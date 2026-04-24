@@ -390,11 +390,109 @@ export function EditorSidebar({
             <input
               type="checkbox"
               checked={active.glassEffect}
-              onChange={(e) => updateActive({ glassEffect: e.target.checked })}
+              onChange={(e) => updateActive({ glassEffect: e.target.checked, textCardEnabled: false })}
               className="accent-primary"
             />
             <span className="text-xs text-text-secondary">Glass ao redor do conteudo</span>
           </label>
+
+          {/* Text Card (white/colored container) */}
+          <div className="border-t border-border pt-3 space-y-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={active.textCardEnabled}
+                onChange={(e) => updateActive({ textCardEnabled: e.target.checked, glassEffect: e.target.checked ? false : active.glassEffect })}
+                className="accent-primary"
+              />
+              <span className="text-xs text-text-secondary font-semibold">Card de texto</span>
+            </label>
+            {active.textCardEnabled && (
+              <div className="pl-5 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-text-muted uppercase tracking-wider w-12">Cor</span>
+                  <input type="color" value={active.textCardBgColor} onChange={(e) => updateActive({ textCardBgColor: e.target.value })} className="w-8 h-8 rounded cursor-pointer border border-border" />
+                  <input type="text" value={active.textCardBgColor} onChange={(e) => updateActive({ textCardBgColor: e.target.value })} className="input-field text-[11px] flex-1 h-8" />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-text-muted uppercase tracking-wider">OPACIDADE</span>
+                    <span className="text-[10px] text-primary font-semibold">{active.textCardOpacity}%</span>
+                  </div>
+                  <input type="range" min={0} max={100} value={active.textCardOpacity} onChange={(e) => updateActive({ textCardOpacity: Number(e.target.value) })} className="w-full accent-primary" />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-text-muted uppercase tracking-wider">RAIO</span>
+                    <span className="text-[10px] text-primary font-semibold">{active.textCardBorderRadius}px</span>
+                  </div>
+                  <input type="range" min={0} max={48} value={active.textCardBorderRadius} onChange={(e) => updateActive({ textCardBorderRadius: Number(e.target.value) })} className="w-full accent-primary" />
+                </div>
+                <div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-text-muted uppercase tracking-wider">PADDING</span>
+                    <span className="text-[10px] text-primary font-semibold">{active.textCardPadding}px</span>
+                  </div>
+                  <input type="range" min={16} max={96} value={active.textCardPadding} onChange={(e) => updateActive({ textCardPadding: Number(e.target.value) })} className="w-full accent-primary" />
+                </div>
+                <div>
+                  <span className="text-[10px] text-text-muted uppercase tracking-wider block mb-1">SOMBRA</span>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(['none', 'soft', 'strong'] as const).map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => updateActive({ textCardShadow: s })}
+                        className={`px-2 py-1 rounded text-[10px] font-semibold border transition-all ${active.textCardShadow === s ? 'border-primary bg-primary/10 text-primary' : 'border-border text-text-secondary hover:border-primary/30'}`}
+                      >
+                        {s === 'none' ? 'Nenhuma' : s === 'soft' ? 'Suave' : 'Forte'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Label Badge (colored pill around label text) */}
+          <div className="border-t border-border pt-3 space-y-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={active.labelBgEnabled}
+                onChange={(e) => updateActive({ labelBgEnabled: e.target.checked })}
+                className="accent-primary"
+              />
+              <span className="text-xs text-text-secondary font-semibold">Badge no label</span>
+            </label>
+            {active.labelBgEnabled && (
+              <div className="pl-5 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-text-muted uppercase tracking-wider w-12">FUNDO</span>
+                  <input type="color" value={active.labelBgColor} onChange={(e) => updateActive({ labelBgColor: e.target.value })} className="w-8 h-8 rounded cursor-pointer border border-border" />
+                  <input type="text" value={active.labelBgColor} onChange={(e) => updateActive({ labelBgColor: e.target.value })} className="input-field text-[11px] flex-1 h-8" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-text-muted uppercase tracking-wider w-12">TEXTO</span>
+                  <input type="color" value={active.labelTextColor} onChange={(e) => updateActive({ labelTextColor: e.target.value })} className="w-8 h-8 rounded cursor-pointer border border-border" />
+                  <input type="text" value={active.labelTextColor} onChange={(e) => updateActive({ labelTextColor: e.target.value })} className="input-field text-[11px] flex-1 h-8" />
+                </div>
+                <div>
+                  <span className="text-[10px] text-text-muted uppercase tracking-wider block mb-1">FORMATO</span>
+                  <div className="grid grid-cols-3 gap-1">
+                    {(['pill', 'rounded', 'square'] as const).map((sh) => (
+                      <button
+                        key={sh}
+                        onClick={() => updateActive({ labelShape: sh })}
+                        className={`px-2 py-1 rounded text-[10px] font-semibold border transition-all ${active.labelShape === sh ? 'border-primary bg-primary/10 text-primary' : 'border-border text-text-secondary hover:border-primary/30'}`}
+                      >
+                        {sh === 'pill' ? 'Pílula' : sh === 'rounded' ? 'Arred.' : 'Quadrado'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Global scale */}
           <div>

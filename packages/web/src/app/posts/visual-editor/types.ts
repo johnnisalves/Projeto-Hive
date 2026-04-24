@@ -77,6 +77,20 @@ export interface SlideState {
   // Glass
   glassEffect: boolean;
 
+  // Label badge (colored pill around label text)
+  labelBgEnabled: boolean;
+  labelBgColor: string;
+  labelTextColor: string;
+  labelShape: 'pill' | 'rounded' | 'square';
+
+  // Text card (container around title/subtitle/label)
+  textCardEnabled: boolean;
+  textCardBgColor: string;
+  textCardOpacity: number; // 0-100
+  textCardBorderRadius: number; // px
+  textCardPadding: number; // px
+  textCardShadow: 'none' | 'soft' | 'strong';
+
   // Corners
   cornerTopLeft: string;
   cornerTopRight: string;
@@ -318,6 +332,16 @@ export function emptySlide(idx: number, tpl: TemplateId = idx === 0 ? 'hero' : '
     subtitleLineHeight: 1.4,
     globalScale: 100,
     glassEffect: false,
+    labelBgEnabled: false,
+    labelBgColor: '#E84E3C',
+    labelTextColor: '#ffffff',
+    labelShape: 'pill',
+    textCardEnabled: false,
+    textCardBgColor: '#ffffff',
+    textCardOpacity: 95,
+    textCardBorderRadius: 28,
+    textCardPadding: 56,
+    textCardShadow: 'soft',
     cornerTopLeft: '',
     cornerTopRight: '',
     cornerBottomLeft: '',

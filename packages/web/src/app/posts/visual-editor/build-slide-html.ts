@@ -125,10 +125,30 @@ export function buildSlideHtml(
   const edgeDist = gs.cornerEdgeDistance || sz.left;
   const ci = Math.max(edgeDist, sz.cornerInset);
 
-  const glassOpen = s.glassEffect
-    ? `<div style="background:rgba(0,0,0,0.35);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-radius:24px;padding:48px;">`
-    : '';
-  const glassClose = s.glassEffect ? '</div>' : '';
+  // Hex to rgba helper for textCard alpha
+  function hexToRgba(hex: string, alpha: number): string {
+    const h = hex.replace('#', '');
+    const r = parseInt(h.length === 3 ? h[0] + h[0] : h.slice(0, 2), 16);
+    const g = parseInt(h.length === 3 ? h[1] + h[1] : h.slice(2, 4), 16);
+    const b = parseInt(h.length === 3 ? h[2] + h[2] : h.slice(4, 6), 16);
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
+  // Text card (priority over glassEffect when enabled)
+  let cardOpen = '';
+  let cardClose = '';
+  if (s.textCardEnabled) {
+    const cardBg = hexToRgba(s.textCardBgColor || '#ffffff', (s.textCardOpacity ?? 95) / 100);
+    const shadowMap = { none: 'none', soft: '0 8px 32px rgba(0,0,0,0.15)', strong: '0 16px 48px rgba(0,0,0,0.35)' };
+    const cardShadow = shadowMap[s.textCardShadow || 'soft'];
+    cardOpen = `<div style="background:${cardBg};backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:${s.textCardBorderRadius ?? 28}px;padding:${s.textCardPadding ?? 56}px;box-shadow:${cardShadow};">`;
+    cardClose = '</div>';
+  } else if (s.glassEffect) {
+    cardOpen = `<div style="background:rgba(0,0,0,0.35);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-radius:24px;padding:48px;">`;
+    cardClose = '</div>';
+  }
+  const glassOpen = cardOpen;
+  const glassClose = cardClose;
 
   // Scale wrapper
   const scaleVal = (s.globalScale || 100) / 100;
@@ -225,9 +245,16 @@ export function buildSlideHtml(
   // ── Content by template ──
   const titleHtml = buildWordHtml(s.title, s.wordHighlights || {}, color, font, s.titleFontSize || 72, s.fontWeight, s.titleLetterSpacing || -0.02, shadow);
 
-  const labelHtml = s.label
-    ? `<div style="font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:3px;color:var(--brand-accent,${color});opacity:0.85;font-family:${font};${shadowSm}">${escHtml(s.label)}</div>`
-    : '';
+  // Label — plain or as a colored badge (when labelBgEnabled)
+  let labelHtml = '';
+  if (s.label) {
+    if (s.labelBgEnabled) {
+      const labelRadius = s.labelShape === 'square' ? '0px' : s.labelShape === 'rounded' ? '12px' : '999px';
+      labelHtml = `<div style="display:inline-block;align-self:flex-start;padding:10px 22px;background:${s.labelBgColor || '#E84E3C'};color:${s.labelTextColor || '#ffffff'};border-radius:${labelRadius};font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:2px;font-family:${font};box-shadow:0 4px 16px rgba(0,0,0,0.15);">${escHtml(s.label)}</div>`;
+    } else {
+      labelHtml = `<div style="font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:3px;color:var(--brand-accent,${color});opacity:0.85;font-family:${font};${shadowSm}">${escHtml(s.label)}</div>`;
+    }
+  }
 
   const subtitleHtml = s.subtitle
     ? `<div style="font-size:${s.subtitleFontSize || 28}px;font-weight:${s.subtitleFontWeight || 400};color:${s.subtitleColor || color};opacity:0.9;line-height:${s.subtitleLineHeight || 1.4};font-family:${subFont};letter-spacing:${s.subtitleLetterSpacing || 0}em;${shadowSm}">${escHtml(s.subtitle)}</div>`
