@@ -24,10 +24,9 @@ const ALLOWED_KEYS = [
   'MCP_AUTH_TOKEN',
   'MCP_URL',
   'MCP_TOKEN',
-  'YOUTUBE_COOKIES',
 ];
 
-const NON_SECRET_KEYS = ['MCP_URL', 'MCP_TOKEN', 'TELEGRAM_ALLOWED_CHAT_IDS', 'INSTAGRAM_USER_ID', 'FACEBOOK_APP_ID', 'YOUTUBE_COOKIES', 'NANO_BANANA_MODEL'];
+const NON_SECRET_KEYS = ['MCP_URL', 'MCP_TOKEN', 'TELEGRAM_ALLOWED_CHAT_IDS', 'INSTAGRAM_USER_ID', 'FACEBOOK_APP_ID', 'NANO_BANANA_MODEL'];
 
 // Check if a key has a value in .env
 function getEnvValue(key: string): string | undefined {
