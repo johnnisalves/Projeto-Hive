@@ -44,59 +44,6 @@ async function ensureJpegUrl(imageUrl: string): Promise<string> {
 }
 
 /**
- * Some self-hosted MinIO setups use sslip.io / nip.io / IP-based hostnames
- * that Meta's Graph API silently rejects with error 2207052 even when the
- * URL is publicly reachable and the image is valid. As a fallback, we
- * upload the image bytes to a real public file host (catbox.moe) so Meta
- * sees a "normal" looking URL.
- */
-async function isMinioUrlSuspect(imageUrl: string): Promise<boolean> {
-  // Treat sslip.io and nip.io subdomains as suspect (IP-mapped hostnames)
-  if (/\.sslip\.io[\/:]/i.test(imageUrl)) return true;
-  if (/\.nip\.io[\/:]/i.test(imageUrl)) return true;
-  // Also treat raw IPv4 hostnames as suspect
-  if (/^https?:\/\/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}([\/:])/.test(imageUrl)) return true;
-  return false;
-}
-
-async function uploadToCatbox(imageUrl: string): Promise<string> {
-  console.log(`[Instagram] URL hostname is suspect for Meta fetcher, mirroring to catbox.moe: ${imageUrl}`);
-  const imgRes = await fetch(imageUrl);
-  if (!imgRes.ok) throw new Error(`Failed to fetch image for catbox mirror: ${imgRes.status}`);
-  const buffer = Buffer.from(await imgRes.arrayBuffer());
-  const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
-  const ext = contentType.includes('jpeg') ? 'jpg' : contentType.includes('png') ? 'png' : 'bin';
-
-  const formData = new FormData();
-  const blob = new Blob([buffer], { type: contentType });
-  formData.append('reqtype', 'fileupload');
-  formData.append('fileToUpload', blob, `image.${ext}`);
-
-  const uploadRes = await fetch('https://catbox.moe/user/api.php', { method: 'POST', body: formData });
-  if (!uploadRes.ok) throw new Error(`Catbox upload failed: ${uploadRes.status}`);
-  const publicUrl = (await uploadRes.text()).trim();
-  if (!publicUrl.startsWith('http')) throw new Error(`Catbox returned invalid URL: ${publicUrl}`);
-  console.log(`[Instagram] Catbox mirror: ${publicUrl}`);
-  return publicUrl;
-}
-
-/**
- * Run the URL through every check Meta cares about, in order:
- *   1. localhost → mirror to catbox
- *   2. PNG → convert to JPEG via sharp
- *   3. sslip.io / nip.io / raw IP hostname → mirror to catbox so Meta
- *      sees a non-suspicious URL (catbox.moe domain)
- */
-async function prepareUrlForMeta(imageUrl: string): Promise<string> {
-  let url = await getPublicImageUrl(imageUrl);
-  url = await ensureJpegUrl(url);
-  if (await isMinioUrlSuspect(url)) {
-    url = await uploadToCatbox(url);
-  }
-  return url;
-}
-
-/**
  * Detect which Instagram API endpoint to use based on token format.
  * - Tokens starting with "EAA" are Facebook Business tokens -> use graph.facebook.com
  * - Other tokens (typically starting with "IGAA") are Instagram Login tokens -> use graph.instagram.com
@@ -286,7 +233,8 @@ async function createChildContainer(publicUrl: string, token: string, igUserId: 
 }
 
 async function publishSingleImage(imageUrl: string, caption: string, token: string, igUserId: string) {
-  const publicImageUrl = await prepareUrlForMeta(imageUrl);
+  const publicImageUrlRaw = await getPublicImageUrl(imageUrl);
+  const publicImageUrl = await ensureJpegUrl(publicImageUrlRaw);
   const base = getGraphBase(token);
   const userPath = resolveUserIdForToken(token, igUserId);
 
@@ -327,11 +275,12 @@ async function publishCarousel(
 ) {
   console.log(`[Instagram] Creating carousel with ${images.length} images...`);
 
-  // Step 1: Upload all images to public URLs, convert to JPEG, mirror suspect hosts
+  // Step 1: Upload all images to public URLs first, then convert to JPEG
   const publicUrls: string[] = [];
   for (const img of images) {
-    const url = await prepareUrlForMeta(img.imageUrl);
-    publicUrls.push(url);
+    const publicUrl = await getPublicImageUrl(img.imageUrl);
+    const jpegUrl = await ensureJpegUrl(publicUrl);
+    publicUrls.push(jpegUrl);
   }
 
   // Verify each carousel image URL is publicly accessible
