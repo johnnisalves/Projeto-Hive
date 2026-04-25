@@ -153,17 +153,19 @@ export function buildSlideHtml(
   }
 
   // Text card (priority over glassEffect when enabled)
+  // The inner card must also be flex+gap so contentGap works inside the card
+  const innerGap = `display:flex;flex-direction:column;gap:${s.contentGap ?? 20}px;`;
   let cardOpen = '';
   let cardClose = '';
   if (s.textCardEnabled) {
     const cardBg = hexToRgba(s.textCardBgColor || '#ffffff', (s.textCardOpacity ?? 95) / 100);
     const shadowMap = { none: 'none', soft: '0 8px 32px rgba(0,0,0,0.15)', strong: '0 16px 48px rgba(0,0,0,0.35)' };
     const cardShadow = shadowMap[s.textCardShadow || 'soft'];
-    cardOpen = `<div style="background:${cardBg};backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:${s.textCardBorderRadius ?? 28}px;padding:${s.textCardPadding ?? 56}px;box-shadow:${cardShadow};">`;
+    cardOpen = `<div style="background:${cardBg};backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border-radius:${s.textCardBorderRadius ?? 28}px;padding:${s.textCardPadding ?? 56}px;box-shadow:${cardShadow};${innerGap}">`;
     cardClose = '</div>';
   } else if (s.glassEffect) {
     const glassBg = hexToRgba(s.glassColor || '#000000', (s.glassOpacity ?? 35) / 100);
-    cardOpen = `<div style="background:${glassBg};backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-radius:24px;padding:48px;">`;
+    cardOpen = `<div style="background:${glassBg};backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-radius:24px;padding:48px;${innerGap}">`;
     cardClose = '</div>';
   }
   const glassOpen = cardOpen;
