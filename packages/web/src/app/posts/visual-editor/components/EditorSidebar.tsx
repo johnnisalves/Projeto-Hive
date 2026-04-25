@@ -528,6 +528,22 @@ export function EditorSidebar({
             />
           </div>
 
+          {/* Spacing between elements */}
+          <div>
+            <div className="flex items-center justify-between">
+              <span className={labelClass}>ESPAÇO ENTRE LABEL/TÍTULO/SUBTÍTULO</span>
+              <span className="text-[10px] text-primary font-semibold">{active.contentGap ?? 20}px</span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={80}
+              value={active.contentGap ?? 20}
+              onChange={(e) => updateActive({ contentGap: Number(e.target.value) })}
+              className="w-full mt-1 accent-primary"
+            />
+          </div>
+
           {/* Title font size */}
           <div>
             <div className="flex items-center justify-between">

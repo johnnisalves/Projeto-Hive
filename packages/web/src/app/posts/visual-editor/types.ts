@@ -74,6 +74,9 @@ export interface SlideState {
   // Global scale
   globalScale: number;
 
+  // Spacing between label, title, subtitle (px)
+  contentGap: number;
+
   // Glass
   glassEffect: boolean;
   glassColor: string;
@@ -333,6 +336,7 @@ export function emptySlide(idx: number, tpl: TemplateId = idx === 0 ? 'hero' : '
     subtitleLetterSpacing: 0,
     subtitleLineHeight: 1.4,
     globalScale: 100,
+    contentGap: 20,
     glassEffect: false,
     glassColor: '#000000',
     glassOpacity: 35,

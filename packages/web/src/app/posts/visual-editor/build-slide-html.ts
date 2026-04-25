@@ -4,6 +4,18 @@ function escHtml(s: string) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// Convert agent-supplied literal "\n" (2 chars: backslash + n) to real newlines.
+// Some MCP clients escape JSON string content again, sending "\\n" which arrives here as "\n".
+function normalizeBreaks(s: string): string {
+  if (!s) return s;
+  return s.replace(/\\n/g, '\n').replace(/\\r\\n/g, '\n');
+}
+
+// Escape for HTML AND turn newlines into <br>
+function escHtmlMultiline(s: string): string {
+  return escHtml(normalizeBreaks(s)).replace(/\n/g, '<br>');
+}
+
 export function getSafeZone(aspectRatio: string) {
   switch (aspectRatio) {
     case '9:16':
@@ -92,21 +104,27 @@ function buildCornerIconSvg(icon: CornerIcon, color: string, size: number): stri
 
 function buildWordHtml(text: string, highlights: Record<number, WordFormat>, defaultColor: string, font: string, fontSize: number, fontWeight: number, letterSpacing: number, shadow: string): string {
   if (!text) return '';
-  const words = text.split(/\s+/).filter(Boolean);
+  const normalized = normalizeBreaks(text);
   if (Object.keys(highlights).length === 0) {
-    return `<span style="font-size:${fontSize}px;font-weight:${fontWeight};color:${defaultColor};letter-spacing:${letterSpacing}em;font-family:${font};${shadow}">${escHtml(text)}</span>`;
+    return `<span style="font-size:${fontSize}px;font-weight:${fontWeight};color:${defaultColor};letter-spacing:${letterSpacing}em;font-family:${font};${shadow}">${escHtml(normalized).replace(/\n/g, '<br>')}</span>`;
   }
-  return words.map((word, i) => {
-    const h = highlights[i];
-    const color = h?.color || defaultColor;
-    const weight = h?.bold ? 900 : fontWeight;
-    const style = h?.italic ? 'font-style:italic;' : '';
-    const decoration: string[] = [];
-    if (h?.underline) decoration.push('underline');
-    if (h?.strikethrough) decoration.push('line-through');
-    const dec = decoration.length ? `text-decoration:${decoration.join(' ')};` : '';
-    return `<span style="font-size:${fontSize}px;font-weight:${weight};color:${color};letter-spacing:${letterSpacing}em;font-family:${font};display:inline;${style}${dec}${shadow}">${escHtml(word)} </span>`;
-  }).join('');
+  // With highlights: split each line into words, render words, insert <br> between lines
+  const lines = normalized.split('\n');
+  let wordIdx = 0;
+  return lines.map((line) => {
+    const words = line.split(/\s+/).filter(Boolean);
+    return words.map((word) => {
+      const h = highlights[wordIdx++];
+      const color = h?.color || defaultColor;
+      const weight = h?.bold ? 900 : fontWeight;
+      const style = h?.italic ? 'font-style:italic;' : '';
+      const decoration: string[] = [];
+      if (h?.underline) decoration.push('underline');
+      if (h?.strikethrough) decoration.push('line-through');
+      const dec = decoration.length ? `text-decoration:${decoration.join(' ')};` : '';
+      return `<span style="font-size:${fontSize}px;font-weight:${weight};color:${color};letter-spacing:${letterSpacing}em;font-family:${font};display:inline;${style}${dec}${shadow}">${escHtml(word)} </span>`;
+    }).join('');
+  }).join('<br>');
 }
 
 export function buildSlideHtml(
@@ -251,14 +269,14 @@ export function buildSlideHtml(
   if (s.label) {
     if (s.labelBgEnabled) {
       const labelRadius = s.labelShape === 'square' ? '0px' : s.labelShape === 'rounded' ? '12px' : '999px';
-      labelHtml = `<div style="display:inline-block;align-self:flex-start;padding:10px 22px;background:${s.labelBgColor || '#E84E3C'};color:${s.labelTextColor || '#ffffff'};border-radius:${labelRadius};font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:2px;font-family:${font};box-shadow:0 4px 16px rgba(0,0,0,0.15);">${escHtml(s.label)}</div>`;
+      labelHtml = `<div style="display:inline-block;align-self:flex-start;padding:10px 22px;background:${s.labelBgColor || '#E84E3C'};color:${s.labelTextColor || '#ffffff'};border-radius:${labelRadius};font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:2px;font-family:${font};box-shadow:0 4px 16px rgba(0,0,0,0.15);">${escHtmlMultiline(s.label)}</div>`;
     } else {
-      labelHtml = `<div style="font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:3px;color:var(--brand-accent,${color});opacity:0.85;font-family:${font};${shadowSm}">${escHtml(s.label)}</div>`;
+      labelHtml = `<div style="font-size:16px;font-weight:700;text-transform:uppercase;letter-spacing:3px;color:var(--brand-accent,${color});opacity:0.85;font-family:${font};${shadowSm}">${escHtmlMultiline(s.label)}</div>`;
     }
   }
 
   const subtitleHtml = s.subtitle
-    ? `<div style="font-size:${s.subtitleFontSize || 28}px;font-weight:${s.subtitleFontWeight || 400};color:${s.subtitleColor || color};opacity:0.9;line-height:${s.subtitleLineHeight || 1.4};font-family:${subFont};letter-spacing:${s.subtitleLetterSpacing || 0}em;${shadowSm}">${escHtml(s.subtitle)}</div>`
+    ? `<div style="font-size:${s.subtitleFontSize || 28}px;font-weight:${s.subtitleFontWeight || 400};color:${s.subtitleColor || color};opacity:0.9;line-height:${s.subtitleLineHeight || 1.4};font-family:${subFont};letter-spacing:${s.subtitleLetterSpacing || 0}em;${shadowSm}">${escHtmlMultiline(s.subtitle)}</div>`
     : '';
 
   let content = '';
@@ -274,10 +292,10 @@ export function buildSlideHtml(
       content = `${labelHtml}<div style="font-size:140px;font-weight:900;line-height:1;font-family:${font};background:linear-gradient(135deg,var(--brand-primary,${color}),var(--brand-secondary,#E84393));-webkit-background-clip:text;-webkit-text-fill-color:transparent;">${escHtml(s.stat)}</div><div style="line-height:1.15;">${titleHtml}</div>${subtitleHtml}`;
       break;
     case 'quote':
-      content = `<div style="font-size:120px;color:var(--brand-primary,${color});opacity:0.3;line-height:0.5;font-family:Georgia,serif;">&ldquo;</div><div style="font-size:${s.titleFontSize || 48}px;font-weight:400;font-style:italic;color:${color};line-height:1.35;font-family:Georgia,serif;${shadow}">${escHtml(s.title)}</div>${s.subtitle ? `<div style="font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:3px;color:var(--brand-accent,${color});font-family:${font};margin-top:24px;">${escHtml(s.subtitle)}</div>` : ''}`;
+      content = `<div style="font-size:120px;color:var(--brand-primary,${color});opacity:0.3;line-height:0.5;font-family:Georgia,serif;">&ldquo;</div><div style="font-size:${s.titleFontSize || 48}px;font-weight:400;font-style:italic;color:${color};line-height:1.35;font-family:Georgia,serif;${shadow}">${escHtmlMultiline(s.title)}</div>${s.subtitle ? `<div style="font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:3px;color:var(--brand-accent,${color});font-family:${font};margin-top:24px;">${escHtmlMultiline(s.subtitle)}</div>` : ''}`;
       break;
     case 'cta':
-      content = `<div style="line-height:1.1;">${titleHtml}</div>${subtitleHtml}${s.label ? `<div style="margin-top:32px;display:inline-block;padding:16px 40px;background:var(--brand-primary,${color});color:#000;border-radius:999px;font-size:20px;font-weight:700;font-family:${font};">${escHtml(s.label)}</div>` : ''}`;
+      content = `<div style="line-height:1.1;">${titleHtml}</div>${subtitleHtml}${s.label ? `<div style="margin-top:32px;display:inline-block;padding:16px 40px;background:var(--brand-primary,${color});color:#000;border-radius:999px;font-size:20px;font-weight:700;font-family:${font};">${escHtmlMultiline(s.label)}</div>` : ''}`;
       break;
   }
 
@@ -305,7 +323,7 @@ export function buildSlideHtml(
     ${logoHtml}
     ${badgeHtml}
     ${indicatorsHtml}
-    <div style="position:absolute;${pos};display:flex;flex-direction:column;gap:20px;font-family:${font};transform:scale(${scaleVal});transform-origin:center;">
+    <div style="position:absolute;${pos};display:flex;flex-direction:column;gap:${s.contentGap ?? 20}px;font-family:${font};transform:scale(${scaleVal});transform-origin:center;">
       ${glassOpen}
       ${content}
       ${glassClose}
