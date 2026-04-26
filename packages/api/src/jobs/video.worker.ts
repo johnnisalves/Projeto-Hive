@@ -35,8 +35,7 @@ async function uploadFileToMinio(filePath: string, mimetype: string): Promise<st
     'Content-Type': mimetype,
   });
 
-  const { buildPublicUrl } = await import('../services/storage.service');
-  return buildPublicUrl(key);
+  return `${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/${key}`;
 }
 
 async function handleAnalyze(data: any) {

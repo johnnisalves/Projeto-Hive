@@ -2,19 +2,6 @@ import { randomUUID } from 'crypto';
 import { minioClient } from '../config/minio';
 import { env } from '../config/env';
 
-/**
- * Build the public URL for a given object key.
- *   MinIO style: https://minio.host/{bucket}/{key}
- *   R2 dev URL:  https://pub-xxx.r2.dev/{key}      (no bucket in path)
- */
-export function buildPublicUrl(key: string): string {
-  const base = env.MINIO_PUBLIC_URL.replace(/\/+$/, '');
-  if (env.STORAGE_PUBLIC_URL_INCLUDES_BUCKET) {
-    return `${base}/${env.MINIO_BUCKET}/${key}`;
-  }
-  return `${base}/${key}`;
-}
-
 export async function uploadImage(buffer: Buffer, mimetype: string): Promise<string> {
   const ext = mimetype === 'image/png' ? 'png' : 'jpg';
   const key = `uploads/${randomUUID()}.${ext}`;
@@ -23,7 +10,7 @@ export async function uploadImage(buffer: Buffer, mimetype: string): Promise<str
     'Content-Type': mimetype,
   });
 
-  return buildPublicUrl(key);
+  return `${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/${key}`;
 }
 
 export async function uploadFile(buffer: Buffer, mimetype: string, originalName: string): Promise<string> {
@@ -34,7 +21,7 @@ export async function uploadFile(buffer: Buffer, mimetype: string, originalName:
     'Content-Type': mimetype,
   });
 
-  return buildPublicUrl(key);
+  return `${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/${key}`;
 }
 
 export async function uploadVideo(
@@ -50,7 +37,7 @@ export async function uploadVideo(
   });
 
   return {
-    videoUrl: buildPublicUrl(key),
+    videoUrl: `${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/${key}`,
     key,
   };
 }
@@ -64,20 +51,16 @@ export async function deleteObject(key: string): Promise<void> {
 }
 
 /**
- * Extract object key from a public URL. Handles both URL patterns:
- *   - https://minio.host/{bucket}/path/file.ext      -> path/file.ext
- *   - https://pub-xxx.r2.dev/path/file.ext           -> path/file.ext
+ * Extract MinIO object key from a public URL.
+ * Example:
+ *   https://minio.foo.com/openhive-images/videos/abc.mp4 -> videos/abc.mp4
  */
 export function extractKeyFromUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
-    if (env.STORAGE_PUBLIC_URL_INCLUDES_BUCKET) {
-      const prefix = `/${env.MINIO_BUCKET}/`;
-      if (!parsed.pathname.startsWith(prefix)) return null;
-      return parsed.pathname.slice(prefix.length);
-    }
-    // R2-style: drop the leading slash
-    return parsed.pathname.replace(/^\/+/, '') || null;
+    const prefix = `/${env.MINIO_BUCKET}/`;
+    if (!parsed.pathname.startsWith(prefix)) return null;
+    return parsed.pathname.slice(prefix.length);
   } catch {
     return null;
   }
