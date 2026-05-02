@@ -23,6 +23,7 @@ const captionSchema = z.object({
   hashtagsCount: z.number().min(1).max(30).optional(),
   language: z.string().optional(),
   maxLength: z.number().max(2200).optional(),
+  brandId: z.string().optional(),
 });
 
 router.use(authMiddleware);
