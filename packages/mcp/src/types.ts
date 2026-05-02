@@ -8,6 +8,8 @@ export interface CreatePostInput {
   hashtags?: string[];
   tone?: string;
   editor_state?: Record<string, unknown>;
+  brand_id?: string;
+  platforms?: string[];
 }
 
 export interface AddImageToPostInput {
@@ -28,6 +30,7 @@ export interface GenerateCaptionInput {
   hashtags_count?: number;
   language?: string;
   max_length?: number;
+  brand_id?: string;
 }
 
 export interface UpdatePostInput {
@@ -36,6 +39,8 @@ export interface UpdatePostInput {
   hashtags?: string[];
   scheduled_at?: string;
   status?: 'DRAFT' | 'SCHEDULED';
+  brand_id?: string;
+  platforms?: string[];
 }
 
 export interface SchedulePostInput {
@@ -47,6 +52,7 @@ export interface ListPostsInput {
   status?: 'DRAFT' | 'SCHEDULED' | 'PUBLISHED' | 'FAILED';
   limit?: number;
   offset?: number;
+  brand_id?: string;
 }
 
 export interface PublishNowInput {
