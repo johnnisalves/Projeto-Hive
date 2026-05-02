@@ -62,6 +62,14 @@ export interface GetAnalyticsInput {
   period?: '7d' | '30d' | '90d';
 }
 
+export interface GenerateImagePromptInput {
+  topic: string;
+  brand_id?: string;
+  style?: string;
+  aspect_ratio?: string;
+  usage?: string;
+}
+
 // Tasks
 export interface CreateTaskInput {
   title: string;
