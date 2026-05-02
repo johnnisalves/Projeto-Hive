@@ -192,6 +192,111 @@ Regras:
   }
 }
 
+interface GenerateImagePromptParams {
+  topic: string;
+  brandId?: string;
+  style?: string;
+  aspectRatio?: string;
+  usage?: string;
+}
+
+interface GenerateImagePromptResult {
+  prompt: string;
+  negative_prompt: string;
+  tips: string;
+}
+
+async function getBrandVisualContext(brandId: string): Promise<{ name: string; primaryColor?: string; secondaryColor?: string; description?: string } | null> {
+  const { prisma } = await import('../config/database');
+  const brand = await prisma.brand.findUnique({ where: { id: brandId } });
+  if (!brand) return null;
+  return {
+    name: brand.name,
+    primaryColor: brand.primaryColor || undefined,
+    secondaryColor: brand.secondaryColor || undefined,
+    description: brand.description || undefined,
+  };
+}
+
+export async function generateImagePromptForStudio(params: GenerateImagePromptParams): Promise<GenerateImagePromptResult> {
+  const { getSetting } = await import('../helpers/getSetting');
+  const apiKey = await getSetting('NANO_BANANA_API_KEY');
+
+  let brand: { name: string; primaryColor?: string; secondaryColor?: string; description?: string } | null = null;
+  if (params.brandId) {
+    brand = await getBrandVisualContext(params.brandId);
+  }
+
+  const style = params.style || 'fotográfico';
+  const ratio = params.aspectRatio || '4:5 (retrato)';
+  const usage = params.usage || 'post de Instagram/Facebook';
+
+  let systemContext = '';
+  if (brand) {
+    systemContext = `
+Contexto da marca: "${brand.name}"
+${brand.description ? `Descrição: ${brand.description}` : ''}
+Cores da marca: primária ${brand.primaryColor || 'N/A'}, secundária ${brand.secondaryColor || 'N/A'}
+O prompt deve gerar uma imagem que combine visualmente com a identidade dessa marca.`;
+  }
+
+  const prompt = `Você é um especialista em engenharia de prompts para geração de imagens em IA (Google Gemini / Imagen 3).
+Gere um prompt otimizado para Google AI Studio (Gemini) que produza uma imagem de alta qualidade.
+
+TEMA: "${params.topic}"
+ESTILO VISUAL: ${style}
+PROPORÇÃO: ${ratio}
+USO: ${usage}
+${systemContext}
+
+Retorne EXATAMENTE neste formato (sem markdown, sem aspas extras):
+
+PROMPT: [prompt detalhado em inglês para gerar a imagem no AI Studio — seja específico sobre iluminação, composição, cores, texturas, atmosfera. Mínimo 50 palavras, máximo 150 palavras]
+NEGATIVE: [negative prompt — o que evitar na imagem, ex: text, watermarks, blurry, deformed faces]
+DICAS: [3 dicas curtas em português sobre como ajustar o prompt se o resultado não ficar bom]
+
+Regras do prompt:
+- SEMPRE em inglês (AI Studio gera melhor com prompts em inglês)
+- Seja ultra-específico sobre composição, iluminação e atmosfera
+- Inclua detalhes de textura e qualidade (ex: "crisp details", "professional photography")
+- Se o tema envolver pessoas, especifique "diverse group" ou detalhes de aparência
+- Para posts de redes sociais: fundo com espaço negativo para sobrepor texto depois
+- NUNCA peça texto/letras na imagem (vamos adicionar via overlay HTML)
+- Evite faces muito próximas (AI Studio distorce facilmente)`;
+
+  if (!apiKey) {
+    // Fallback: prompt simples sem Gemini
+    const fallbackPrompt = `Professional ${style} style image for social media. Topic: ${params.topic}. High quality, vibrant colors, ${ratio} composition with negative space for text overlay. Crisp details, modern aesthetic.`;
+    return {
+      prompt: fallbackPrompt,
+      negative_prompt: 'text, watermark, blurry, deformed faces, low quality, cartoon, illustration (unless specified)',
+      tips: '1. Se a imagem tiver texto, adicione "no text, no letters" ao prompt.\n2. Se as cores não combinarem com a marca, ajuste as cores descritas no prompt.\n3. Para mais espaço de texto, adicione "generous negative space, minimal background".',
+    };
+  }
+
+  try {
+    const result = await callGeminiText(apiKey, prompt);
+
+    const promptMatch = result.match(/PROMPT:\s*([\s\S]+?)(?=NEGATIVE:|$)/i);
+    const negativeMatch = result.match(/NEGATIVE:\s*([\s\S]+?)(?=DICAS:|$)/i);
+    const tipsMatch = result.match(/DICAS:\s*([\s\S]+?)(?=$)/i);
+
+    return {
+      prompt: promptMatch?.[1]?.trim() || `Professional ${style} image about ${params.topic}. High quality, vibrant, ${ratio}.`,
+      negative_prompt: negativeMatch?.[1]?.trim() || 'text, watermark, blurry, deformed, low quality',
+      tips: tipsMatch?.[1]?.trim() || 'Ajuste cores e composição conforme necessário.',
+    };
+  } catch (err) {
+    console.error('[image-prompt] Gemini failed:', err);
+    const fallbackPrompt = `Professional ${style} style image for social media. Topic: ${params.topic}. High quality, vibrant colors, ${ratio} composition with negative space for text overlay.`;
+    return {
+      prompt: fallbackPrompt,
+      negative_prompt: 'text, watermark, blurry, deformed faces, low quality',
+      tips: 'Gemini indisponível. Ajuste o prompt manualmente no AI Studio.',
+    };
+  }
+}
+
 export async function refineSlide(params: RefineSlideParams): Promise<RefineSlideResult> {
   const { getSetting } = await import('../helpers/getSetting');
   const apiKey = await getSetting('NANO_BANANA_API_KEY');
