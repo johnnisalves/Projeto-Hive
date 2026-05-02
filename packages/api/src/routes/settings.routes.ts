@@ -27,9 +27,14 @@ const ALLOWED_KEYS = [
   'CLOUDINARY_CLOUD_NAME',
   'CLOUDINARY_API_KEY',
   'CLOUDINARY_API_SECRET',
+  'LINKEDIN_CLIENT_ID',
+  'LINKEDIN_CLIENT_SECRET',
+  'X_CLIENT_ID',
+  'X_CLIENT_SECRET',
+  'HF_API_TOKEN',
 ];
 
-const NON_SECRET_KEYS = ['MCP_URL', 'MCP_TOKEN', 'TELEGRAM_ALLOWED_CHAT_IDS', 'INSTAGRAM_USER_ID', 'FACEBOOK_APP_ID', 'NANO_BANANA_MODEL', 'CLOUDINARY_CLOUD_NAME'];
+const NON_SECRET_KEYS = ['MCP_URL', 'MCP_TOKEN', 'TELEGRAM_ALLOWED_CHAT_IDS', 'INSTAGRAM_USER_ID', 'FACEBOOK_APP_ID', 'NANO_BANANA_MODEL', 'CLOUDINARY_CLOUD_NAME', 'LINKEDIN_CLIENT_ID', 'X_CLIENT_ID'];
 
 // Check if a key has a value in .env
 function getEnvValue(key: string): string | undefined {
@@ -187,6 +192,12 @@ router.delete('/:key', async (req: AuthRequest, res: Response) => {
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message });
   }
+});
+
+// GET /api/settings/nanobana-usage - Check image generation quota
+router.get('/nanobana-usage', async (_req: AuthRequest, res: Response) => {
+  const { getUsageStats } = await import('../services/nanobana.service');
+  res.json({ success: true, data: getUsageStats() });
 });
 
 export default router;
