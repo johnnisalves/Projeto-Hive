@@ -1,4 +1,4 @@
-const API_URL = process.env.API_URL || 'http://localhost:4001';
+const API_URL = process.env.API_URL || 'http://localhost:3001';
 const API_TOKEN = process.env.API_TOKEN || process.env.MCP_AUTH_TOKEN || '';
 
 async function request<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
