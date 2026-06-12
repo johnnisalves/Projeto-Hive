@@ -175,6 +175,22 @@ function registerTools(server: McpServer) {
   );
 
   server.tool(
+    'generate_image_prompt',
+    'Gera um prompt otimizado para Google AI Studio (Gemini/Imagen). Copie o prompt e cole no AI Studio para gerar imagens de alta qualidade gratuitamente. Retorna: prompt em inglês, negative prompt e dicas de ajuste.',
+    {
+      topic: z.string().describe('Tema/descricao da imagem desejada (ex: "Aventureiros em trilha na natureza com mochilas coloridas")'),
+      brand_id: z.string().optional().describe('ID do brand — ajusta cores e estilo visual ao prompt'),
+      style: z.string().optional().describe('Estilo visual: fotografico, ilustracao, flat-design, aquarela, cartoon, realista (default: fotografico)'),
+      aspect_ratio: z.string().optional().describe('Proporcao: "1:1", "4:5", "9:16" (default: 4:5)'),
+      usage: z.string().optional().describe('Uso da imagem: "post carrossel", "stories", "capa" (default: post de Instagram/Facebook)'),
+    },
+    async ({ topic, brand_id, style, aspect_ratio, usage }) => {
+      const result = await generateImagePrompt({ topic, brand_id, style, aspect_ratio, usage });
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.tool(
     'schedule_post',
     'Agenda um post para publicação em data/hora específica',
     {
