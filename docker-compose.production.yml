@@ -82,6 +82,7 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       TELEGRAM_ALLOWED_CHAT_IDS: ${TELEGRAM_ALLOWED_CHAT_IDS:-}
       MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:-}
+      RENDERER_URL: ${RENDERER_URL:-http://renderer:3003}
     depends_on:
       postgres:
         condition: service_healthy
@@ -132,6 +133,13 @@ services:
       - '${MCP_PORT:-3002}:3002'
     depends_on:
       - api
+    restart: unless-stopped
+
+  renderer:
+    build:
+      context: .
+      dockerfile: Dockerfile.renderer
+    container_name: instapost-renderer
     restart: unless-stopped
 
 volumes:
