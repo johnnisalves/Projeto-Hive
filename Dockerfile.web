@@ -11,7 +11,7 @@ RUN npm ci --workspace=packages/shared --workspace=packages/web --include-worksp
 # Copy source
 COPY packages/shared/ packages/shared/
 COPY packages/web/ packages/web/
-COPY turbo.json ./
+COPY turbo.json tsconfig.base.json ./
 
 # Build
 RUN npm run build --workspace=packages/shared

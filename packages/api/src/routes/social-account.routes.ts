@@ -289,7 +289,7 @@ router.post('/', validate(addAccountSchema), async (req: AuthRequest, res: Respo
 router.put('/:id/default', async (req: AuthRequest, res: Response) => {
   try {
     const userId = await resolveOwnerId(req.userId!);
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const account = await prisma.socialAccount.findFirst({ where: { id, userId } });
     if (!account) { res.status(404).json({ success: false, error: 'Account not found' }); return; }
@@ -314,7 +314,7 @@ router.put('/:id/default', async (req: AuthRequest, res: Response) => {
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const userId = await resolveOwnerId(req.userId!);
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     const account = await prisma.socialAccount.findFirst({ where: { id, userId } });
     if (!account) { res.status(404).json({ success: false, error: 'Account not found' }); return; }

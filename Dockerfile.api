@@ -24,7 +24,7 @@ RUN npm ci --workspace=packages/shared --workspace=packages/api --include-worksp
 COPY packages/shared/ packages/shared/
 COPY packages/api/ packages/api/
 COPY scripts/video/ scripts/video/
-COPY turbo.json ./
+COPY turbo.json tsconfig.base.json ./
 
 # Generate Prisma client and build
 RUN npx prisma generate --schema=packages/api/prisma/schema.prisma

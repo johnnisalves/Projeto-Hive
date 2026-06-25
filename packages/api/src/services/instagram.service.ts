@@ -9,7 +9,7 @@ function sleep(ms: number) {
 
 async function uploadBufferToImgur(buffer: Buffer): Promise<string> {
   const clientId = process.env.IMGUR_CLIENT_ID || '546c25a59c58ad7';
-  const blob = new Blob([buffer], { type: 'image/jpeg' });
+  const blob = new Blob([new Uint8Array(buffer)], { type: 'image/jpeg' });
   const form = new FormData();
   form.append('image', blob, 'upload.jpg');
 
