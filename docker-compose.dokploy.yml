@@ -40,11 +40,6 @@ services:
       - miniodata:/data
     restart: unless-stopped
     networks: [internal, dokploy-network]
-    healthcheck:
-      test: ['CMD', 'mc', 'ready', 'local']
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   api:
     build:
@@ -80,7 +75,7 @@ services:
       redis:
         condition: service_healthy
       minio:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     networks: [internal]
 
