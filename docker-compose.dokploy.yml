@@ -1,0 +1,127 @@
+# Compose para deploy no Dokploy (Traefik + dokploy-network).
+# Sem `ports:` expostos no host — o Traefik roteia por dominio.
+# web / mcp / minio entram na dokploy-network (recebem dominio); o resto fica na rede interna.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: instapost
+      POSTGRES_USER: instapost
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-instapost123}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks: [internal]
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U instapost']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redisdata:/data
+    restart: unless-stopped
+    networks: [internal]
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin_secret}
+    volumes:
+      - miniodata:/data
+    restart: unless-stopped
+    networks: [internal, dokploy-network]
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      NODE_ENV: production
+      PORT: '3001'
+      DATABASE_URL: postgresql://instapost:${DB_PASSWORD:-instapost123}@postgres:5432/instapost
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: '9000'
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin_secret}
+      MINIO_USE_SSL: 'false'
+      MINIO_BUCKET: ${MINIO_BUCKET:-instapost-images}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://localhost:9000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      INSTAGRAM_ACCESS_TOKEN: ${INSTAGRAM_ACCESS_TOKEN:-}
+      INSTAGRAM_USER_ID: ${INSTAGRAM_USER_ID:-}
+      FACEBOOK_APP_ID: ${FACEBOOK_APP_ID:-}
+      FACEBOOK_APP_SECRET: ${FACEBOOK_APP_SECRET:-}
+      NANO_BANANA_API_KEY: ${NANO_BANANA_API_KEY:-}
+      NANO_BANANA_PROVIDER: ${NANO_BANANA_PROVIDER:-google}
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:-}
+      RENDERER_URL: ${RENDERER_URL:-http://renderer:3003}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [internal]
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    environment:
+      NODE_ENV: production
+      API_INTERNAL_URL: http://api:3001
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks: [internal, dokploy-network]
+
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    environment:
+      PORT: '3002'
+      API_URL: http://api:3001
+      API_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+    depends_on:
+      - api
+    restart: unless-stopped
+    networks: [internal, dokploy-network]
+
+  renderer:
+    build:
+      context: .
+      dockerfile: Dockerfile.renderer
+    restart: unless-stopped
+    networks: [internal]
+
+networks:
+  internal:
+  dokploy-network:
+    external: true
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:
