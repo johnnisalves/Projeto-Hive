@@ -104,16 +104,72 @@ async function callGeminiText(apiKey: string, prompt: string): Promise<string> {
   return text.trim();
 }
 
-export async function generateCaption(params: GenerateCaptionParams): Promise<GenerateCaptionResult> {
+async function resolveTextProvider(): Promise<{ kind: 'openrouter' | 'google'; key: string; model: string } | null> {
   const { getSetting } = await import('../helpers/getSetting');
-  const apiKey = await getSetting('NANO_BANANA_API_KEY');
+  const provider = ((await getSetting('NANO_BANANA_PROVIDER')) || 'google').toLowerCase();
+  if (provider === 'openrouter') {
+    const key = await getSetting('OPENROUTER_API_KEY');
+    if (key) {
+      const model = (await getSetting('OPENROUTER_TEXT_MODEL')) || 'google/gemini-2.5-flash';
+      return { kind: 'openrouter', key, model };
+    }
+  }
+  const googleKey = await getSetting('NANO_BANANA_API_KEY');
+  if (googleKey) return { kind: 'google', key: googleKey, model: 'gemini-2.0-flash' };
+  return null;
+}
+
+async function callOpenRouterText(apiKey: string, model: string, prompt: string): Promise<string> {
+  const { env } = await import('../config/env');
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': env.FRONTEND_URL,
+      'X-Title': 'OpenHive',
+    },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.8,
+      max_tokens: 1024,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`OpenRouter text error ${response.status}: ${err.slice(0, 150)}`);
+  }
+
+  const data = (await response.json()) as any;
+  const text = data.choices?.[0]?.message?.content;
+  if (!text) throw new Error('No text returned from OpenRouter');
+  return String(text).trim();
+}
+
+/**
+ * Unified text generation: routes to OpenRouter when NANO_BANANA_PROVIDER=openrouter
+ * (single key for text + image), otherwise falls back to native Google Gemini.
+ */
+async function callText(prompt: string): Promise<string> {
+  const provider = await resolveTextProvider();
+  if (!provider) throw new Error('No text provider configured');
+  if (provider.kind === 'openrouter') {
+    return callOpenRouterText(provider.key, provider.model, prompt);
+  }
+  return callGeminiText(provider.key, prompt);
+}
+
+export async function generateCaption(params: GenerateCaptionParams): Promise<GenerateCaptionResult> {
+  const textProvider = await resolveTextProvider();
 
   let brand: BrandContext | null = null;
   if (params.brandId) {
     brand = await getBrandContext(params.brandId);
   }
 
-  if (!apiKey) {
+  if (!textProvider) {
     return generateCaptionStatic(params, brand);
   }
 
@@ -164,7 +220,7 @@ Regras:
   }
 
   try {
-    const result = await callGeminiText(apiKey, prompt);
+    const result = await callText(prompt);
 
     const titleMatch = result.match(/TITULO:\s*(.+)/i);
     const subtitleMatch = result.match(/SUBTITULO:\s*(.+)/i);
@@ -219,8 +275,7 @@ async function getBrandVisualContext(brandId: string): Promise<{ name: string; p
 }
 
 export async function generateImagePromptForStudio(params: GenerateImagePromptParams): Promise<GenerateImagePromptResult> {
-  const { getSetting } = await import('../helpers/getSetting');
-  const apiKey = await getSetting('NANO_BANANA_API_KEY');
+  const textProvider = await resolveTextProvider();
 
   let brand: { name: string; primaryColor?: string; secondaryColor?: string; description?: string } | null = null;
   if (params.brandId) {
@@ -264,7 +319,7 @@ Regras do prompt:
 - NUNCA peça texto/letras na imagem (vamos adicionar via overlay HTML)
 - Evite faces muito próximas (AI Studio distorce facilmente)`;
 
-  if (!apiKey) {
+  if (!textProvider) {
     // Fallback: prompt simples sem Gemini
     const fallbackPrompt = `Professional ${style} style image for social media. Topic: ${params.topic}. High quality, vibrant colors, ${ratio} composition with negative space for text overlay. Crisp details, modern aesthetic.`;
     return {
@@ -275,7 +330,7 @@ Regras do prompt:
   }
 
   try {
-    const result = await callGeminiText(apiKey, prompt);
+    const result = await callText(prompt);
 
     const promptMatch = result.match(/PROMPT:\s*([\s\S]+?)(?=NEGATIVE:|$)/i);
     const negativeMatch = result.match(/NEGATIVE:\s*([\s\S]+?)(?=DICAS:|$)/i);
@@ -298,11 +353,10 @@ Regras do prompt:
 }
 
 export async function refineSlide(params: RefineSlideParams): Promise<RefineSlideResult> {
-  const { getSetting } = await import('../helpers/getSetting');
-  const apiKey = await getSetting('NANO_BANANA_API_KEY');
+  const textProvider = await resolveTextProvider();
 
-  if (!apiKey) {
-    throw new Error('Configure sua Google Gemini API Key em Configurações para usar IA');
+  if (!textProvider) {
+    throw new Error('Configure sua chave de IA (OpenRouter ou Google Gemini) em Configurações para usar IA');
   }
 
   const { title, subtitle, label, instruction } = params;
@@ -326,7 +380,7 @@ Regras:
 - Mantenha impactante e conciso
 - Siga a instrução do usuário fielmente`;
 
-  const result = await callGeminiText(apiKey, prompt);
+  const result = await callText(prompt);
 
   const titleMatch = result.match(/TITULO:\s*(.+)/i);
   const subtitleMatch = result.match(/SUBTITULO:\s*(.+)/i);

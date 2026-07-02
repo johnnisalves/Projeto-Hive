@@ -165,31 +165,112 @@ async function generateViaGemini(prompt: string, aspectRatio?: string): Promise<
   };
 }
 
+async function generateViaOpenRouter(prompt: string, aspectRatio?: string): Promise<{ buffer: Buffer; contentType: string }> {
+  const { getSetting } = await import('../helpers/getSetting');
+  const apiKey = await getSetting('OPENROUTER_API_KEY');
+  if (!apiKey) {
+    throw new Error('OPENROUTER_API_KEY not configured');
+  }
+
+  const configured = await getSetting('OPENROUTER_IMAGE_MODEL');
+  const model = configured || 'google/gemini-3-pro-image';
+  const ratio = aspectRatio || '1:1';
+
+  const url = 'https://openrouter.ai/api/v1/chat/completions';
+  const body = JSON.stringify({
+    model,
+    messages: [
+      { role: 'user', content: `Generate an image with aspect ratio ${ratio}. ${prompt}` },
+    ],
+    // OpenRouter unified image API: image output comes back in message.images[]
+    modalities: ['image', 'text'],
+  });
+
+  let response: globalThis.Response | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': env.FRONTEND_URL,
+        'X-Title': 'OpenHive',
+      },
+      body,
+    });
+    if (response.ok || (response.status !== 503 && response.status !== 429)) break;
+    await new Promise(r => setTimeout(r, (attempt + 1) * 5000));
+  }
+
+  if (!response!.ok) {
+    const errorText = await response!.text();
+    throw new Error(`OpenRouter error ${response!.status}: ${errorText.slice(0, 150)}`);
+  }
+
+  const data = (await response!.json()) as any;
+  const message = data.choices?.[0]?.message;
+  const images = message?.images || [];
+  const first = images[0];
+  const dataUrl: string | undefined = first?.image_url?.url || (typeof first === 'string' ? first : undefined);
+  if (!dataUrl || !dataUrl.startsWith('data:')) {
+    throw new Error('No image returned from OpenRouter');
+  }
+
+  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!match) {
+    throw new Error('Malformed image data URL from OpenRouter');
+  }
+  const contentType = match[1];
+  const buffer = Buffer.from(match[2], 'base64');
+
+  console.log(`[OpenRouter] Image generated via ${model} (${(buffer.length / 1024).toFixed(0)}KB)`);
+  return { buffer, contentType };
+}
+
 export async function generateImage(params: GenerateImageParams): Promise<GenerateImageResult> {
   const usage = checkUsage();
   if (!usage.allowed) {
     throw new Error(`Daily limit reached (${DAILY_LIMIT} images). Resets in ${usage.resetsIn}.`);
   }
 
+  const { getSetting } = await import('../helpers/getSetting');
+  const provider = ((await getSetting('NANO_BANANA_PROVIDER')) || env.NANO_BANANA_PROVIDER || 'google').toLowerCase();
+
   const enrichedPrompt = params.style
     ? `Professional social media, high quality, vibrant colors, ${params.style} style, ${params.prompt}`
     : `Professional social media, high quality, vibrant colors, ${params.prompt}`;
 
-  let imageBuffer: Buffer;
-  let contentType = 'image/jpeg';
+  // Ordered cascade of generators. When provider=openrouter, OpenRouter (Nano Banana Pro
+  // etc) goes first for best quality; HuggingFace (free) and native Gemini stay as
+  // graceful fallbacks so image generation never hard-fails when one provider is down.
+  const attempts: Array<{ name: string; run: () => Promise<{ buffer: Buffer; contentType: string }> }> = [];
+  if (provider === 'openrouter') {
+    attempts.push({ name: 'OpenRouter', run: () => generateViaOpenRouter(enrichedPrompt, params.aspectRatio) });
+  }
+  attempts.push({
+    name: 'HuggingFace',
+    run: async () => ({ buffer: await generateViaHuggingFace(enrichedPrompt, params.aspectRatio), contentType: 'image/jpeg' }),
+  });
+  attempts.push({ name: 'Gemini', run: () => generateViaGemini(enrichedPrompt, params.aspectRatio) });
 
-  // Try HuggingFace first (free, fast), fallback to Gemini (paid quota)
-  try {
-    imageBuffer = await generateViaHuggingFace(enrichedPrompt, params.aspectRatio);
-  } catch (hfError: any) {
-    console.log(`[NanoBana] HF failed: ${hfError.message}. Trying Gemini fallback...`);
+  let imageBuffer: Buffer | null = null;
+  let contentType = 'image/jpeg';
+  const errors: string[] = [];
+
+  for (const attempt of attempts) {
     try {
-      const geminiResult = await generateViaGemini(enrichedPrompt, params.aspectRatio);
-      imageBuffer = geminiResult.buffer;
-      contentType = geminiResult.contentType;
-    } catch (geminiError: any) {
-      throw new Error(`Image generation failed. HF: ${hfError.message} | Gemini: ${geminiError.message}`);
+      const r = await attempt.run();
+      imageBuffer = r.buffer;
+      contentType = r.contentType;
+      break;
+    } catch (e: any) {
+      errors.push(`${attempt.name}: ${e.message}`);
+      console.log(`[NanoBana] ${attempt.name} failed: ${e.message}`);
     }
+  }
+
+  if (!imageBuffer) {
+    throw new Error(`Image generation failed. ${errors.join(' | ')}`);
   }
 
   const result = await uploadToMinio(imageBuffer, contentType);

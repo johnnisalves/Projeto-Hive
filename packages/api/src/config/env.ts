@@ -15,7 +15,15 @@ const envSchema = z.object({
   FACEBOOK_APP_SECRET: z.string().optional(),
 
   NANO_BANANA_API_KEY: z.string().optional(),
-  NANO_BANANA_PROVIDER: z.enum(['google', 'nanobananaapi', 'fal']).default('google'),
+  NANO_BANANA_PROVIDER: z.enum(['google', 'nanobananaapi', 'fal', 'openrouter']).default('google'),
+
+  // OpenRouter — provider unificado de geração de imagem (Nano Banana Pro etc).
+  // Uma única chave dá acesso a todos os modelos (google/gemini-3-pro-image,
+  // google/gemini-3.1-flash-image, openai/gpt-5-image, ...). Trocar de modelo
+  // é só mudar OPENROUTER_IMAGE_MODEL. Requer NANO_BANANA_PROVIDER=openrouter.
+  OPENROUTER_API_KEY: z.string().optional(),
+  OPENROUTER_IMAGE_MODEL: z.string().default('google/gemini-3-pro-image'),
+  OPENROUTER_TEXT_MODEL: z.string().default('google/gemini-2.5-flash'),
 
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_ALLOWED_CHAT_IDS: z.string().optional(),
