@@ -320,6 +320,20 @@ export default function SettingsPage() {
         <p className="text-sm text-text-secondary mt-1">Gerencie integracoes e chaves de API</p>
       </div>
 
+      {/* Atalho: Empresas (logo + informacoes ficam la) */}
+      <div className="mb-6">
+        <a href="/brands" className="card p-5 flex items-center gap-4 border-2 border-primary/30 hover:border-primary transition-colors group block">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 flex items-center justify-center flex-shrink-0">
+            <Hexagon className="w-6 h-6 text-violet-600" strokeWidth={1.5} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-bold text-text-primary">Logo e informacoes da empresa</h3>
+            <p className="text-xs text-text-secondary mt-0.5">Logo, telefone/WhatsApp, cores, produtos, direcao de arte e tom de voz ficam no menu <span className="font-semibold text-primary">Empresas</span> — clique aqui para gerenciar</p>
+          </div>
+          <ExternalLink className="w-4 h-4 text-text-muted group-hover:text-primary transition-colors flex-shrink-0" />
+        </a>
+      </div>
+
       {/* MCP Connection */}
       <div className="mb-6">
         <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-3">Conexao MCP</p>
