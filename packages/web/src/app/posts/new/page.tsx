@@ -108,17 +108,27 @@ export default function NewPost() {
     if (uploaded.length > 0) {
       setImages((prev) => [...prev, ...uploaded]);
       setActiveImageIndex(images.length + uploaded.length - 1);
+      // Auto-legenda: se ainda nao tem legenda/hashtags, gera automaticamente a partir da arte
+      if (!caption.trim() && !hashtags.trim()) {
+        handleGenerateCaption(uploaded[0].url);
+      }
     }
     setArtUploading(false);
   }
 
-  async function handleGenerateCaption() {
-    const topic = (prompt || caption || '').trim();
-    if (!topic) { setMessage('Escreva um tema/contexto no campo Prompt para gerar a legenda'); setMessageType('error'); return; }
+  async function handleGenerateCaption(imageOverride?: string) {
+    // Gera a partir do que existir: prompt digitado, legenda atual, a ARTE subida (a IA "ve" a imagem) e/ou dados da empresa
+    const topic = (prompt || '').trim();
+    const imageUrl = imageOverride || images[activeImageIndex]?.url || images[0]?.url;
+    if (!topic && !imageUrl && !selectedBrandId) {
+      setMessage('Suba uma arte, selecione uma empresa ou escreva um tema no Prompt');
+      setMessageType('error');
+      return;
+    }
     setCaptionLoading(true);
     setMessage('');
     try {
-      const cap = await api.generateCaption(topic, undefined, selectedBrandId, captionMode, platforms[0]);
+      const cap = await api.generateCaption(topic, undefined, selectedBrandId, captionMode, platforms[0], imageUrl);
       setCaption(cap.caption);
       setHashtags(cap.hashtags.join(', '));
     } catch (err: any) {
@@ -601,7 +611,7 @@ export default function NewPost() {
               <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Legenda</label>
               <div className="flex items-center gap-3">
                 <button
-                  onClick={handleGenerateCaption}
+                  onClick={() => handleGenerateCaption()}
                   disabled={captionLoading}
                   className="flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary/80 disabled:opacity-50"
                 >
@@ -658,10 +668,29 @@ export default function NewPost() {
             )}
           </div>
 
-          {/* Schedule */}
+          {/* Schedule / Publish now */}
           <div className="card p-5">
             <label className="block text-xs font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Agendar para</label>
             <input type="datetime-local" value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} className="input-field" />
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => handleSave('publish')}
+                disabled={loading || images.length === 0}
+                className="btn-cta flex-1 justify-center text-xs py-2.5"
+              >
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" strokeWidth={1.5} />}
+                Publicar agora
+              </button>
+              <button
+                onClick={() => handleSave('schedule')}
+                disabled={loading || !scheduledAt || images.length === 0}
+                className="btn-ghost flex-1 justify-center text-xs py-2.5 text-status-scheduled border-status-scheduled/30 hover:bg-blue-500/10"
+              >
+                <Clock className="w-4 h-4" strokeWidth={1.5} />
+                Agendar
+              </button>
+            </div>
+            <p className="text-[10px] text-text-muted mt-2">Sem pressa? Escolha data/hora e clique em Agendar. Com pressa? Publicar agora envia direto pro Instagram.</p>
           </div>
 
           {/* File Upload */}

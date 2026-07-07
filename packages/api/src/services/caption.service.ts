@@ -11,7 +11,7 @@ interface BrandContext {
 export type CaptionMode = 'engajar' | 'vender' | 'educar';
 
 interface GenerateCaptionParams {
-  topic: string;
+  topic?: string;
   tone?: 'educativo' | 'inspirador' | 'humor' | 'noticia';
   mode?: CaptionMode;
   platform?: string;
@@ -19,6 +19,8 @@ interface GenerateCaptionParams {
   language?: string;
   maxLength?: number;
   brandId?: string;
+  /** URL da arte do post — a IA analisa a imagem e escreve a legenda com base nela */
+  imageUrl?: string;
 }
 
 interface GenerateCaptionResult {
@@ -122,7 +124,7 @@ function generateHashtags(topic: string, count: number, brandHashtags?: string[]
 }
 
 function generateCaptionStatic(params: GenerateCaptionParams, brand?: BrandContext | null): GenerateCaptionResult {
-  const { topic, tone = 'educativo', hashtagsCount = 10, maxLength = 2200 } = params;
+  const { topic = 'novidades', tone = 'educativo', hashtagsCount = 10, maxLength = 2200 } = params;
 
   const template = TONE_TEMPLATES[tone] || TONE_TEMPLATES.educativo;
   const brandName = brand?.name || 'nossos seguidores';
@@ -177,8 +179,15 @@ async function resolveTextProvider(): Promise<{ kind: 'openrouter' | 'google'; k
   return null;
 }
 
-async function callOpenRouterText(apiKey: string, model: string, prompt: string): Promise<string> {
+async function callOpenRouterText(apiKey: string, model: string, prompt: string, imageUrl?: string): Promise<string> {
   const { env } = await import('../config/env');
+  // Multimodal: quando ha imagem, envia texto + imagem (o modelo "ve" a arte do post)
+  const content: any = imageUrl
+    ? [
+        { type: 'text', text: prompt },
+        { type: 'image_url', image_url: { url: imageUrl } },
+      ]
+    : prompt;
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -189,7 +198,7 @@ async function callOpenRouterText(apiKey: string, model: string, prompt: string)
     },
     body: JSON.stringify({
       model,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content }],
       temperature: 0.8,
       max_tokens: 1024,
     }),
@@ -210,12 +219,13 @@ async function callOpenRouterText(apiKey: string, model: string, prompt: string)
  * Unified text generation: routes to OpenRouter when NANO_BANANA_PROVIDER=openrouter
  * (single key for text + image), otherwise falls back to native Google Gemini.
  */
-async function callText(prompt: string): Promise<string> {
+async function callText(prompt: string, imageUrl?: string): Promise<string> {
   const provider = await resolveTextProvider();
   if (!provider) throw new Error('No text provider configured');
   if (provider.kind === 'openrouter') {
-    return callOpenRouterText(provider.key, provider.model, prompt);
+    return callOpenRouterText(provider.key, provider.model, prompt, imageUrl);
   }
+  // Gemini nativo: sem suporte a imagem neste caminho (texto apenas)
   return callGeminiText(provider.key, prompt);
 }
 
@@ -231,7 +241,10 @@ export async function generateCaption(params: GenerateCaptionParams): Promise<Ge
     return generateCaptionStatic(params, brand);
   }
 
-  const { topic, tone = 'educativo', hashtagsCount = 10, mode = 'engajar', platform } = params;
+  const { tone = 'educativo', hashtagsCount = 10, mode = 'engajar', platform, imageUrl } = params;
+  const topic = (params.topic || '').trim() || (imageUrl
+    ? 'Post para redes sociais da marca — use a IMAGEM anexada como fonte principal do conteudo'
+    : 'Post para redes sociais da marca');
 
   const platformKey = (platform || 'INSTAGRAM').toUpperCase();
   const platformRules = PLATFORM_RULES[platformKey] || PLATFORM_RULES.INSTAGRAM;
@@ -266,6 +279,7 @@ ${modeInstructions}
 
 ## BRIEFING
 - Tema/assunto: "${topic}"
+${imageUrl ? `- IMPORTANTE: a IMAGEM ANEXADA é a arte final do post. Analise o que ela mostra (headline, oferta, produto, telefone, clima) e escreva legenda 100% coerente com ela — a legenda complementa a arte, não repete nem descreve literalmente.` : ''}
 ${!brand ? `- Tom desejado: ${tone}` : ''}
 ${brand?.defaultHashtags?.length ? `- Hashtags obrigatórias da marca (inclua todas): ${brand.defaultHashtags.join(', ')}` : ''}
 
@@ -276,7 +290,7 @@ LEGENDA: [legenda pronta para colar, seguindo as regras da plataforma e o modo d
 HASHTAGS: [${hashtagsCount} hashtags separadas por vírgula, sem #${brand?.defaultHashtags?.length ? ' — inclua TODAS as obrigatórias da marca e complete com relevantes ao tema' : ', mix de alto volume e nicho'}]`;
 
   try {
-    const result = await callText(prompt);
+    const result = await callText(prompt, imageUrl);
 
     const titleMatch = result.match(/TITULO:\s*(.+)/i);
     const subtitleMatch = result.match(/SUBTITULO:\s*(.+)/i);

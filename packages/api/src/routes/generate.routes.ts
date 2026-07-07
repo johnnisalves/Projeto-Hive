@@ -25,7 +25,7 @@ const imageSchema = z.object({
 });
 
 const captionSchema = z.object({
-  topic: z.string().min(1),
+  topic: z.string().optional(),
   tone: z.enum(['educativo', 'inspirador', 'humor', 'noticia']).optional(),
   mode: z.enum(['engajar', 'vender', 'educar']).optional(),
   platform: z.string().optional(),
@@ -33,6 +33,7 @@ const captionSchema = z.object({
   language: z.string().optional(),
   maxLength: z.number().max(2200).optional(),
   brandId: z.string().optional(),
+  imageUrl: z.string().optional(),
 });
 
 router.use(authMiddleware);
