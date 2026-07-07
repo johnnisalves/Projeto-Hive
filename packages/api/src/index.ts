@@ -197,8 +197,32 @@ function logConfig() {
   console.log('============================');
 }
 
+async function ensureBrandColumns() {
+  // Idempotently ensure new Brand columns exist (migrations are not auto-applied on this deploy).
+  // Uses the query engine (always present) via raw SQL — safe on existing data.
+  const stmts = [
+    'ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "phone" TEXT',
+    'ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "artDirection" TEXT',
+  ];
+  for (const sql of stmts) {
+    try {
+      await prisma.$executeRawUnsafe(sql);
+    } catch (err) {
+      console.warn('[boot] ensureBrandColumns:', sql, (err as Error).message);
+    }
+  }
+  console.log('[boot] Brand columns ensured');
+}
+
 async function start() {
   logConfig();
+
+  try {
+    await ensureBrandColumns();
+  } catch (err) {
+    console.warn('[boot] ensureBrandColumns failed (continuing):', (err as Error).message);
+  }
+
   try {
     await initMinio();
     console.log('MinIO initialized');

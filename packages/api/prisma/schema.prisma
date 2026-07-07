@@ -64,6 +64,8 @@ model Brand {
   voiceTone       String?
   websiteUrl      String?
   instagramUrl    String?
+  phone           String?
+  artDirection    String?
   products        String[] @default([])
   defaultHashtags String[] @default([])
   defaultPlatforms String[] @default(["INSTAGRAM"])

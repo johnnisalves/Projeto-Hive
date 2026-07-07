@@ -196,6 +196,7 @@ router.post('/composed', validate(composedSchema), async (req: AuthRequest, res:
               accentColor: brand.accentColor || undefined,
               backgroundColor: brand.backgroundColor || undefined,
               products: brand.products,
+              artDirection: brand.artDirection || undefined,
             },
             aspectRatio,
             bakeText: false,

@@ -36,6 +36,7 @@ export async function generateImageController(req: Request, res: Response) {
               accentColor: brand.accentColor,
               backgroundColor: brand.backgroundColor,
               products: brand.products,
+              artDirection: brand.artDirection,
             }
           : null,
         aspectRatio,

@@ -49,6 +49,8 @@ const createBrandSchema = z.object({
   voiceTone: optionalString(1000),
   websiteUrl: optionalUrl,
   instagramUrl: optionalUrl,
+  phone: optionalString(50),
+  artDirection: optionalString(2000),
   products: z.array(z.string()).optional(),
   defaultHashtags: z.array(z.string()).optional(),
   defaultPlatforms: z.array(z.string()).optional(),

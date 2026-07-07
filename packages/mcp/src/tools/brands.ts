@@ -16,6 +16,8 @@ export interface CreateBrandInput {
   voice_tone?: string;
   website_url?: string;
   instagram_url?: string;
+  phone?: string;
+  art_direction?: string;
   products?: string[];
   default_hashtags?: string[];
   is_default?: boolean;
@@ -42,6 +44,8 @@ function toApiBody(input: Partial<CreateBrandInput>): Record<string, unknown> {
   if (input.voice_tone !== undefined) body.voiceTone = input.voice_tone;
   if (input.website_url !== undefined) body.websiteUrl = input.website_url;
   if (input.instagram_url !== undefined) body.instagramUrl = input.instagram_url;
+  if (input.phone !== undefined) body.phone = input.phone;
+  if (input.art_direction !== undefined) body.artDirection = input.art_direction;
   if (input.products !== undefined) body.products = input.products;
   if (input.default_hashtags !== undefined) body.defaultHashtags = input.default_hashtags;
   if (input.is_default !== undefined) body.isDefault = input.is_default;
@@ -67,6 +71,8 @@ function toResponse(brand: any) {
     voice_tone: brand.voiceTone,
     website_url: brand.websiteUrl,
     instagram_url: brand.instagramUrl,
+    phone: brand.phone,
+    art_direction: brand.artDirection,
     products: brand.products || [],
     default_hashtags: brand.defaultHashtags || [],
     is_default: brand.isDefault,
