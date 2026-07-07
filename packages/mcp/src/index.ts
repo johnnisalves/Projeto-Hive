@@ -135,13 +135,15 @@ function registerTools(server: McpServer) {
     {
       topic: z.string().describe('Tema do post'),
       tone: z.enum(['educativo', 'inspirador', 'humor', 'noticia']).optional().describe('Tom da legenda'),
+      mode: z.enum(['engajar', 'vender', 'educar']).optional().describe('Objetivo da legenda: engajar (comentarios/salvamentos), vender (conversao, CTA com WhatsApp da marca) ou educar (autoridade). Default: engajar'),
+      platform: z.string().optional().describe('Plataforma alvo (INSTAGRAM, FACEBOOK, LINKEDIN, X) — aplica regras de formato especificas'),
       hashtags_count: z.number().optional().describe('Quantidade de hashtags (1-30)'),
       language: z.string().optional().describe('Idioma (padrão: pt-BR)'),
       max_length: z.number().optional().describe('Tamanho máximo da legenda'),
       brand_id: z.string().optional().describe('ID do brand — gera legenda com tom de voz e hashtags da marca'),
     },
-    async ({ topic, tone, hashtags_count, language, max_length, brand_id }) => {
-      const result = await generateCaption({ topic, tone, hashtags_count, language, max_length, brand_id });
+    async ({ topic, tone, mode, platform, hashtags_count, language, max_length, brand_id }) => {
+      const result = await generateCaption({ topic, tone, mode, platform, hashtags_count, language, max_length, brand_id });
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     },
   );

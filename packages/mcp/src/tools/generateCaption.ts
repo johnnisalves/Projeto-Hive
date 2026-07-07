@@ -5,6 +5,8 @@ export async function generateCaption(input: GenerateCaptionInput) {
   const result = await api.generateCaption({
     topic: input.topic,
     tone: input.tone,
+    mode: input.mode,
+    platform: input.platform,
     hashtagsCount: input.hashtags_count,
     language: input.language,
     maxLength: input.max_length,

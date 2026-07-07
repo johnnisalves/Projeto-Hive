@@ -27,6 +27,8 @@ const imageSchema = z.object({
 const captionSchema = z.object({
   topic: z.string().min(1),
   tone: z.enum(['educativo', 'inspirador', 'humor', 'noticia']).optional(),
+  mode: z.enum(['engajar', 'vender', 'educar']).optional(),
+  platform: z.string().optional(),
   hashtagsCount: z.number().min(1).max(30).optional(),
   language: z.string().optional(),
   maxLength: z.number().max(2200).optional(),

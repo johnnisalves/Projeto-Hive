@@ -31,6 +31,8 @@ export interface GenerateImageInput {
 export interface GenerateCaptionInput {
   topic: string;
   tone?: 'educativo' | 'inspirador' | 'humor' | 'noticia';
+  mode?: 'engajar' | 'vender' | 'educar';
+  platform?: string;
   hashtags_count?: number;
   language?: string;
   max_length?: number;

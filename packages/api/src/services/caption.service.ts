@@ -4,11 +4,17 @@ interface BrandContext {
   defaultHashtags?: string[];
   products?: string[];
   description?: string;
+  phone?: string;
+  tonePrompt?: string;
 }
+
+export type CaptionMode = 'engajar' | 'vender' | 'educar';
 
 interface GenerateCaptionParams {
   topic: string;
   tone?: 'educativo' | 'inspirador' | 'humor' | 'noticia';
+  mode?: CaptionMode;
+  platform?: string;
   hashtagsCount?: number;
   language?: string;
   maxLength?: number;
@@ -40,6 +46,56 @@ const TONE_TEMPLATES: Record<string, string> = {
   noticia: '🔥 NOVIDADE!\n\n{content}\n\n📲 Fica ligado para mais updates!',
 };
 
+// ── Modo de conteúdo (portado do motor Dispara AI) ──
+const MODE_INSTRUCTIONS: Record<CaptionMode, string> = {
+  engajar: `OBJETIVO: MAXIMIZAR ENGAJAMENTO (comentários, compartilhamentos, salvamentos)
+- Faça perguntas abertas que gerem conversa
+- Use storytelling pessoal/relatável
+- Gatilhos: curiosidade, identificação, nostalgia, humor
+- Técnica "loop aberto": comece com uma promessa e entregue no final
+- Peça opinião: "Concorda? Comenta aí"
+- Use "Salve esse post" como CTA (aumenta alcance algorítmico)`,
+
+  vender: `OBJETIVO: GERAR CONVERSÕES (pedidos, cliques, vendas, leads)
+- Framework PAS (Problema → Agitação → Solução) ou AIDA (Atenção → Interesse → Desejo → Ação)
+- Foque em BENEFÍCIOS e desejo, não em características
+- Prova social quando fizer sentido (clientes satisfeitos, mais pedido, favorito da casa)
+- Urgência real e leve: "só hoje", "enquanto durar", "peça agora"
+- CTA claro e específico — se a marca tiver WhatsApp/telefone, use-o no CTA (ex: "Peça pelo WhatsApp: (87) 99999-9999")
+- Quebre objeções antes que apareçam`,
+
+  educar: `OBJETIVO: CONSTRUIR AUTORIDADE E CONFIANÇA
+- Comece com um dado/fato surpreendente
+- Estruture em passos numerados ou lista curta
+- Use analogias simples para conceitos complexos
+- Dê uma dica prática que o seguidor possa aplicar HOJE
+- Posicione a marca como especialista sem arrogância
+- CTA: "Salve para consultar depois" ou "Compartilhe com alguém que precisa"`,
+};
+
+// ── Regras por plataforma (portado do motor Dispara AI) ──
+const PLATFORM_RULES: Record<string, string> = {
+  INSTAGRAM: `- MÁXIMO 1800 caracteres (limite é 2200, deixe margem)
+- Gancho forte nos primeiros 125 caracteres (é o que aparece antes do "mais")
+- Parágrafos curtos (2-3 linhas), máximo 4 parágrafos
+- 1-2 emojis por parágrafo, não mais
+- CTA curto no final (1 frase)
+- Seja CONCISO. Menos é mais. Corte tudo que não agrega valor direto.`,
+  FACEBOOK: `- Posts entre 40-80 palavras têm mais engajamento
+- Perguntas geram mais comentários
+- Tom conversacional e storytelling
+- Emojis moderados, 1-2 por parágrafo`,
+  LINKEDIN: `- Tom profissional mas humano, nunca corporativo demais
+- Comece com afirmação provocativa ou dado surpreendente
+- Use quebras de linha e listas para facilitar leitura
+- 1300-1600 caracteres é o ideal
+- Máximo 1-2 emojis no post inteiro
+- CTA: "Concorda? Comente abaixo"`,
+  X: `- Direto e provocativo, máximo 280 caracteres
+- 1 ideia forte por post
+- No máximo 1-2 hashtags`,
+};
+
 async function getBrandContext(brandId: string): Promise<BrandContext | null> {
   const { prisma } = await import('../config/database');
   const brand = await prisma.brand.findUnique({ where: { id: brandId } });
@@ -50,6 +106,8 @@ async function getBrandContext(brandId: string): Promise<BrandContext | null> {
     defaultHashtags: brand.defaultHashtags?.length ? brand.defaultHashtags : undefined,
     products: brand.products?.length ? brand.products : undefined,
     description: brand.description || undefined,
+    phone: (brand as any).phone || undefined,
+    tonePrompt: (brand as any).tonePrompt || undefined,
   };
 }
 
@@ -173,51 +231,49 @@ export async function generateCaption(params: GenerateCaptionParams): Promise<Ge
     return generateCaptionStatic(params, brand);
   }
 
-  const { topic, tone = 'educativo', hashtagsCount = 10 } = params;
+  const { topic, tone = 'educativo', hashtagsCount = 10, mode = 'engajar', platform } = params;
 
-  let prompt: string;
+  const platformKey = (platform || 'INSTAGRAM').toUpperCase();
+  const platformRules = PLATFORM_RULES[platformKey] || PLATFORM_RULES.INSTAGRAM;
+  const modeInstructions = MODE_INSTRUCTIONS[mode] || MODE_INSTRUCTIONS.engajar;
+
+  // Brand context block (shared by both prompts)
+  let brandBlock = '';
   if (brand) {
-    prompt = `Você é redator de redes sociais de "${brand.name}".
-${brand.description ? `\nSobre a marca: ${brand.description}\n` : ''}
-${brand.voiceTone ? `IDENTIDADE DA MARCA - Tom de voz: ${brand.voiceTone}` : 'Tom: profissional e engajador'}
-
-Gere conteúdo para Instagram sobre: "${topic}"
-
-${brand.defaultHashtags?.length ? `Hashtags obrigatórias da marca (inclua todas): ${brand.defaultHashtags.join(', ')}` : ''}
-
-Retorne EXATAMENTE neste formato (sem markdown, sem aspas extras):
-TITULO: [título impactante, máximo 6 palavras]
-SUBTITULO: [subtítulo que complementa, máximo 15 palavras]
-LEGENDA: [legenda para Instagram, 100-200 palavras, com emojis adequados ao tom da marca e CTA]
-HASHTAGS: [${hashtagsCount} hashtags separadas por vírgula, sem #${brand.defaultHashtags?.length ? ' — inclua TODAS as hashtags obrigatórias da marca e adicione relevantes ao tema' : ', mix de alto volume e nicho'}]
-
-Regras:
-- Português BR
-- Título deve ser hook que para o scroll
-- Subtítulo complementa o título com dado ou contexto
-- Legenda com gancho, valor e CTA
-- Hashtags relevantes ao nicho da marca
-- Mantenha o tom de voz da marca em TODO o conteúdo`;
-  } else {
-    prompt = `Você é redator de conteúdo para Instagram.
-
-Gere conteúdo para um slide de carrossel sobre: "${topic}"
-
-Tom: ${tone}
-
-Retorne EXATAMENTE neste formato (sem markdown, sem aspas extras):
-TITULO: [título impactante, máximo 6 palavras]
-SUBTITULO: [subtítulo que complementa, máximo 15 palavras]
-LEGENDA: [legenda para Instagram, 100-200 palavras, com emojis moderados e CTA]
-HASHTAGS: [${hashtagsCount} hashtags separadas por vírgula, sem #]
-
-Regras:
-- Português BR
-- Título deve ser hook que para o scroll
-- Subtítulo complementa o título com dado ou contexto
-- Legenda com gancho, valor e CTA
-- Hashtags mix de alto volume e nicho`;
+    const parts: string[] = [`Marca: ${brand.name}`];
+    if (brand.description) parts.push(`Sobre: ${brand.description}`);
+    if (brand.products?.length) parts.push(`Produtos/serviços: ${brand.products.join(', ')}`);
+    if (brand.voiceTone) parts.push(`Tom de voz da marca: ${brand.voiceTone}`);
+    if (brand.tonePrompt) parts.push(`Instruções de tom da marca: ${brand.tonePrompt}`);
+    if (brand.phone) parts.push(`WhatsApp/telefone da marca: ${brand.phone} (use no CTA quando o objetivo for vender/pedir)`);
+    brandBlock = `\n## CONTEXTO DA MARCA\n${parts.join('\n')}\n`;
   }
+
+  const prompt = `Você é um copywriter sênior e estrategista de conteúdo digital com 10+ anos de experiência em redes sociais no Brasil. Domina copywriting (PAS, AIDA, storytelling), algoritmos e psicologia de engajamento.
+
+## REGRAS ABSOLUTAS
+- Responda SEMPRE em português brasileiro fluente e natural
+- NUNCA use clichês como "no mundo digital de hoje" ou "você sabia que"
+- Cada frase deve ter um propósito: informar, emocionar, persuadir ou direcionar ação
+- Emojis são ferramentas estratégicas, não decoração
+- O conteúdo deve soar como uma pessoa real, não uma IA
+${brandBlock}
+## REGRAS DA PLATAFORMA (${platformKey})
+${platformRules}
+
+## MODO DE CONTEÚDO
+${modeInstructions}
+
+## BRIEFING
+- Tema/assunto: "${topic}"
+${!brand ? `- Tom desejado: ${tone}` : ''}
+${brand?.defaultHashtags?.length ? `- Hashtags obrigatórias da marca (inclua todas): ${brand.defaultHashtags.join(', ')}` : ''}
+
+Retorne EXATAMENTE neste formato (sem markdown, sem aspas extras):
+TITULO: [título impactante, máximo 6 palavras — hook que para o scroll]
+SUBTITULO: [subtítulo que complementa, máximo 15 palavras]
+LEGENDA: [legenda pronta para colar, seguindo as regras da plataforma e o modo de conteúdo, com gancho, valor e CTA]
+HASHTAGS: [${hashtagsCount} hashtags separadas por vírgula, sem #${brand?.defaultHashtags?.length ? ' — inclua TODAS as obrigatórias da marca e complete com relevantes ao tema' : ', mix de alto volume e nicho'}]`;
 
   try {
     const result = await callText(prompt);

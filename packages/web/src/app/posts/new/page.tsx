@@ -54,6 +54,7 @@ export default function NewPost() {
   const artInputRef = useRef<HTMLInputElement>(null);
   const [artUploading, setArtUploading] = useState(false);
   const [captionLoading, setCaptionLoading] = useState(false);
+  const [captionMode, setCaptionMode] = useState<'engajar' | 'vender' | 'educar'>('engajar');
 
   function togglePlatform(p: Platform) {
     setPlatforms((prev) =>
@@ -114,7 +115,7 @@ export default function NewPost() {
     setCaptionLoading(true);
     setMessage('');
     try {
-      const cap = await api.generateCaption(topic, undefined, selectedBrandId);
+      const cap = await api.generateCaption(topic, undefined, selectedBrandId, captionMode, platforms[0]);
       setCaption(cap.caption);
       setHashtags(cap.hashtags.join(', '));
     } catch (err: any) {
@@ -145,7 +146,7 @@ export default function NewPost() {
       // Only auto-generate caption if it's empty (don't overwrite what the user typed)
       if (caption.trim() || hashtags.trim()) return null;
       try {
-        return await api.generateCaption(prompt, undefined, selectedBrandId);
+        return await api.generateCaption(prompt, undefined, selectedBrandId, captionMode, platforms[0]);
       } catch {
         return null;
       }
@@ -225,7 +226,7 @@ export default function NewPost() {
       let captionText = '';
       let captionHashtags: string[] = [];
       try {
-        const cap = await api.generateCaption(prompt, undefined, selectedBrandId);
+        const cap = await api.generateCaption(prompt, undefined, selectedBrandId, captionMode, platforms[0]);
         captionText = cap.caption;
         captionHashtags = cap.hashtags;
         const parts = cap.caption.split(/\.\s*\n|\n\n|\n/);
@@ -592,6 +593,28 @@ export default function NewPost() {
                 </button>
                 <span className="text-[11px] text-text-muted tabular-nums">{caption.length}/2200</span>
               </div>
+            </div>
+            {/* Objetivo da legenda (modo) */}
+            <div className="flex items-center gap-1.5 mb-3">
+              <span className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mr-1">Objetivo:</span>
+              {([
+                { value: 'engajar', label: '💬 Engajar' },
+                { value: 'vender', label: '💰 Vender' },
+                { value: 'educar', label: '📚 Educar' },
+              ] as const).map(({ value, label }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setCaptionMode(value)}
+                  className={`px-2.5 py-1 rounded-badge text-[11px] font-semibold border transition-all ${
+                    captionMode === value
+                      ? 'bg-primary/10 border-primary text-primary'
+                      : 'bg-bg-main border-border text-text-muted hover:border-primary/40'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
             <textarea
               value={caption}

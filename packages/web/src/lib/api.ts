@@ -97,10 +97,10 @@ export const api = {
       body: JSON.stringify({ prompt, aspectRatio }),
     }),
 
-  generateCaption: (topic: string, tone?: string, brandId?: string) =>
+  generateCaption: (topic: string, tone?: string, brandId?: string, mode?: string, platform?: string) =>
     request<{ caption: string; hashtags: string[] }>('/api/generate/caption', {
       method: 'POST',
-      body: JSON.stringify({ topic, tone, brandId }),
+      body: JSON.stringify({ topic, tone, brandId, mode, platform }),
     }),
 
   refineSlide: (body: { title: string; subtitle?: string; label?: string; instruction: string }) =>
