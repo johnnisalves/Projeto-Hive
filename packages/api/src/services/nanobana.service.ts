@@ -6,6 +6,10 @@ interface GenerateImageParams {
   prompt: string;
   style?: string;
   aspectRatio?: '1:1' | '9:16' | '4:5';
+  /** Negative prompt (what to avoid). Appended to the prompt for chat-based image models. */
+  negativePrompt?: string;
+  /** When true, `prompt` is used as-is (already art-directed) instead of the default wrapper. */
+  preEnriched?: boolean;
 }
 
 interface GenerateImageResult {
@@ -236,9 +240,14 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   const { getSetting } = await import('../helpers/getSetting');
   const provider = ((await getSetting('NANO_BANANA_PROVIDER')) || env.NANO_BANANA_PROVIDER || 'google').toLowerCase();
 
-  const enrichedPrompt = params.style
+  const base = params.preEnriched
+    ? params.prompt
+    : params.style
     ? `Professional social media, high quality, vibrant colors, ${params.style} style, ${params.prompt}`
     : `Professional social media, high quality, vibrant colors, ${params.prompt}`;
+  const enrichedPrompt = params.negativePrompt
+    ? `${base}\n\nAvoid in the image: ${params.negativePrompt}.`
+    : base;
 
   // Ordered cascade of generators. When provider=openrouter, OpenRouter (Nano Banana Pro
   // etc) goes first for best quality; HuggingFace (free) and native Gemini stay as

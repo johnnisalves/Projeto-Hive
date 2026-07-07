@@ -22,6 +22,10 @@ export interface GenerateImageInput {
   prompt: string;
   style?: string;
   aspect_ratio?: '1:1' | '9:16' | '4:5';
+  brand_id?: string;
+  enrich?: boolean;
+  art_style?: 'humanizado' | 'grafico';
+  bake_text?: boolean;
 }
 
 export interface GenerateCaptionInput {

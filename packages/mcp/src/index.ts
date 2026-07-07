@@ -113,14 +113,18 @@ function registerTools(server: McpServer) {
 
   server.tool(
     'generate_image',
-    'Gera uma imagem via Nano Banana API',
+    'Gera uma imagem via IA. Passe brand_id + enrich:true para que um "diretor de arte" reescreva o prompt (cinematográfico, premium, alinhado à identidade da marca) antes de gerar — recomendado para artes com cara de campanha. Por padrão NÃO renderiza texto na imagem (use bake_text:true para permitir).',
     {
-      prompt: z.string().describe('Descrição da imagem desejada'),
+      prompt: z.string().describe('Descrição/tema da imagem desejada'),
       style: z.string().optional().describe('Estilo da imagem'),
       aspect_ratio: z.enum(['1:1', '9:16', '4:5']).optional().describe('Proporção da imagem'),
+      brand_id: z.string().optional().describe('ID da marca para o diretor de arte alinhar mood/paleta (use com enrich:true)'),
+      enrich: z.boolean().optional().describe('Ativa o diretor de arte (enriquecimento de prompt em 2 estágios). Recomendado true para qualidade premium.'),
+      art_style: z.enum(['humanizado', 'grafico']).optional().describe('humanizado = foto real cinematográfica (default); grafico = design/infográfico moderno'),
+      bake_text: z.boolean().optional().describe('Se true, permite texto renderizado na imagem. Default false (texto vai como overlay depois).'),
     },
-    async ({ prompt, style, aspect_ratio }) => {
-      const result = await generateImage({ prompt, style, aspect_ratio });
+    async ({ prompt, style, aspect_ratio, brand_id, enrich, art_style, bake_text }) => {
+      const result = await generateImage({ prompt, style, aspect_ratio, brand_id, enrich, art_style, bake_text });
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     },
   );
@@ -665,6 +669,7 @@ function registerTools(server: McpServer) {
       overlay_opacity: z.number().min(0).max(1).optional().describe('Opacidade da camada escura entre fundo e HTML (0-1, default: 0). Use 0.4-0.6 quando o fundo e fotografico e os textos sao brancos'),
       brand_id: z.string().optional().describe('ID do brand para injetar cores/fontes como CSS variables e logo no canto. Use get_default_brand ou list_brands para descobrir IDs. SEMPRE passe quando disponivel'),
       apply_brand: z.boolean().optional().describe('Se true (padrao quando brand_id e fornecido), aplica brand. Se false, ignora mesmo com brand_id'),
+      enrich_background: z.boolean().optional().describe('Diretor de arte no fundo: quando ha brand, o background_prompt e reescrito em prompt cinematografico premium ANTES de gerar. Default: LIGADO quando ha brand. Passe false para usar o background_prompt exatamente como escrito.'),
     },
     async (input) => {
       const result = await composeImageWithOverlay(input);

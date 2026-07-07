@@ -8,6 +8,7 @@ export interface ComposeImageInput {
   overlay_opacity?: number;
   brand_id?: string;
   apply_brand?: boolean;
+  enrich_background?: boolean;
 }
 
 export async function composeImageWithOverlay(input: ComposeImageInput) {
@@ -23,6 +24,7 @@ export async function composeImageWithOverlay(input: ComposeImageInput) {
     overlayOpacity: input.overlay_opacity,
     brandId: input.brand_id,
     applyBrand: input.apply_brand,
+    enrichBackground: input.enrich_background,
   });
 
   return {

@@ -6,6 +6,10 @@ export async function generateImage(input: GenerateImageInput) {
     prompt: input.prompt,
     style: input.style,
     aspectRatio: input.aspect_ratio,
+    brandId: input.brand_id,
+    enrich: input.enrich,
+    artStyle: input.art_style,
+    bakeText: input.bake_text,
   });
   return { image_url: result.imageUrl };
 }

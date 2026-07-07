@@ -7,6 +7,7 @@ import { renderTemplateToImage, renderHtmlToImage, renderComposedToImage } from 
 import { TEMPLATES } from '../services/templates';
 import { generateImage } from '../services/nanobana.service';
 import { generateImagePromptForStudio } from '../services/caption.service';
+import { enrichImagePrompt } from '../services/artDirector.service';
 import { prisma } from '../config/database';
 import { resolveOwnerId } from '../helpers/resolveOwnerId';
 
@@ -16,6 +17,11 @@ const imageSchema = z.object({
   prompt: z.string().min(1),
   style: z.string().optional(),
   aspectRatio: z.enum(['1:1', '9:16', '4:5']).optional(),
+  // Art-director enrichment (opt-in)
+  brandId: z.string().optional(),
+  enrich: z.boolean().optional(),
+  artStyle: z.enum(['humanizado', 'grafico']).optional(),
+  bakeText: z.boolean().optional(),
 });
 
 const captionSchema = z.object({
@@ -145,6 +151,8 @@ const composedSchema = z.object({
   // Brand integration
   brandId: z.string().optional(),
   applyBrand: z.boolean().optional(),
+  // Art-director enrichment of the AI background (defaults ON when a brand is applied)
+  enrichBackground: z.boolean().optional(),
 });
 
 function getSizeFromAspect(ar?: string): { width: number; height: number } {
@@ -157,20 +165,56 @@ function getSizeFromAspect(ar?: string): { width: number; height: number } {
 
 router.post('/composed', validate(composedSchema), async (req: AuthRequest, res: Response) => {
   try {
-    const { html, backgroundPrompt, backgroundUrl, aspectRatio, overlayOpacity, brandId, applyBrand } = req.body;
+    const { html, backgroundPrompt, backgroundUrl, aspectRatio, overlayOpacity, brandId, applyBrand, enrichBackground } = req.body;
     const { width, height } = getSizeFromAspect(aspectRatio);
+
+    // Resolve brand once (used for both art-director enrichment and overlay colors/logo)
+    let brand: any = null;
+    if (brandId && applyBrand !== false) {
+      const userId = await resolveOwnerId(req.userId!);
+      brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+    }
 
     // Step 1: Resolve background URL (generate via AI if prompt was given)
     let bgUrl = backgroundUrl as string | undefined;
     if (!bgUrl && backgroundPrompt) {
-      console.log('[composed] Generating AI background:', backgroundPrompt);
-      const bg = await generateImage({ prompt: backgroundPrompt, aspectRatio });
+      let bgPrompt: string = backgroundPrompt;
+      let bgNegative: string | undefined;
+      let bgPreEnriched = false;
+      // Art-director enrichment: default ON when a brand is applied, unless explicitly disabled
+      const shouldEnrich = enrichBackground !== false && !!brand;
+      if (shouldEnrich) {
+        try {
+          const enriched = await enrichImagePrompt({
+            topic: backgroundPrompt,
+            brand: {
+              name: brand.name,
+              description: brand.description,
+              voiceTone: brand.voiceTone,
+              primaryColor: brand.primaryColor,
+              secondaryColor: brand.secondaryColor,
+              accentColor: brand.accentColor || undefined,
+              backgroundColor: brand.backgroundColor || undefined,
+              products: brand.products,
+            },
+            aspectRatio,
+            bakeText: false,
+          });
+          bgPrompt = enriched.prompt;
+          bgNegative = enriched.negativePrompt;
+          bgPreEnriched = true;
+        } catch {
+          /* fall back to the raw background prompt */
+        }
+      }
+      console.log(`[composed] AI background (enriched=${bgPreEnriched}):`, bgPrompt.slice(0, 120));
+      const bg = await generateImage({ prompt: bgPrompt, aspectRatio, negativePrompt: bgNegative, preEnriched: bgPreEnriched });
       bgUrl = bg.imageUrl;
     }
     // bgUrl can be empty — the HTML itself may contain the background
     if (!bgUrl) bgUrl = '';
 
-    // Step 2: Resolve brand fields if requested
+    // Step 2: Brand overlay fields (colors / fonts / logo / name)
     let brandPrimaryColor: string | undefined;
     let brandSecondaryColor: string | undefined;
     let brandAccentColor: string | undefined;
@@ -180,21 +224,16 @@ router.post('/composed', validate(composedSchema), async (req: AuthRequest, res:
     let brandBodyFont: string | undefined;
     let brandLogoUrl: string | undefined;
     let brandName: string | undefined;
-
-    if (brandId && applyBrand !== false) {
-      const userId = await resolveOwnerId(req.userId!);
-      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
-      if (brand) {
-        brandPrimaryColor = brand.primaryColor;
-        brandSecondaryColor = brand.secondaryColor;
-        brandAccentColor = brand.accentColor || undefined;
-        brandTextColor = brand.textColor || undefined;
-        brandFontFamily = brand.fontFamily || undefined;
-        brandHeadingFont = brand.headingFont || undefined;
-        brandBodyFont = brand.bodyFont || undefined;
-        brandLogoUrl = brand.logoUrl || undefined;
-        brandName = brand.name;
-      }
+    if (brand) {
+      brandPrimaryColor = brand.primaryColor;
+      brandSecondaryColor = brand.secondaryColor;
+      brandAccentColor = brand.accentColor || undefined;
+      brandTextColor = brand.textColor || undefined;
+      brandFontFamily = brand.fontFamily || undefined;
+      brandHeadingFont = brand.headingFont || undefined;
+      brandBodyFont = brand.bodyFont || undefined;
+      brandLogoUrl = brand.logoUrl || undefined;
+      brandName = brand.name;
     }
 
     // Step 3: Compose
