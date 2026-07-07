@@ -53,6 +53,7 @@ export default function NewPost() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const artInputRef = useRef<HTMLInputElement>(null);
   const [artUploading, setArtUploading] = useState(false);
+  const [artDragOver, setArtDragOver] = useState(false);
   const [captionLoading, setCaptionLoading] = useState(false);
   const [captionMode, setCaptionMode] = useState<'engajar' | 'vender' | 'educar'>('engajar');
 
@@ -89,9 +90,11 @@ export default function NewPost() {
   async function handleArtUpload(files: FileList) {
     const remaining = 10 - images.length;
     if (remaining <= 0) { setMessage('Maximo de 10 imagens por carrossel'); setMessageType('error'); return; }
+    const accepted = Array.from(files).filter((f) => /^image\/(png|jpe?g|webp)$/i.test(f.type));
+    if (accepted.length === 0) { setMessage('Formato nao suportado — use PNG, JPG ou WEBP'); setMessageType('error'); return; }
     setArtUploading(true);
     setMessage('');
-    const picked = Array.from(files).slice(0, remaining);
+    const picked = accepted.slice(0, remaining);
     const uploaded: CarouselImage[] = [];
     for (const f of picked) {
       try {
@@ -407,14 +410,28 @@ export default function NewPost() {
             />
             <button
               onClick={() => artInputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (!artDragOver) setArtDragOver(true); }}
+              onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setArtDragOver(false); }}
+              onDrop={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setArtDragOver(false);
+                if (e.dataTransfer?.files?.length) handleArtUpload(e.dataTransfer.files);
+              }}
               disabled={artUploading || images.length >= 10}
-              className="w-full flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-dashed border-border hover:border-emerald-400 hover:bg-emerald-500/5 transition-colors disabled:opacity-50"
+              className={`w-full flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-dashed transition-colors disabled:opacity-50 ${
+                artDragOver
+                  ? 'border-emerald-400 bg-emerald-500/15 scale-[1.01]'
+                  : 'border-border hover:border-emerald-400 hover:bg-emerald-500/5'
+              }`}
             >
-              {artUploading ? <Loader2 className="w-6 h-6 animate-spin text-emerald-600" /> : <Upload className="w-6 h-6 text-emerald-600" strokeWidth={1.5} />}
-              <span className="text-sm font-semibold text-text-primary">{artUploading ? 'Enviando...' : 'Clique para enviar sua arte'}</span>
-              <span className="text-[11px] text-text-muted">PNG, JPG ou WEBP • pode selecionar várias (carrossel) • máx 10</span>
+              {artUploading ? <Loader2 className="w-6 h-6 animate-spin text-emerald-600" /> : <Upload className={`w-6 h-6 text-emerald-600 ${artDragOver ? 'animate-bounce' : ''}`} strokeWidth={1.5} />}
+              <span className="text-sm font-semibold text-text-primary">
+                {artUploading ? 'Enviando...' : artDragOver ? 'Solta aqui! 👇' : 'Arraste sua arte aqui ou clique para escolher'}
+              </span>
+              <span className="text-[11px] text-text-muted">PNG, JPG ou WEBP • pode arrastar várias (carrossel) • máx 10</span>
             </button>
-            <p className="text-[10px] text-text-muted text-center mt-2">Fez a arte em outro app? Suba aqui, gere a legenda com IA e agende/publique.</p>
+            <p className="text-[10px] text-text-muted text-center mt-2">Fez a arte em outro app? Arraste da pasta direto pra cá, gere a legenda com IA e agende/publique.</p>
           </div>
 
           {/* AI generation */}
