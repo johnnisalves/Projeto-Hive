@@ -16,7 +16,7 @@ const links = [
   { href: '/tasks', label: 'Tarefas', icon: CheckSquare, page: 'tasks' },
   { href: '/projects', label: 'Projetos', icon: FolderKanban, page: 'projects' },
   { href: '/funnels', label: 'Funis', icon: GitBranch, page: 'funnels' },
-  { href: '/brands', label: 'Brands', icon: Palette, page: 'brands' },
+  { href: '/brands', label: 'Empresas', icon: Palette, page: 'brands' },
   { href: '/team', label: 'Equipe', icon: Users, page: 'team' },
   { href: '/settings', label: 'Configuracoes', icon: Settings, page: 'settings' },
 ];

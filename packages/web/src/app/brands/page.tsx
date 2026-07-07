@@ -22,6 +22,8 @@ interface Brand {
   voiceTone?: string | null;
   websiteUrl?: string | null;
   instagramUrl?: string | null;
+  phone?: string | null;
+  artDirection?: string | null;
   products: string[];
   defaultHashtags: string[];
   defaultPlatforms: string[];
@@ -46,6 +48,8 @@ const EMPTY_BRAND: Partial<Brand> = {
   voiceTone: '',
   websiteUrl: '',
   instagramUrl: '',
+  phone: '',
+  artDirection: '',
   products: [],
   defaultHashtags: [],
   defaultPlatforms: ['INSTAGRAM'],
@@ -106,7 +110,7 @@ export default function BrandsPage() {
   }
 
   async function handleSave() {
-    if (!editing.name?.trim()) { alert('Nome do brand e obrigatorio'); return; }
+    if (!editing.name?.trim()) { alert('Nome da empresa e obrigatorio'); return; }
     setSaving(true);
     try {
       // Helper: empty string -> undefined (omit from payload)
@@ -128,6 +132,8 @@ export default function BrandsPage() {
         voiceTone: opt(editing.voiceTone),
         websiteUrl: opt(editing.websiteUrl),
         instagramUrl: opt(editing.instagramUrl),
+        phone: opt(editing.phone),
+        artDirection: opt(editing.artDirection),
         products: productsText.split(',').map((p) => p.trim()).filter(Boolean),
         defaultHashtags: hashtagsText.split(',').map((h) => h.trim().replace(/^#/, '')).filter(Boolean),
         defaultPlatforms: selectedPlatforms,
@@ -152,7 +158,7 @@ export default function BrandsPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!await confirm({ message: 'Deletar este brand?' })) return;
+    if (!await confirm({ message: 'Deletar esta empresa?' })) return;
     try {
       await api.deleteBrand(id);
       setBrands((prev) => prev.filter((b) => b.id !== id));
@@ -171,14 +177,14 @@ export default function BrandsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-page-title text-text-primary">Brands</h1>
+          <h1 className="text-page-title text-text-primary">Empresas</h1>
           <p className="text-sm text-text-secondary mt-1">
-            Gerencie a identidade visual das suas marcas - logo, cores, produtos
+            Gerencie suas empresas — logo, telefone, cores, direção de arte
           </p>
         </div>
         <button onClick={openCreate} className="btn-cta">
           <Plus className="w-4 h-4" strokeWidth={2.5} />
-          Novo Brand
+          Nova Empresa
         </button>
       </div>
 
@@ -190,11 +196,11 @@ export default function BrandsPage() {
       ) : brands.length === 0 ? (
         <div className="card p-16 text-center">
           <Palette className="w-16 h-16 text-text-muted mx-auto mb-4" strokeWidth={1} />
-          <h3 className="text-base font-bold text-text-primary mb-2">Nenhum brand cadastrado</h3>
-          <p className="text-sm text-text-muted mb-5">Cadastre seu primeiro brand para aplicar identidade visual nos seus posts</p>
+          <h3 className="text-base font-bold text-text-primary mb-2">Nenhuma empresa cadastrada</h3>
+          <p className="text-sm text-text-muted mb-5">Cadastre sua primeira empresa para aplicar logo, informações e direção de arte nos seus posts</p>
           <button onClick={openCreate} className="btn-cta inline-flex">
             <Plus className="w-4 h-4" strokeWidth={2.5} />
-            Criar primeiro brand
+            Criar primeira empresa
           </button>
         </div>
       ) : (
@@ -325,8 +331,8 @@ export default function BrandsPage() {
                   <Palette className="w-5 h-5 text-violet-600" strokeWidth={1.5} />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-text-primary">{editing.id ? 'Editar Brand' : 'Novo Brand'}</h3>
-                  <p className="text-xs text-text-secondary">Configure a identidade visual da sua marca</p>
+                  <h3 className="text-base font-bold text-text-primary">{editing.id ? 'Editar Empresa' : 'Nova Empresa'}</h3>
+                  <p className="text-xs text-text-secondary">Configure a logo, informações e identidade visual da empresa</p>
                 </div>
               </div>
               <button onClick={() => setModalOpen(false)} className="p-1.5 rounded hover:bg-bg-main">
@@ -386,6 +392,18 @@ export default function BrandsPage() {
                         {uploading ? 'Enviando...' : editing.logoUrl ? 'Trocar logo' : 'Enviar logo'}
                       </button>
                     </div>
+                  </div>
+
+                  {/* Phone / WhatsApp */}
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Telefone / WhatsApp</label>
+                    <input
+                      value={editing.phone || ''}
+                      onChange={(e) => setEditing({ ...editing, phone: e.target.value })}
+                      placeholder="(87) 99130-5450"
+                      className="input-field"
+                    />
+                    <p className="text-[10px] text-text-muted mt-1">Aparece nas artes e nos CTAs de contato</p>
                   </div>
                 </div>
               </section>
@@ -573,6 +591,18 @@ export default function BrandsPage() {
                     />
                     <p className="text-[10px] text-text-muted mt-1">Instruções para geração de imagens e templates visuais</p>
                   </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Direção de Arte (regras fixas)</label>
+                    <textarea
+                      value={editing.artDirection || ''}
+                      onChange={(e) => setEditing({ ...editing, artDirection: e.target.value })}
+                      rows={4}
+                      maxLength={2000}
+                      placeholder="Regras que a IA SEMPRE segue nas artes desta empresa. Ex: NUNCA mostrar forno a lenha; cores vivas; pizza gigante e apetitosa; logo em brasão preto; CTA WhatsApp no rodapé."
+                      className="input-field resize-y text-xs"
+                    />
+                    <p className="text-[10px] text-text-muted mt-1">O &quot;diretor de arte&quot; aplica essas regras automaticamente em toda geração de imagem</p>
+                  </div>
                 </div>
               </section>
 
@@ -621,7 +651,7 @@ export default function BrandsPage() {
             <div className="flex gap-2 justify-end p-6 pt-4 border-t border-border">
               <button onClick={() => setModalOpen(false)} className="btn-ghost text-xs">Cancelar</button>
               <button onClick={handleSave} disabled={saving} className="btn-cta text-xs">
-                {saving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando...</> : 'Salvar Brand'}
+                {saving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando...</> : 'Salvar Empresa'}
               </button>
             </div>
           </div>

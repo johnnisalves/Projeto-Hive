@@ -51,6 +51,9 @@ export default function NewPost() {
   const [postFile, setPostFile] = useState({ url: '', name: '' });
   const [fileUploading, setFileUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const artInputRef = useRef<HTMLInputElement>(null);
+  const [artUploading, setArtUploading] = useState(false);
+  const [captionLoading, setCaptionLoading] = useState(false);
 
   function togglePlatform(p: Platform) {
     setPlatforms((prev) =>
@@ -80,6 +83,45 @@ export default function NewPost() {
       setMessageType('error');
     }
     setFileUploading(false);
+  }
+
+  async function handleArtUpload(files: FileList) {
+    const remaining = 10 - images.length;
+    if (remaining <= 0) { setMessage('Maximo de 10 imagens por carrossel'); setMessageType('error'); return; }
+    setArtUploading(true);
+    setMessage('');
+    const picked = Array.from(files).slice(0, remaining);
+    const uploaded: CarouselImage[] = [];
+    for (const f of picked) {
+      try {
+        const r = await api.uploadFile(f);
+        uploaded.push({ url: r.fileUrl });
+      } catch (err: any) {
+        setMessage(err.message || 'Erro ao enviar arte');
+        setMessageType('error');
+      }
+    }
+    if (uploaded.length > 0) {
+      setImages((prev) => [...prev, ...uploaded]);
+      setActiveImageIndex(images.length + uploaded.length - 1);
+    }
+    setArtUploading(false);
+  }
+
+  async function handleGenerateCaption() {
+    const topic = (prompt || caption || '').trim();
+    if (!topic) { setMessage('Escreva um tema/contexto no campo Prompt para gerar a legenda'); setMessageType('error'); return; }
+    setCaptionLoading(true);
+    setMessage('');
+    try {
+      const cap = await api.generateCaption(topic, undefined, selectedBrandId);
+      setCaption(cap.caption);
+      setHashtags(cap.hashtags.join(', '));
+    } catch (err: any) {
+      setMessage(err.message || 'Erro ao gerar legenda');
+      setMessageType('error');
+    }
+    setCaptionLoading(false);
   }
 
   async function handleGenerateImage() {
@@ -313,7 +355,7 @@ export default function NewPost() {
     <div className="max-w-7xl mx-auto animate-fade-in">
       <div className="mb-6">
         <h1 className="text-page-title text-text-primary">Criar Post</h1>
-        <p className="text-sm text-text-secondary mt-1">Gere imagens com IA ou abra o Editor Visual para um carrossel completo</p>
+        <p className="text-sm text-text-secondary mt-1">Suba sua arte pronta ou gere com IA — depois gere a legenda e agende/publique</p>
       </div>
 
       {/* Mode Entry — choose between AI generation here or Editor Visual */}
@@ -346,6 +388,34 @@ export default function NewPost() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Editor */}
         <div className="space-y-5">
+          {/* Upload own art */}
+          <div className="card p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-emerald-500/10 to-teal-500/10">
+                <Upload className="w-4 h-4 text-emerald-600" strokeWidth={2} />
+              </div>
+              <h2 className="text-sm font-bold text-text-primary">Subir Arte Pronta</h2>
+            </div>
+            <input
+              ref={artInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              multiple
+              className="hidden"
+              onChange={(e) => { if (e.target.files?.length) handleArtUpload(e.target.files); e.target.value = ''; }}
+            />
+            <button
+              onClick={() => artInputRef.current?.click()}
+              disabled={artUploading || images.length >= 10}
+              className="w-full flex flex-col items-center justify-center gap-2 py-6 rounded-xl border-2 border-dashed border-border hover:border-emerald-400 hover:bg-emerald-500/5 transition-colors disabled:opacity-50"
+            >
+              {artUploading ? <Loader2 className="w-6 h-6 animate-spin text-emerald-600" /> : <Upload className="w-6 h-6 text-emerald-600" strokeWidth={1.5} />}
+              <span className="text-sm font-semibold text-text-primary">{artUploading ? 'Enviando...' : 'Clique para enviar sua arte'}</span>
+              <span className="text-[11px] text-text-muted">PNG, JPG ou WEBP • pode selecionar várias (carrossel) • máx 10</span>
+            </button>
+            <p className="text-[10px] text-text-muted text-center mt-2">Fez a arte em outro app? Suba aqui, gere a legenda com IA e agende/publique.</p>
+          </div>
+
           {/* AI generation */}
           <div className="card p-5">
             <div className="flex items-center gap-2 mb-4">
@@ -511,7 +581,17 @@ export default function NewPost() {
           <div className="card p-5">
             <div className="flex items-center justify-between mb-3">
               <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Legenda</label>
-              <span className="text-[11px] text-text-muted tabular-nums">{caption.length}/2200</span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={handleGenerateCaption}
+                  disabled={captionLoading}
+                  className="flex items-center gap-1 text-[11px] font-semibold text-primary hover:text-primary/80 disabled:opacity-50"
+                >
+                  {captionLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" strokeWidth={2} />}
+                  {captionLoading ? 'Gerando...' : 'Gerar com IA'}
+                </button>
+                <span className="text-[11px] text-text-muted tabular-nums">{caption.length}/2200</span>
+              </div>
             </div>
             <textarea
               value={caption}
