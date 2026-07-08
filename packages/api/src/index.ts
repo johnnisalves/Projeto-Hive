@@ -17,6 +17,7 @@ import settingsRoutes from './routes/settings.routes';
 import instagramRoutes from './routes/instagram.routes';
 import socialAccountRoutes from './routes/social-account.routes';
 import brandRoutes from './routes/brand.routes';
+import whatsappRoutes from './routes/whatsapp.routes';
 import calendarRoutes from './routes/calendar.routes';
 import designSystemsRoutes from './routes/designSystems.routes';
 import { publishWorker } from './jobs/publish.worker';
@@ -43,6 +44,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/instagram', instagramRoutes);
 app.use('/api/social-accounts', socialAccountRoutes);
 app.use('/api/brands', brandRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/design-systems', designSystemsRoutes);
 
@@ -206,6 +208,9 @@ async function ensureBrandColumns() {
     // SocialAccount.brandId (schema evoluiu; sem isso o publish quebra com prisma.socialAccount.findFirst)
     'ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "brandId" TEXT',
     'CREATE INDEX IF NOT EXISTS "SocialAccount_brandId_idx" ON "SocialAccount"("brandId")',
+    // WhatsappConnection (Status do WhatsApp via UAZ)
+    'CREATE TABLE IF NOT EXISTS "WhatsappConnection" ("id" TEXT PRIMARY KEY, "name" TEXT NOT NULL, "host" TEXT NOT NULL, "token" TEXT NOT NULL, "phone" TEXT, "isDefault" BOOLEAN NOT NULL DEFAULT false, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)',
+    'CREATE INDEX IF NOT EXISTS "WhatsappConnection_userId_idx" ON "WhatsappConnection"("userId")',
   ];
   for (const sql of stmts) {
     try {

@@ -317,6 +317,19 @@ export const api = {
     request(`/api/brands/${id}/default`, { method: 'PUT' }),
   deleteBrand: (id: string) => request(`/api/brands/${id}`, { method: 'DELETE' }),
 
+  // WhatsApp (Status via UAZ)
+  listWhatsappConnections: () => request<any[]>('/api/whatsapp/connections'),
+  addWhatsappConnection: (body: { name: string; host: string; token: string; phone?: string }) =>
+    request('/api/whatsapp/connections', { method: 'POST', body: JSON.stringify(body) }),
+  setDefaultWhatsappConnection: (id: string) =>
+    request(`/api/whatsapp/connections/${id}/default`, { method: 'PUT' }),
+  deleteWhatsappConnection: (id: string) =>
+    request(`/api/whatsapp/connections/${id}`, { method: 'DELETE' }),
+  testWhatsappConnection: (body: { host: string; token: string }) =>
+    request<{ ok: boolean; detail?: string }>('/api/whatsapp/test', { method: 'POST', body: JSON.stringify(body) }),
+  publishWhatsappStatus: (postId: string, connectionId?: string) =>
+    request<{ id: string }>(`/api/whatsapp/status/${postId}`, { method: 'POST', body: JSON.stringify({ connectionId }) }),
+
   // Instagram Accounts
   listInstagramAccounts: () => request<any[]>('/api/instagram/accounts'),
   addInstagramAccount: (body: { accessToken: string; instagramUserId: string; username?: string }) =>

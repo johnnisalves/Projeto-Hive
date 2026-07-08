@@ -179,6 +179,20 @@ model InstagramToken {
   @@index([userId])
 }
 
+// Conexao WhatsApp (UAZ API) para publicar no Status do WhatsApp
+model WhatsappConnection {
+  id        String   @id @default(uuid())
+  name      String
+  host      String
+  token     String
+  phone     String?
+  isDefault Boolean  @default(false)
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
 model SocialAccount {
   id              String          @id @default(uuid())
   platform        SocialPlatform

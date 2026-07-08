@@ -56,6 +56,7 @@ export default function NewPost() {
   const [artDragOver, setArtDragOver] = useState(false);
   const [captionLoading, setCaptionLoading] = useState(false);
   const [captionMode, setCaptionMode] = useState<'engajar' | 'vender' | 'educar'>('engajar');
+  const [publishMode, setPublishMode] = useState<'FEED' | 'STORIES'>('FEED');
 
   function togglePlatform(p: Platform) {
     setPlatforms((prev) =>
@@ -305,6 +306,31 @@ export default function NewPost() {
     }
   }
 
+  async function handleWhatsappStatus() {
+    if (images.length === 0) { setMessage('Suba uma arte para enviar ao Status do WhatsApp'); setMessageType('error'); return; }
+    setLoading(true);
+    setMessage('');
+    try {
+      const payload: Record<string, unknown> = {
+        caption,
+        hashtags: hashtags.split(',').map((h) => h.trim()).filter(Boolean),
+        aspectRatio,
+        platforms,
+        imageUrl: images[0].url,
+      };
+      if (selectedBrandId) payload.brandId = selectedBrandId;
+      const post = (await api.createPost(payload)) as any;
+      await api.publishWhatsappStatus(post.id);
+      setMessage('Enviado pro Status do WhatsApp! 🎉');
+      setMessageType('success');
+      setTimeout(() => router.push('/posts'), 1800);
+    } catch (err: any) {
+      setMessage(err.message || 'Erro ao enviar pro Status do WhatsApp');
+      setMessageType('error');
+    }
+    setLoading(false);
+  }
+
   function handleRemoveImage(index: number) {
     setImages((prev) => prev.filter((_, i) => i !== index));
     if (activeImageIndex >= images.length - 1) {
@@ -316,13 +342,14 @@ export default function NewPost() {
     setLoading(true);
     setMessage('');
     try {
-      const isCarousel = images.length >= 2;
+      const isCarousel = images.length >= 2 && publishMode !== 'STORIES';
       const payload: Record<string, unknown> = {
         caption,
         hashtags: hashtags.split(',').map((h) => h.trim()).filter(Boolean),
         nanoPrompt: prompt || undefined,
         aspectRatio,
         platforms,
+        publishMode,
       };
 
       if (selectedBrandId) payload.brandId = selectedBrandId;
@@ -522,6 +549,39 @@ export default function NewPost() {
             </div>
           </div>
 
+          {/* Publicar como: Feed / Stories */}
+          <div className="card p-5">
+            <label className="block text-xs font-semibold text-text-secondary mb-3 uppercase tracking-wider">Publicar como</label>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { value: 'FEED', label: 'Feed', desc: 'Post no perfil', icon: Layers },
+                { value: 'STORIES', label: 'Stories', desc: 'Some em 24h • 9:16', icon: Zap },
+              ] as const).map(({ value, label, desc, icon: Icon }) => {
+                const active = publishMode === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      setPublishMode(value);
+                      if (value === 'STORIES') setAspectRatio('9:16');
+                    }}
+                    className={`py-3 px-3 rounded-btn border transition-all duration-200 flex flex-col items-center gap-1 ${
+                      active ? 'bg-primary/[0.08] border-primary text-primary shadow-sm' : 'bg-bg-card border-border text-text-secondary hover:border-primary/50'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" strokeWidth={2} />
+                    <span className="font-bold text-sm">{label}</span>
+                    <span className="text-[10px] opacity-70">{desc}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {publishMode === 'STORIES' && (
+              <p className="text-[10px] text-text-muted mt-2">Stories publica só 1 imagem (a capa), sem legenda no Instagram, no formato vertical 9:16.</p>
+            )}
+          </div>
+
           {/* Aspect Ratio */}
           <div className="card p-5">
             <label className="block text-xs font-semibold text-text-secondary mb-3 uppercase tracking-wider">Tamanho da imagem</label>
@@ -691,6 +751,16 @@ export default function NewPost() {
               </button>
             </div>
             <p className="text-[10px] text-text-muted mt-2">Sem pressa? Escolha data/hora e clique em Agendar. Com pressa? Publicar agora envia direto pro Instagram.</p>
+            <button
+              onClick={handleWhatsappStatus}
+              disabled={loading || images.length === 0}
+              className="w-full flex items-center justify-center gap-2 mt-3 py-2.5 rounded-btn text-xs font-bold text-white transition-colors disabled:opacity-50"
+              style={{ background: '#25D366' }}
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageCircle className="w-4 h-4" strokeWidth={2} />}
+              Enviar pro Status do WhatsApp
+            </button>
+            <p className="text-[10px] text-text-muted mt-1.5">Publica a arte no seu Status do WhatsApp. Configure a conexão em Configurações → WhatsApp.</p>
           </div>
 
           {/* File Upload */}

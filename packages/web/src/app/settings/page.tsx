@@ -133,6 +133,13 @@ export default function SettingsPage() {
   const [igUserId, setIgUserId] = useState('');
   const [igAdding, setIgAdding] = useState(false);
 
+  // WhatsApp (Status via UAZ)
+  const [waConns, setWaConns] = useState<any[]>([]);
+  const [showAddWa, setShowAddWa] = useState(false);
+  const [waForm, setWaForm] = useState({ name: '', host: 'https://digitalcrm.uazapi.com', token: '', phone: '' });
+  const [waAdding, setWaAdding] = useState(false);
+  const [waTest, setWaTest] = useState('');
+
   // Social accounts (multi-platform)
   const [socialAccounts, setSocialAccounts] = useState<any[]>([]);
   const [showAddSocial, setShowAddSocial] = useState(false);
@@ -143,7 +150,50 @@ export default function SettingsPage() {
     loadSettings();
     loadIgAccounts();
     loadSocialAccounts();
+    loadWaConns();
   }, []);
+
+  async function loadWaConns() {
+    try {
+      const res: any = await api.listWhatsappConnections();
+      setWaConns(Array.isArray(res) ? res : res?.data || []);
+    } catch {}
+  }
+
+  async function handleAddWaConn() {
+    if (!waForm.name || !waForm.host || !waForm.token) return;
+    setWaAdding(true);
+    setWaTest('');
+    try {
+      await api.addWhatsappConnection(waForm);
+      setWaForm({ name: '', host: 'https://digitalcrm.uazapi.com', token: '', phone: '' });
+      setShowAddWa(false);
+      await loadWaConns();
+    } catch (e: any) {
+      setWaTest('Erro ao salvar: ' + (e?.message || ''));
+    }
+    setWaAdding(false);
+  }
+
+  async function handleTestWaConn() {
+    if (!waForm.host || !waForm.token) return;
+    setWaTest('Testando...');
+    try {
+      const r: any = await api.testWhatsappConnection({ host: waForm.host, token: waForm.token });
+      setWaTest(r?.ok ? '✅ Conexao OK' : '❌ Falhou: ' + (r?.detail || ''));
+    } catch (e: any) {
+      setWaTest('❌ Erro: ' + (e?.message || ''));
+    }
+  }
+
+  async function handleSetDefaultWa(id: string) {
+    try { await api.setDefaultWhatsappConnection(id); await loadWaConns(); } catch {}
+  }
+
+  async function handleDeleteWa(id: string) {
+    if (!await confirm({ message: 'Remover esta conexao WhatsApp?' })) return;
+    try { await api.deleteWhatsappConnection(id); await loadWaConns(); } catch {}
+  }
 
   async function loadSocialAccounts() {
     try {
@@ -559,6 +609,86 @@ export default function SettingsPage() {
                       onClick={() => handleDeleteIg(acc.id)}
                       className="p-1.5 rounded text-text-muted hover:text-status-failed hover:bg-red-500/10 transition-colors"
                     >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-3">WhatsApp (Status)</p>
+        <div className="card p-5 mb-6">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(37,211,102,0.12)' }}>
+              <span className="text-2xl">🟢</span>
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-text-primary">WhatsApp</h3>
+                  <p className="text-xs text-text-secondary">Conecte uma instancia (UAZ) para publicar no Status do WhatsApp</p>
+                </div>
+                <button
+                  onClick={() => setShowAddWa(!showAddWa)}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Adicionar Conexao
+                </button>
+              </div>
+
+              {showAddWa && (
+                <div className="p-4 rounded-lg bg-bg-main space-y-3 mb-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-muted mb-1">Nome / Empresa</label>
+                    <input value={waForm.name} onChange={(e) => setWaForm({ ...waForm, name: e.target.value })} className="input-field text-xs" placeholder="Ex: Essenza" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-muted mb-1">Host da API (UAZ)</label>
+                    <input value={waForm.host} onChange={(e) => setWaForm({ ...waForm, host: e.target.value })} className="input-field text-xs" placeholder="https://digitalcrm.uazapi.com" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-muted mb-1">Token da instancia</label>
+                    <input value={waForm.token} onChange={(e) => setWaForm({ ...waForm, token: e.target.value })} className="input-field text-xs" placeholder="token da instancia UAZ" type="password" />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-text-muted mb-1">Telefone (opcional)</label>
+                    <input value={waForm.phone} onChange={(e) => setWaForm({ ...waForm, phone: e.target.value })} className="input-field text-xs" placeholder="(87) 99999-9999" />
+                  </div>
+                  <p className="text-[10px] text-text-muted">O token da instancia vem do seu painel UAZ (mesmo usado no DigitalCRM). O Status usa o destino especial status@broadcast.</p>
+                  {waTest && <p className="text-[11px] font-medium">{waTest}</p>}
+                  <div className="flex gap-2">
+                    <button onClick={handleAddWaConn} disabled={!waForm.name || !waForm.host || !waForm.token || waAdding} className="btn-cta text-xs">
+                      {waAdding ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando...</> : 'Adicionar'}
+                    </button>
+                    <button onClick={handleTestWaConn} disabled={!waForm.host || !waForm.token} className="btn-ghost text-xs">Testar conexao</button>
+                    <button onClick={() => { setShowAddWa(false); setWaTest(''); }} className="btn-ghost text-xs">Cancelar</button>
+                  </div>
+                </div>
+              )}
+
+              {waConns.length === 0 && !showAddWa && (
+                <p className="text-xs text-text-muted">Nenhuma conexao. Clique em "Adicionar Conexao".</p>
+              )}
+              {waConns.map((c) => (
+                <div key={c.id} className="flex items-center gap-3 p-3 rounded-lg bg-bg-main mb-2">
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: '#25D366' }}>
+                    {(c.name || '?')[0].toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-semibold text-text-primary">{c.name}</p>
+                      {c.isDefault && <span className="px-1.5 py-0.5 rounded bg-primary/10 text-[10px] font-bold text-primary">PADRAO</span>}
+                    </div>
+                    <p className="text-[10px] text-text-muted">{c.phone || c.host}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {!c.isDefault && (
+                      <button onClick={() => handleSetDefaultWa(c.id)} className="px-2 py-1 rounded text-[10px] font-semibold text-primary hover:bg-primary/10 transition-colors">Tornar padrao</button>
+                    )}
+                    <button onClick={() => handleDeleteWa(c.id)} className="p-1.5 rounded text-text-muted hover:text-status-failed hover:bg-red-500/10 transition-colors">
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>

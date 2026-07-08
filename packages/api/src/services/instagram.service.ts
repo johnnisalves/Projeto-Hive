@@ -254,6 +254,37 @@ async function publishSingleImage(imageUrl: string, caption: string, token: stri
   return await publishContainer(createData.id, token, igUserId);
 }
 
+async function publishImageStory(imageUrl: string, token: string, igUserId: string) {
+  const publicImageUrl = await ensureMetaCompatibleUrl(imageUrl);
+  const base = getGraphBase(token);
+  const userPath = resolveUserIdForToken(token, igUserId);
+
+  console.log('[Instagram] Creating IMAGE STORY container...');
+  console.log('[Instagram] Image URL:', publicImageUrl);
+
+  await verifyPublicUrl(publicImageUrl, 'Story image');
+
+  const createData = await withRetry(async () => {
+    const createRes = await fetch(`${base}/${userPath}/media`, {
+      method: 'POST',
+      body: new URLSearchParams({
+        image_url: publicImageUrl,
+        media_type: 'STORIES',
+        access_token: token,
+      }),
+    });
+    const data = (await createRes.json()) as any;
+    console.log('[Instagram] Create STORY container response:', JSON.stringify(data));
+    if (!data.id) {
+      throw new Error(`Failed to create story container: ${JSON.stringify(data)}`);
+    }
+    return data;
+  }, 'Create story container');
+
+  await pollContainerStatus(createData.id, token);
+  return await publishContainer(createData.id, token, igUserId);
+}
+
 async function publishCarousel(
   images: Array<{ imageUrl: string }>,
   caption: string,
@@ -457,7 +488,14 @@ export async function publishToInstagram(postId: string, accountId?: string) {
     return await publishVideoMedia(post.videoUrl, caption, token, igUserId, mode);
   }
 
-  // Carousel or single image?
+  // Image Story (Stories nao aceitam carrossel nem caption — usa a imagem de capa)
+  if (post.publishMode === 'STORIES') {
+    const storyUrl = post.imageUrl || (post.images && post.images[0]?.imageUrl);
+    if (!storyUrl) throw new Error('Post has no image for Story');
+    return await publishImageStory(storyUrl, token, igUserId);
+  }
+
+  // Carousel or single image (Feed)
   if (post.isCarousel && post.images && post.images.length >= 2) {
     return await publishCarousel(post.images, caption, token, igUserId);
   } else {
