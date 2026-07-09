@@ -18,6 +18,7 @@ const STATUS_BADGE: Record<string, string> = {
   SCHEDULED: 'badge-scheduled',
   PUBLISHING: 'badge-publishing',
   PUBLISHED: 'badge-published',
+  PARTIAL: 'badge-scheduled',
   FAILED: 'badge-failed',
 };
 
@@ -26,6 +27,7 @@ const STATUS_LABEL: Record<string, string> = {
   SCHEDULED: 'Agendado',
   PUBLISHING: 'Publicando',
   PUBLISHED: 'Publicado',
+  PARTIAL: 'Parcial',
   FAILED: 'Falha',
 };
 
@@ -251,7 +253,7 @@ export default function PostsList() {
                           </div>
                         )}
                       </div>
-                      {post.status === 'FAILED' && post.lastError && (
+                      {(post.status === 'FAILED' || post.status === 'PARTIAL') && post.lastError && (
                         <p className="text-[10px] text-status-failed mt-1 max-w-xs truncate" title={post.lastError}>
                           {post.lastError}
                         </p>
@@ -276,7 +278,7 @@ export default function PostsList() {
                 </td>
                 <td className="px-5 py-4">
                   <div className="flex gap-1.5 justify-end">
-                    {(post.status === 'DRAFT' || post.status === 'FAILED') && (
+                    {(post.status === 'DRAFT' || post.status === 'FAILED' || post.status === 'PARTIAL') && (
                       <>
                         <button
                           onClick={() => handlePublish(post.id)}

@@ -211,6 +211,8 @@ async function ensureBrandColumns() {
     // WhatsappConnection (Status do WhatsApp via UAZ)
     'CREATE TABLE IF NOT EXISTS "WhatsappConnection" ("id" TEXT PRIMARY KEY, "name" TEXT NOT NULL, "host" TEXT NOT NULL, "token" TEXT NOT NULL, "phone" TEXT, "isDefault" BOOLEAN NOT NULL DEFAULT false, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)',
     'CREATE INDEX IF NOT EXISTS "WhatsappConnection_userId_idx" ON "WhatsappConnection"("userId")',
+    // Status PARTIAL (publicacao parcial multi-plataforma)
+    `ALTER TYPE "PostStatus" ADD VALUE IF NOT EXISTS 'PARTIAL'`,
   ];
   for (const sql of stmts) {
     try {

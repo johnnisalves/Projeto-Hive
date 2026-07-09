@@ -219,6 +219,7 @@ enum PostStatus {
   SCHEDULED
   PUBLISHING
   PUBLISHED
+  PARTIAL
   FAILED
 }
 

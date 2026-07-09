@@ -29,10 +29,20 @@ export async function publishToPlatforms(
   const brand = post.brandId ? await prisma.brand.findUnique({ where: { id: post.brandId } }) : null;
   const originalCaption = post.caption || '';
 
+  // Idempotencia: plataformas que ja publicaram com sucesso (retry nao reposta)
+  const previous = (post.publishedResults as Record<string, { id?: string; error?: string }> | null) || {};
+
   const adapted = adaptCaptionForPlatforms(originalCaption, platforms, brand);
   const captionMap = new Map(adapted.map((c) => [c.platform, c.caption]));
 
   for (const platform of platforms) {
+    // Pula se ja publicou com sucesso numa tentativa anterior (evita post duplicado no retry)
+    if (previous[platform]?.id) {
+      results[platform] = { id: previous[platform].id };
+      console.log(`[SocialPublisher] ${platform} ja publicado (${previous[platform].id}), pulando`);
+      continue;
+    }
+
     const publisher = PUBLISHERS[platform];
     if (!publisher) {
       console.warn(`[SocialPublisher] No publisher for platform: ${platform}`);

@@ -1,7 +1,15 @@
 import { Queue } from 'bullmq';
 import { redis } from '../config/redis';
 
-const publishQueue = new Queue('publish-queue', { connection: redis });
+const publishQueue = new Queue('publish-queue', {
+  connection: redis,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 30000 }, // 30s, 60s, 120s
+    removeOnComplete: 100,
+    removeOnFail: 300,
+  },
+});
 
 export async function schedulePost(postId: string, scheduledAt: Date) {
   const delay = scheduledAt.getTime() - Date.now();
