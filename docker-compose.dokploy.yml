@@ -102,6 +102,7 @@ services:
       PORT: '3002'
       API_URL: http://api:3001
       API_TOKEN: ${INTERNAL_SERVICE_TOKEN}
+      MCP_AUTH_TOKEN: ${MCP_AUTH_TOKEN:-}
     depends_on:
       - api
     restart: unless-stopped
