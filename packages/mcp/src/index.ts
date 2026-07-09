@@ -734,11 +734,32 @@ function registerTools(server: McpServer) {
   );
 }
 
+// Token de acesso opcional. Enquanto MCP_AUTH_TOKEN nao estiver definido, o servidor
+// segue aberto (compat — nao derruba o cliente ja conectado). Ao definir a env var,
+// o /mcp passa a exigir "Authorization: Bearer <token>" (ou header "x-mcp-token").
+const MCP_AUTH_TOKEN = process.env.MCP_AUTH_TOKEN?.trim() || '';
+
+function isAuthorized(req: http.IncomingMessage): boolean {
+  if (!MCP_AUTH_TOKEN) return true; // sem token configurado = aberto (rollout seguro)
+  const auth = req.headers['authorization'];
+  const bearer = typeof auth === 'string' && auth.startsWith('Bearer ')
+    ? auth.slice(7).trim()
+    : '';
+  const headerToken = (req.headers['x-mcp-token'] as string | undefined)?.trim() || '';
+  return bearer === MCP_AUTH_TOKEN || headerToken === MCP_AUTH_TOKEN;
+}
+
 async function main() {
+  if (!MCP_AUTH_TOKEN) {
+    console.warn('[MCP] AVISO: MCP_AUTH_TOKEN nao definido — servidor ABERTO sem autenticacao. Defina a env var para exigir token.');
+  } else {
+    console.log('[MCP] Autenticacao por token ATIVA (Authorization: Bearer / x-mcp-token).');
+  }
+
   const httpServer = http.createServer(async (req, res) => {
     const url = req.url || '/';
 
-    // Health check endpoint
+    // Health check endpoint (sempre aberto — usado pelo healthcheck do Dokploy)
     if (url === '/health') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ status: 'ok' }));
@@ -747,6 +768,11 @@ async function main() {
 
     // MCP endpoint - stateless: new server+transport per request
     if (url === '/mcp') {
+      if (!isAuthorized(req)) {
+        res.writeHead(401, { 'Content-Type': 'application/json', 'WWW-Authenticate': 'Bearer' });
+        res.end(JSON.stringify({ error: 'unauthorized', message: 'Token invalido ou ausente.' }));
+        return;
+      }
       try {
         const server = new McpServer({ name: 'instapost-ai', version: '0.1.0' });
         registerTools(server);
