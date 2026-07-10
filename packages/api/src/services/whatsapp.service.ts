@@ -1,9 +1,14 @@
 import { prisma } from '../config/database';
 
 /**
- * Publicacao no STATUS do WhatsApp via UAZ API (uazapi).
- * Uma conexao guarda: host (ex: https://digitalcrm.uazapi.com) + token da instancia.
+ * Publicacao no STATUS do WhatsApp via WuzAPI (github.com/asternic/wuzapi — whatsmeow).
+ * Uma conexao guarda: host (ex: https://wapi.digitalcrm.com.br) + token da instancia.
  * O envio para o status usa o destino especial "status@broadcast".
+ *
+ * Endpoints WuzAPI usados:
+ *   GET  /session/status        -> checa se a instancia esta logada
+ *   POST /chat/send/image       -> body { Phone, Image (base64 data URI), Caption }
+ * ATENCAO: WuzAPI exige a imagem em base64 (data:image/...;base64,...), NAO aceita URL.
  */
 
 function normalizeHost(host: string): string {
@@ -37,19 +42,24 @@ async function resolveConnection(userId: string, connectionId?: string): Promise
   return conn;
 }
 
-/** Testa a conexao consultando o status da instancia na UAZ. */
+/** Testa a conexao consultando o status da sessao no WuzAPI. */
 export async function testWhatsappConnection(host: string, token: string): Promise<{ ok: boolean; detail?: string }> {
   const base = normalizeHost(host);
   try {
-    const res = await fetch(`${base}/instance/status`, {
+    const res = await fetch(`${base}/session/status`, {
       method: 'GET',
       headers: { token, 'Content-Type': 'application/json' },
     });
-    const data = await res.json().catch(() => ({}));
+    const data = (await res.json().catch(() => ({}))) as any;
     if (!res.ok) {
       return { ok: false, detail: `HTTP ${res.status}: ${JSON.stringify(data).slice(0, 200)}` };
     }
-    return { ok: true, detail: JSON.stringify(data).slice(0, 200) };
+    const d = data?.data || data;
+    const connected = d?.Connected ?? d?.connected;
+    const loggedIn = d?.LoggedIn ?? d?.loggedIn;
+    // Token valido (HTTP 200). Idealmente logado (LoggedIn=true).
+    const ok = loggedIn !== false;
+    return { ok, detail: `Connected=${connected} LoggedIn=${loggedIn}` };
   } catch (err: any) {
     return { ok: false, detail: err?.message || 'Falha de rede' };
   }
@@ -69,26 +79,34 @@ export async function publishToWhatsappStatus(postId: string, connectionId?: str
   const base = normalizeHost(conn.host);
   const caption = [post.caption, post.hashtags.map((h) => `#${h}`).join(' ')].filter(Boolean).join('\n\n');
 
+  // WuzAPI exige a imagem em base64 data URI (nao aceita URL). Baixa e converte.
+  const imgRes = await fetch(imageUrl);
+  if (!imgRes.ok) throw new Error(`Falha ao baixar imagem para o Status (HTTP ${imgRes.status})`);
+  let contentType = (imgRes.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
+  if (!/^image\/(jpe?g|png)$/i.test(contentType)) contentType = 'image/jpeg'; // WuzAPI aceita jpeg/png
+  const buf = Buffer.from(await imgRes.arrayBuffer());
+  const dataUri = `data:${contentType};base64,${buf.toString('base64')}`;
+
   const body = {
-    number: 'status@broadcast',
-    type: 'image',
-    file: imageUrl,
-    text: caption || undefined,
+    Phone: 'status@broadcast',
+    Image: dataUri,
+    Caption: caption || '',
   };
 
-  console.log(`[WhatsApp] Publicando no Status via ${base}/send/media (conn=${conn.name})`);
-  const res = await fetch(`${base}/send/media`, {
+  console.log(`[WhatsApp] Publicando no Status via ${base}/chat/send/image (conn=${conn.name}, ${Math.round(buf.length / 1024)}KB)`);
+  const res = await fetch(`${base}/chat/send/image`, {
     method: 'POST',
     headers: { token: conn.token, 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(body),
   });
   const data = (await res.json().catch(() => ({}))) as any;
-  console.log('[WhatsApp] Resposta UAZ:', JSON.stringify(data).slice(0, 400));
+  console.log('[WhatsApp] Resposta WuzAPI:', JSON.stringify(data).slice(0, 400));
 
   if (!res.ok) {
-    throw new Error(`UAZ retornou HTTP ${res.status}: ${JSON.stringify(data).slice(0, 200)}`);
+    throw new Error(`WuzAPI retornou HTTP ${res.status}: ${JSON.stringify(data).slice(0, 200)}`);
   }
-  // UAZ costuma retornar id/messageid; aceita variacoes
-  const id = data?.id || data?.messageid || data?.messageId || data?.key?.id || 'status-ok';
+  // WuzAPI retorna { code, success, data: { Id, ... } }
+  const d = data?.data || data;
+  const id = d?.Id || d?.id || d?.messageid || d?.messageId || 'status-ok';
   return { id: String(id) };
 }

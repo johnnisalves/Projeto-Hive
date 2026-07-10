@@ -136,7 +136,7 @@ export default function SettingsPage() {
   // WhatsApp (Status via UAZ)
   const [waConns, setWaConns] = useState<any[]>([]);
   const [showAddWa, setShowAddWa] = useState(false);
-  const [waForm, setWaForm] = useState({ name: '', host: 'https://digitalcrm.uazapi.com', token: '', phone: '' });
+  const [waForm, setWaForm] = useState({ name: '', host: 'https://wapi.digitalcrm.com.br', token: '', phone: '' });
   const [waAdding, setWaAdding] = useState(false);
   const [waTest, setWaTest] = useState('');
 
@@ -166,7 +166,7 @@ export default function SettingsPage() {
     setWaTest('');
     try {
       await api.addWhatsappConnection(waForm);
-      setWaForm({ name: '', host: 'https://digitalcrm.uazapi.com', token: '', phone: '' });
+      setWaForm({ name: '', host: 'https://wapi.digitalcrm.com.br', token: '', phone: '' });
       setShowAddWa(false);
       await loadWaConns();
     } catch (e: any) {
@@ -628,7 +628,7 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between mb-3">
                 <div>
                   <h3 className="text-sm font-bold text-text-primary">WhatsApp</h3>
-                  <p className="text-xs text-text-secondary">Conecte uma instancia (UAZ) para publicar no Status do WhatsApp</p>
+                  <p className="text-xs text-text-secondary">Conecte uma instancia (WuzAPI / DCRM API) para publicar no Status do WhatsApp</p>
                 </div>
                 <button
                   onClick={() => setShowAddWa(!showAddWa)}
@@ -646,18 +646,18 @@ export default function SettingsPage() {
                     <input value={waForm.name} onChange={(e) => setWaForm({ ...waForm, name: e.target.value })} className="input-field text-xs" placeholder="Ex: Essenza" />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-text-muted mb-1">Host da API (UAZ)</label>
-                    <input value={waForm.host} onChange={(e) => setWaForm({ ...waForm, host: e.target.value })} className="input-field text-xs" placeholder="https://digitalcrm.uazapi.com" />
+                    <label className="block text-[11px] font-semibold text-text-muted mb-1">Host da API</label>
+                    <input value={waForm.host} onChange={(e) => setWaForm({ ...waForm, host: e.target.value })} className="input-field text-xs" placeholder="https://wapi.digitalcrm.com.br" />
                   </div>
                   <div>
                     <label className="block text-[11px] font-semibold text-text-muted mb-1">Token da instancia</label>
-                    <input value={waForm.token} onChange={(e) => setWaForm({ ...waForm, token: e.target.value })} className="input-field text-xs" placeholder="token da instancia UAZ" type="password" />
+                    <input value={waForm.token} onChange={(e) => setWaForm({ ...waForm, token: e.target.value })} className="input-field text-xs" placeholder="token da instancia (painel wapi.digitalcrm.com.br)" type="password" />
                   </div>
                   <div>
                     <label className="block text-[11px] font-semibold text-text-muted mb-1">Telefone (opcional)</label>
                     <input value={waForm.phone} onChange={(e) => setWaForm({ ...waForm, phone: e.target.value })} className="input-field text-xs" placeholder="(87) 99999-9999" />
                   </div>
-                  <p className="text-[10px] text-text-muted">O token da instancia vem do seu painel UAZ (mesmo usado no DigitalCRM). O Status usa o destino especial status@broadcast.</p>
+                  <p className="text-[10px] text-text-muted">O token da instancia vem do seu painel em wapi.digitalcrm.com.br (aba Dados da instancia). O Status usa o destino especial status@broadcast.</p>
                   {waTest && <p className="text-[11px] font-medium">{waTest}</p>}
                   <div className="flex gap-2">
                     <button onClick={handleAddWaConn} disabled={!waForm.name || !waForm.host || !waForm.token || waAdding} className="btn-cta text-xs">
