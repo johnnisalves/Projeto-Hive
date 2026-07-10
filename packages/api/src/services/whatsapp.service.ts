@@ -1,5 +1,6 @@
 import { prisma } from '../config/database';
 
+// build: force-recreate 2026-07-10 (regenera roteamento/rede apos outage)
 /**
  * Publicacao no STATUS do WhatsApp via WuzAPI (github.com/asternic/wuzapi — whatsmeow).
  * Uma conexao guarda: host (ex: https://wapi.digitalcrm.com.br) + token da instancia.
