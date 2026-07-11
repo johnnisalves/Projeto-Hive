@@ -80,7 +80,9 @@ services:
       minio:
         condition: service_started
     restart: unless-stopped
-    networks: [internal]
+    # dokploy-network junto de internal: web resolve "api" pela dokploy-network;
+    # sem isso, "api" caia num registro DNS stale (10.0.1.x) e dava ECONNREFUSED.
+    networks: [internal, dokploy-network]
 
   web:
     build:
