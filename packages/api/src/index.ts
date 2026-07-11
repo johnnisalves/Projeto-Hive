@@ -213,6 +213,8 @@ async function ensureBrandColumns() {
     'CREATE INDEX IF NOT EXISTS "WhatsappConnection_userId_idx" ON "WhatsappConnection"("userId")',
     // Status PARTIAL (publicacao parcial multi-plataforma)
     `ALTER TYPE "PostStatus" ADD VALUE IF NOT EXISTS 'PARTIAL'`,
+    // Fila de aprovacao (#2): none | pending | approved | rejected
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "approvalState" TEXT NOT NULL DEFAULT 'none'`,
   ];
   for (const sql of stmts) {
     try {

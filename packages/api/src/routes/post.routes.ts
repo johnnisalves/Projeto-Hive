@@ -1,7 +1,9 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { z } from 'zod';
-import { authMiddleware } from '../middleware/auth.middleware';
+import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate';
+import { prisma } from '../config/database';
+import { resolveOwnerId } from '../helpers/resolveOwnerId';
 import {
   createPost,
   listPosts,
@@ -70,5 +72,19 @@ router.post('/:id/publish', publishPost);
 router.post('/:id/schedule', validate(scheduleSchema), schedulePostController);
 router.post('/:id/images', validate(addImageSchema), addImageToPost);
 router.delete('/:id/images/:imageId', removeImageFromPost);
+
+// #2 Fila de aprovacao: define o estado de aprovacao do post (workflow de equipe)
+const approvalSchema = z.object({ approvalState: z.enum(['none', 'pending', 'approved', 'rejected']) });
+router.put('/:id/approval', validate(approvalSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    const post = await prisma.post.findFirst({ where: { id: req.params.id, userId: ownerId } });
+    if (!post) { res.status(404).json({ success: false, error: 'Post nao encontrado' }); return; }
+    const updated = await prisma.post.update({ where: { id: post.id }, data: { approvalState: req.body.approvalState } as any });
+    res.json({ success: true, data: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao atualizar aprovacao' });
+  }
+});
 
 export default router;

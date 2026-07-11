@@ -31,6 +31,14 @@ const STATUS_LABEL: Record<string, string> = {
   FAILED: 'Falha',
 };
 
+// #2 Fila de aprovacao
+const APPROVAL_LABEL: Record<string, string> = { pending: 'Aguardando aprovacao', approved: 'Aprovado', rejected: 'Rejeitado' };
+const APPROVAL_CLASS: Record<string, string> = {
+  pending: 'bg-amber-500/10 text-amber-600',
+  approved: 'bg-emerald-500/10 text-emerald-600',
+  rejected: 'bg-red-500/10 text-red-600',
+};
+
 export default function PostsList() {
   const confirm = useConfirm();
   const [posts, setPosts] = useState<any[]>([]);
@@ -84,6 +92,16 @@ export default function PostsList() {
       // Update local state immediately (API now returns instantly, publishes in background)
       setPosts((prev) => prev.map((p) => p.id === id ? { ...p, status: 'PUBLISHING' } : p));
     } catch (err: any) { alert(err.message || 'Erro ao publicar'); }
+    setActionLoading(null);
+  }
+
+  // #2 Fila de aprovacao
+  async function handleApproval(id: string, approvalState: 'none' | 'pending' | 'approved' | 'rejected') {
+    setActionLoading(id);
+    try {
+      await api.setPostApproval(id, approvalState);
+      setPosts((prev) => prev.map((p) => p.id === id ? { ...p, approvalState } : p));
+    } catch (err: any) { alert(err.message || 'Erro ao atualizar aprovacao'); }
     setActionLoading(null);
   }
 
@@ -265,6 +283,11 @@ export default function PostsList() {
                   <span className={`badge ${STATUS_BADGE[post.status] || 'badge-draft'}`}>
                     {STATUS_LABEL[post.status] || post.status}
                   </span>
+                  {post.approvalState && post.approvalState !== 'none' && (
+                    <span className={`ml-1 px-2 py-0.5 rounded-badge text-[10px] font-semibold ${APPROVAL_CLASS[post.approvalState] || ''}`}>
+                      {APPROVAL_LABEL[post.approvalState]}
+                    </span>
+                  )}
                 </td>
                 <td className="px-5 py-4">
                   <span className="text-xs text-text-secondary bg-bg-main px-2 py-1 rounded-badge font-medium">
@@ -280,15 +303,38 @@ export default function PostsList() {
                   <div className="flex gap-1.5 justify-end">
                     {(post.status === 'DRAFT' || post.status === 'FAILED' || post.status === 'PARTIAL') && (
                       <>
-                        <button
-                          onClick={() => handlePublish(post.id)}
-                          disabled={actionLoading === post.id}
-                          className="px-3 py-1.5 rounded-badge text-xs font-semibold bg-emerald-500/10 text-status-published hover:bg-emerald-100 transition-colors disabled:opacity-50"
-                          title="Publicar"
-                        >
-                          {actionLoading === post.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5 inline mr-1" strokeWidth={1.5} />}
-                          {actionLoading !== post.id && 'Publicar'}
-                        </button>
+                        {/* #2 Aprovacao */}
+                        {(!post.approvalState || post.approvalState === 'none') && (
+                          <button onClick={() => handleApproval(post.id, 'pending')} disabled={actionLoading === post.id}
+                            className="px-3 py-1.5 rounded-badge text-xs font-semibold bg-amber-500/10 text-amber-600 hover:bg-amber-100 transition-colors disabled:opacity-50" title="Enviar para aprovacao">
+                            Enviar p/ aprovacao
+                          </button>
+                        )}
+                        {post.approvalState === 'pending' && (
+                          <>
+                            <button onClick={() => handleApproval(post.id, 'approved')} disabled={actionLoading === post.id}
+                              className="px-3 py-1.5 rounded-badge text-xs font-semibold bg-emerald-500/10 text-emerald-600 hover:bg-emerald-100 transition-colors disabled:opacity-50">Aprovar</button>
+                            <button onClick={() => handleApproval(post.id, 'rejected')} disabled={actionLoading === post.id}
+                              className="px-3 py-1.5 rounded-badge text-xs font-semibold bg-red-500/10 text-red-600 hover:bg-red-100 transition-colors disabled:opacity-50">Rejeitar</button>
+                          </>
+                        )}
+                        {post.approvalState === 'rejected' && (
+                          <button onClick={() => handleApproval(post.id, 'pending')} disabled={actionLoading === post.id}
+                            className="px-3 py-1.5 rounded-badge text-xs font-semibold bg-amber-500/10 text-amber-600 hover:bg-amber-100 transition-colors disabled:opacity-50">Reenviar</button>
+                        )}
+
+                        {/* Publicar so quando nao esta pendente/rejeitado */}
+                        {post.approvalState !== 'pending' && post.approvalState !== 'rejected' && (
+                          <button
+                            onClick={() => handlePublish(post.id)}
+                            disabled={actionLoading === post.id}
+                            className="px-3 py-1.5 rounded-badge text-xs font-semibold bg-emerald-500/10 text-status-published hover:bg-emerald-100 transition-colors disabled:opacity-50"
+                            title="Publicar"
+                          >
+                            {actionLoading === post.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5 inline mr-1" strokeWidth={1.5} />}
+                            {actionLoading !== post.id && 'Publicar'}
+                          </button>
+                        )}
                         <button
                           onClick={() => { setScheduleModal(post.id); setScheduleDate(''); }}
                           className="px-3 py-1.5 rounded-badge text-xs font-semibold bg-blue-500/10 text-status-scheduled hover:bg-blue-100 transition-colors"

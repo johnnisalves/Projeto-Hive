@@ -104,6 +104,7 @@ model Post {
   imageSource     ImageSource @default(NANOBANA)
   nanoPrompt      String?
   status          PostStatus  @default(DRAFT)
+  approvalState   String      @default("none")
   scheduledAt     DateTime?
   publishedAt     DateTime?
   instagramId     String?

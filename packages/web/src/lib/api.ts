@@ -91,6 +91,9 @@ export const api = {
   schedulePost: (id: string, scheduledAt: string) =>
     request(`/api/posts/${id}/schedule`, { method: 'POST', body: JSON.stringify({ scheduledAt }) }),
 
+  setPostApproval: (id: string, approvalState: 'none' | 'pending' | 'approved' | 'rejected') =>
+    request(`/api/posts/${id}/approval`, { method: 'PUT', body: JSON.stringify({ approvalState }) }),
+
   generateImage: (prompt: string, aspectRatio?: string) =>
     request<{ imageUrl: string }>('/api/generate/image', {
       method: 'POST',
