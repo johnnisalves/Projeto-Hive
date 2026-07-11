@@ -6,7 +6,7 @@ import { generateImageController, generateCaptionController, refineSlideControll
 import { renderTemplateToImage, renderHtmlToImage, renderComposedToImage } from '../services/template-renderer.service';
 import { TEMPLATES } from '../services/templates';
 import { generateImage } from '../services/nanobana.service';
-import { generateImagePromptForStudio } from '../services/caption.service';
+import { generateImagePromptForStudio, callText } from '../services/caption.service';
 import { enrichImagePrompt } from '../services/artDirector.service';
 import { prisma } from '../config/database';
 import { resolveOwnerId } from '../helpers/resolveOwnerId';
@@ -57,6 +57,72 @@ router.post('/content-plan', validate(contentPlanSchema), async (req: AuthReques
     res.json({ success: true, data: result });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Falha ao gerar plano de conteúdo' });
+  }
+});
+
+// #6 Repurpose: adapta uma legenda para o formato/tom de cada plataforma
+const PLATFORM_RULES_REPURPOSE: Record<string, string> = {
+  instagram: 'Instagram: visual, emojis com moderacao, quebras de linha, CTA no fim, ate 5 hashtags.',
+  facebook: 'Facebook: tom mais conversacional, pode ser um pouco mais longo, storytelling, 2-3 hashtags.',
+  linkedin: 'LinkedIn: profissional, sem emojis exagerados, insight/valor, sem hashtags demais (3-4), tom de autoridade.',
+  x: 'X/Twitter: MUITO curto e direto (ate 280 caracteres), 1 ideia forte, 1-2 hashtags no maximo.',
+  whatsapp: 'WhatsApp Status: curtissimo, direto, 1 frase de impacto + CTA, emojis ok, sem hashtags.',
+};
+const repurposeSchema = z.object({
+  caption: z.string().min(1),
+  platforms: z.array(z.enum(['instagram', 'facebook', 'linkedin', 'x', 'whatsapp'])).min(1),
+  brandId: z.string().optional(),
+});
+router.post('/repurpose', validate(repurposeSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const { caption, platforms, brandId } = req.body as { caption: string; platforms: string[]; brandId?: string };
+    let brandTone = '';
+    if (brandId) {
+      const ownerId = await resolveOwnerId(req.userId!);
+      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId: ownerId } });
+      if (brand) brandTone = `\nTOM DA MARCA ${brand.name}: ${brand.voiceTone || 'profissional'}.`;
+    }
+    const out: Record<string, string> = {};
+    await Promise.all(platforms.map(async (p) => {
+      const prompt = `Reescreva o conteudo abaixo adaptado para ${PLATFORM_RULES_REPURPOSE[p] || p}.${brandTone}\nMantenha a mensagem central. Responda APENAS com o texto final, sem explicacoes.\n\nCONTEUDO ORIGINAL:\n${caption}`;
+      try { out[p] = (await callText(prompt)).trim(); } catch (e: any) { out[p] = `(erro: ${e?.message || 'falha'})`; }
+    }));
+    res.json({ success: true, data: { results: out } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao adaptar conteudo' });
+  }
+});
+
+// #7 Variacoes A/B de legenda: gera N variacoes para testar
+const variationsSchema = z.object({
+  topic: z.string().min(1),
+  count: z.number().min(2).max(5).optional(),
+  platform: z.string().optional(),
+  brandId: z.string().optional(),
+});
+router.post('/caption-variations', validate(variationsSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const { topic, count, platform, brandId } = req.body as { topic: string; count?: number; platform?: string; brandId?: string };
+    const n = count || 3;
+    let brandTone = '';
+    if (brandId) {
+      const ownerId = await resolveOwnerId(req.userId!);
+      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId: ownerId } });
+      if (brand) brandTone = ` Tom da marca ${brand.name}: ${brand.voiceTone || 'profissional'}.`;
+    }
+    const prompt = `Gere ${n} VARIACOES bem diferentes de legenda para um post sobre: "${topic}" (plataforma: ${platform || 'Instagram'}).${brandTone}
+Cada variacao deve testar um angulo/gancho diferente (ex: pergunta, dado, historia, urgencia, beneficio). Curtas e escaneaveis.
+Responda APENAS com um array JSON de strings, ex: ["variacao 1","variacao 2","variacao 3"]`;
+    const raw = await callText(prompt);
+    let s = raw.trim().replace(/^```(?:json)?/i, '').replace(/```$/i, '').trim();
+    const a = s.indexOf('['), b = s.lastIndexOf(']');
+    if (a >= 0 && b > a) s = s.slice(a, b + 1);
+    let variations: string[] = [];
+    try { const parsed = JSON.parse(s); if (Array.isArray(parsed)) variations = parsed.map((x) => String(x)).slice(0, n); } catch { /* ignore */ }
+    if (!variations.length) variations = raw.split('\n').map((l) => l.replace(/^\s*[\d\-\.\)]+\s*/, '').trim()).filter(Boolean).slice(0, n);
+    res.json({ success: true, data: { variations } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao gerar variacoes' });
   }
 });
 

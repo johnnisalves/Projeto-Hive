@@ -115,6 +115,18 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  repurposeContent: (body: { caption: string; platforms: string[]; brandId?: string }) =>
+    request<{ results: Record<string, string> }>('/api/generate/repurpose', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
+  captionVariations: (body: { topic: string; count?: number; platform?: string; brandId?: string }) =>
+    request<{ variations: string[] }>('/api/generate/caption-variations', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
   instagramStatus: () => request<{ connected: boolean }>('/api/instagram/status'),
 
   // Tasks
