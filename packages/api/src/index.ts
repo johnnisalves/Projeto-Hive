@@ -230,8 +230,10 @@ function start() {
   // Sobe o servidor HTTP IMEDIATAMENTE. Nenhum init de background pode travar a API:
   // se ensureBrandColumns/initMinio/initTokenRefreshJob pendurar (ex: Redis/BullMQ
   // reconectando, ALTER esperando lock), este app.listen garante que /api responde.
-  app.listen(env.PORT, () => {
-    console.log(`InstaPost API running on port ${env.PORT}`);
+  // Bind explicito em IPv4 0.0.0.0: sem isso, o Node bindava so em IPv6 (::) e o
+  // container web (que resolve api:3001 por IPv4) recebia ECONNREFUSED -> 500 em /api.
+  app.listen(env.PORT, '0.0.0.0', () => {
+    console.log(`InstaPost API running on 0.0.0.0:${env.PORT}`);
   });
 
   publishWorker.on('failed', (job, err) => {
