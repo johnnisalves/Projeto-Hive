@@ -54,7 +54,7 @@ async function callArtDirectorLLM(fullPrompt: string): Promise<string | null> {
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',
             'HTTP-Referer': env.FRONTEND_URL,
-            'X-Title': 'OpenHive',
+            'X-Title': 'DisparaAI',
           },
           body: JSON.stringify({
             model,

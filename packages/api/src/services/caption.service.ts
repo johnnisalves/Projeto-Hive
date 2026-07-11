@@ -194,7 +194,7 @@ async function callOpenRouterText(apiKey: string, model: string, prompt: string,
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       'HTTP-Referer': env.FRONTEND_URL,
-      'X-Title': 'OpenHive',
+      'X-Title': 'DisparaAI',
     },
     body: JSON.stringify({
       model,

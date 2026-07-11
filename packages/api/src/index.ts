@@ -191,7 +191,7 @@ app.get('/api/instagram/profile', async (_req, res) => {
 
 function logConfig() {
   const mask = (v?: string) => v ? `${v.slice(0, 6)}...${v.slice(-4)}` : 'NOT SET';
-  console.log('=== InstaPost API Config ===');
+  console.log('=== DisparaAI API Config ===');
   console.log('NANO_BANANA_API_KEY:', mask(env.NANO_BANANA_API_KEY));
   console.log('MINIO_ENDPOINT:', env.MINIO_ENDPOINT);
   console.log('MINIO_PUBLIC_URL:', env.MINIO_PUBLIC_URL);
@@ -233,7 +233,7 @@ function start() {
   // Bind explicito em IPv4 0.0.0.0: sem isso, o Node bindava so em IPv6 (::) e o
   // container web (que resolve api:3001 por IPv4) recebia ECONNREFUSED -> 500 em /api.
   app.listen(env.PORT, '0.0.0.0', () => {
-    console.log(`InstaPost API running on 0.0.0.0:${env.PORT}`);
+    console.log(`DisparaAI API running on 0.0.0.0:${env.PORT}`);
   });
 
   publishWorker.on('failed', (job, err) => {

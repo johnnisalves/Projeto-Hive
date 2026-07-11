@@ -774,7 +774,7 @@ async function main() {
         return;
       }
       try {
-        const server = new McpServer({ name: 'instapost-ai', version: '0.1.0' });
+        const server = new McpServer({ name: 'disparaai', version: '0.1.0' });
         registerTools(server);
 
         const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
@@ -797,7 +797,7 @@ async function main() {
   });
 
   httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`InstaPost MCP Server running on http://0.0.0.0:${PORT}/mcp`);
+    console.log(`DisparaAI MCP Server running on http://0.0.0.0:${PORT}/mcp`);
   });
 }
 

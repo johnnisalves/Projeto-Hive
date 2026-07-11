@@ -4,7 +4,7 @@
  * Reference data extracted from 58 well-known brand design systems.
  * Used by AI agents (via MCP) to suggest brand identities, color palettes,
  * typography choices, and visual principles when users create or refine
- * their own brands in OpenHive.
+ * their own brands in DisparaAI.
  *
  * Each entry contains FACTS (color hex codes, font names, weight numbers)
  * combined with original short descriptions of the visual mood and principles.

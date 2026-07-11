@@ -49,7 +49,7 @@ export function Sidebar() {
             <Hexagon className="w-5 h-5" strokeWidth={2.5} fill="currentColor" />
           </div>
           <span className="font-bold text-[20px] tracking-tight bg-gradient-to-r from-primary to-accent-pink bg-clip-text text-transparent">
-            OpenHive
+            DisparaAI
           </span>
         </div>
         <span className="text-[10px] font-bold tracking-[1px] text-text-muted ml-10">AI PLATFORM</span>

@@ -135,7 +135,7 @@ function LoginScreen({
           </div>
           <div>
             <h1 className="text-2xl font-bold text-text-primary tracking-tight">
-              Insta<span className="bg-gradient-to-r from-primary to-accent-pink bg-clip-text text-transparent">Post</span>
+              Dispara<span className="bg-gradient-to-r from-primary to-accent-pink bg-clip-text text-transparent">AI</span>
             </h1>
             <span className="text-xs font-semibold text-text-muted uppercase tracking-[0.1em]">AI Platform</span>
           </div>

@@ -5,8 +5,8 @@ import { ThemeProvider } from '../components/ThemeProvider';
 import { ConfirmProvider } from '../components/ConfirmModal';
 
 export const metadata = {
-  title: 'OpenHive AI - Content Platform',
-  description: 'Plataforma open-source de criacao e gestao de conteudo com IA',
+  title: 'DisparaAI - Plataforma de Conteudo com IA',
+  description: 'DisparaAI - Crie, agende e publique conteudo com inteligencia artificial.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

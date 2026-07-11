@@ -198,7 +198,7 @@ async function generateViaOpenRouter(prompt: string, aspectRatio?: string): Prom
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': env.FRONTEND_URL,
-        'X-Title': 'OpenHive',
+        'X-Title': 'DisparaAI',
       },
       body,
     });
