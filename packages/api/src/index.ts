@@ -224,28 +224,15 @@ async function ensureBrandColumns() {
   console.log('[boot] Brand columns ensured');
 }
 
-async function start() {
+function start() {
   logConfig();
 
-  try {
-    await ensureBrandColumns();
-  } catch (err) {
-    console.warn('[boot] ensureBrandColumns failed (continuing):', (err as Error).message);
-  }
-
-  try {
-    await initMinio();
-    console.log('MinIO initialized');
-  } catch (err) {
-    console.warn('MinIO initialization failed (uploads will not work):', (err as Error).message);
-  }
-
-  try {
-    await initTokenRefreshJob();
-    console.log('Token refresh job scheduled');
-  } catch (err) {
-    console.warn('Token refresh job failed to start:', (err as Error).message);
-  }
+  // Sobe o servidor HTTP IMEDIATAMENTE. Nenhum init de background pode travar a API:
+  // se ensureBrandColumns/initMinio/initTokenRefreshJob pendurar (ex: Redis/BullMQ
+  // reconectando, ALTER esperando lock), este app.listen garante que /api responde.
+  app.listen(env.PORT, () => {
+    console.log(`InstaPost API running on port ${env.PORT}`);
+  });
 
   publishWorker.on('failed', (job, err) => {
     console.error(`Publish job ${job?.id} failed:`, err.message);
@@ -259,9 +246,17 @@ async function start() {
     console.error(`Task reminder job ${job?.id} failed:`, err.message);
   });
 
-  app.listen(env.PORT, () => {
-    console.log(`InstaPost API running on port ${env.PORT}`);
-  });
+  // Inits de background — NAO bloqueiam o listen; erros/hangs aqui nao derrubam a API.
+  ensureBrandColumns()
+    .catch((err) => console.warn('[boot] ensureBrandColumns failed (continuing):', (err as Error).message));
+
+  initMinio()
+    .then(() => console.log('MinIO initialized'))
+    .catch((err) => console.warn('MinIO initialization failed (uploads will not work):', (err as Error).message));
+
+  initTokenRefreshJob()
+    .then(() => console.log('Token refresh job scheduled'))
+    .catch((err) => console.warn('Token refresh job failed to start:', (err as Error).message));
 }
 
 start();
