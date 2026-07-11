@@ -105,6 +105,9 @@ model Post {
   nanoPrompt      String?
   status          PostStatus  @default(DRAFT)
   approvalState   String      @default("none")
+  isEvergreen     Boolean     @default(false)
+  evergreenIntervalDays Int   @default(7)
+  evergreenLastRunAt DateTime?
   scheduledAt     DateTime?
   publishedAt     DateTime?
   instagramId     String?

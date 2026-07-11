@@ -23,6 +23,7 @@ import designSystemsRoutes from './routes/designSystems.routes';
 import { publishWorker } from './jobs/publish.worker';
 import { tokenRefreshWorker, initTokenRefreshJob } from './jobs/token-refresh.worker';
 import { taskReminderWorker } from './jobs/task-reminder.worker';
+import { evergreenWorker, initEvergreenJob } from './jobs/evergreen.worker';
 
 const app = express();
 
@@ -215,6 +216,10 @@ async function ensureBrandColumns() {
     `ALTER TYPE "PostStatus" ADD VALUE IF NOT EXISTS 'PARTIAL'`,
     // Fila de aprovacao (#2): none | pending | approved | rejected
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "approvalState" TEXT NOT NULL DEFAULT 'none'`,
+    // Evergreen (#9): republicacao recorrente dos melhores posts
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "isEvergreen" BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "evergreenIntervalDays" INTEGER NOT NULL DEFAULT 7`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "evergreenLastRunAt" TIMESTAMP(3)`,
   ];
   for (const sql of stmts) {
     try {
@@ -250,6 +255,10 @@ function start() {
     console.error(`Task reminder job ${job?.id} failed:`, err.message);
   });
 
+  evergreenWorker.on('failed', (job, err) => {
+    console.error(`Evergreen job ${job?.id} failed:`, err.message);
+  });
+
   // Inits de background — NAO bloqueiam o listen; erros/hangs aqui nao derrubam a API.
   ensureBrandColumns()
     .catch((err) => console.warn('[boot] ensureBrandColumns failed (continuing):', (err as Error).message));
@@ -261,6 +270,10 @@ function start() {
   initTokenRefreshJob()
     .then(() => console.log('Token refresh job scheduled'))
     .catch((err) => console.warn('Token refresh job failed to start:', (err as Error).message));
+
+  initEvergreenJob()
+    .then(() => console.log('Evergreen job scheduled'))
+    .catch((err) => console.warn('Evergreen job failed to start:', (err as Error).message));
 }
 
 start();

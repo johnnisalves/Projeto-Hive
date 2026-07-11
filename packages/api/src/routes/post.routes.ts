@@ -87,4 +87,23 @@ router.put('/:id/approval', validate(approvalSchema), async (req: AuthRequest, r
   }
 });
 
+// #9 Evergreen: marca/desmarca o post para republicacao recorrente
+const evergreenSchema = z.object({
+  isEvergreen: z.boolean(),
+  evergreenIntervalDays: z.number().int().min(1).max(365).optional(),
+});
+router.put('/:id/evergreen', validate(evergreenSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    const post = await prisma.post.findFirst({ where: { id: req.params.id, userId: ownerId } });
+    if (!post) { res.status(404).json({ success: false, error: 'Post nao encontrado' }); return; }
+    const data: any = { isEvergreen: req.body.isEvergreen };
+    if (req.body.evergreenIntervalDays) data.evergreenIntervalDays = req.body.evergreenIntervalDays;
+    const updated = await prisma.post.update({ where: { id: post.id }, data });
+    res.json({ success: true, data: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao atualizar evergreen' });
+  }
+});
+
 export default router;

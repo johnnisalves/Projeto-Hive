@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '../../lib/api';
-import { Plus, Trash2, Send, Calendar, X, Loader2, FileText, Image as ImageIcon, Layers, ChevronLeft, ChevronRight, Pencil, Video as VideoIcon, Film, Wand2, Instagram, Facebook, Linkedin, Twitter } from 'lucide-react';
+import { Plus, Trash2, Send, Calendar, X, Loader2, FileText, Image as ImageIcon, Layers, ChevronLeft, ChevronRight, Pencil, Video as VideoIcon, Film, Wand2, Instagram, Facebook, Linkedin, Twitter, Repeat } from 'lucide-react';
 
 const PLATFORM_ICONS: Record<string, { icon: typeof Instagram; color: string }> = {
   INSTAGRAM: { icon: Instagram, color: 'text-pink-500' },
@@ -102,6 +102,23 @@ export default function PostsList() {
       await api.setPostApproval(id, approvalState);
       setPosts((prev) => prev.map((p) => p.id === id ? { ...p, approvalState } : p));
     } catch (err: any) { alert(err.message || 'Erro ao atualizar aprovacao'); }
+    setActionLoading(null);
+  }
+
+  async function handleEvergreen(post: any) {
+    const turnOn = !post.isEvergreen;
+    let days = post.evergreenIntervalDays || 7;
+    if (turnOn) {
+      const input = prompt('Republicar este post a cada quantos dias?', String(days));
+      if (input === null) return;
+      const n = parseInt(input, 10);
+      if (!Number.isNaN(n) && n >= 1 && n <= 365) days = n;
+    }
+    setActionLoading(post.id);
+    try {
+      await api.setPostEvergreen(post.id, turnOn, days);
+      setPosts((prev) => prev.map((p) => p.id === post.id ? { ...p, isEvergreen: turnOn, evergreenIntervalDays: days } : p));
+    } catch (err: any) { alert(err.message || 'Erro ao atualizar evergreen'); }
     setActionLoading(null);
   }
 
@@ -288,6 +305,11 @@ export default function PostsList() {
                       {APPROVAL_LABEL[post.approvalState]}
                     </span>
                   )}
+                  {post.isEvergreen && (
+                    <span className="ml-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-badge text-[10px] font-semibold bg-emerald-500/15 text-emerald-400">
+                      <Repeat className="w-3 h-3" /> Evergreen {post.evergreenIntervalDays || 7}d
+                    </span>
+                  )}
                 </td>
                 <td className="px-5 py-4">
                   <span className="text-xs text-text-secondary bg-bg-main px-2 py-1 rounded-badge font-medium">
@@ -372,6 +394,16 @@ export default function PostsList() {
                         title="Editar legenda/agendamento"
                       >
                         <Pencil className="w-3.5 h-3.5" strokeWidth={1.5} />
+                      </button>
+                    )}
+                    {(post.status === 'PUBLISHED' || post.status === 'PARTIAL') && (
+                      <button
+                        onClick={() => handleEvergreen(post)}
+                        disabled={actionLoading === post.id}
+                        className={`px-2.5 py-1.5 rounded-badge text-xs transition-colors disabled:opacity-50 ${post.isEvergreen ? 'bg-emerald-500/15 text-emerald-400' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
+                        title={post.isEvergreen ? `Evergreen ativo (a cada ${post.evergreenIntervalDays || 7}d) - clique para desativar` : 'Ativar republicacao automatica (Evergreen)'}
+                      >
+                        <Repeat className="w-3.5 h-3.5" strokeWidth={1.5} />
                       </button>
                     )}
                     <button

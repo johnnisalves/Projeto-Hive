@@ -94,6 +94,9 @@ export const api = {
   setPostApproval: (id: string, approvalState: 'none' | 'pending' | 'approved' | 'rejected') =>
     request(`/api/posts/${id}/approval`, { method: 'PUT', body: JSON.stringify({ approvalState }) }),
 
+  setPostEvergreen: (id: string, isEvergreen: boolean, evergreenIntervalDays?: number) =>
+    request(`/api/posts/${id}/evergreen`, { method: 'PUT', body: JSON.stringify({ isEvergreen, evergreenIntervalDays }) }),
+
   generateImage: (prompt: string, aspectRatio?: string) =>
     request<{ imageUrl: string }>('/api/generate/image', {
       method: 'POST',
