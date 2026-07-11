@@ -78,7 +78,7 @@ const approvalSchema = z.object({ approvalState: z.enum(['none', 'pending', 'app
 router.put('/:id/approval', validate(approvalSchema), async (req: AuthRequest, res: Response) => {
   try {
     const ownerId = await resolveOwnerId(req.userId!);
-    const post = await prisma.post.findFirst({ where: { id: req.params.id, userId: ownerId } });
+    const post = await prisma.post.findFirst({ where: { id: String(req.params.id), userId: ownerId } });
     if (!post) { res.status(404).json({ success: false, error: 'Post nao encontrado' }); return; }
     const updated = await prisma.post.update({ where: { id: post.id }, data: { approvalState: req.body.approvalState } as any });
     res.json({ success: true, data: updated });
@@ -95,7 +95,7 @@ const evergreenSchema = z.object({
 router.put('/:id/evergreen', validate(evergreenSchema), async (req: AuthRequest, res: Response) => {
   try {
     const ownerId = await resolveOwnerId(req.userId!);
-    const post = await prisma.post.findFirst({ where: { id: req.params.id, userId: ownerId } });
+    const post = await prisma.post.findFirst({ where: { id: String(req.params.id), userId: ownerId } });
     if (!post) { res.status(404).json({ success: false, error: 'Post nao encontrado' }); return; }
     const data: any = { isEvergreen: req.body.isEvergreen };
     if (req.body.evergreenIntervalDays) data.evergreenIntervalDays = req.body.evergreenIntervalDays;
