@@ -305,7 +305,7 @@ export const api = {
 
   // Template image generation
   listTemplates: () => request<any[]>('/api/generate/templates'),
-  generateTemplate: (body: { title: string; subtitle?: string; body?: string; accent?: string; template?: string; aspectRatio?: string }) =>
+  generateTemplate: (body: { title: string; subtitle?: string; body?: string; accent?: string; template?: string; aspectRatio?: string; brandId?: string; applyBrand?: boolean }) =>
     request<{ imageUrl: string }>('/api/generate/template', { method: 'POST', body: JSON.stringify(body) }),
 
   // Composed image: AI background + HTML overlay

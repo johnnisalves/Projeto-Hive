@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, PlusSquare, FileText, Calendar, CalendarRange, CheckSquare, FolderKanban, Settings, LogOut, Hexagon, Users, GitBranch, Video, Palette, Wand2, Moon, Sun } from 'lucide-react';
+import { Home, PlusSquare, FileText, Calendar, CalendarRange, CheckSquare, FolderKanban, Settings, LogOut, Hexagon, Users, GitBranch, Video, Palette, Wand2, LayoutTemplate, Moon, Sun } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { useTheme } from './ThemeProvider';
 
@@ -15,6 +15,7 @@ const links = [
   { href: '/calendar', label: 'Calendario', icon: Calendar, page: 'calendar' },
   { href: '/planner', label: 'Planejador IA', icon: CalendarRange, page: 'planner' },
   { href: '/ai-studio', label: 'Estudio IA', icon: Wand2, page: 'ai-studio' },
+  { href: '/templates', label: 'Templates', icon: LayoutTemplate, page: 'templates' },
   { href: '/tasks', label: 'Tarefas', icon: CheckSquare, page: 'tasks' },
   { href: '/projects', label: 'Projetos', icon: FolderKanban, page: 'projects' },
   { href: '/funnels', label: 'Funis', icon: GitBranch, page: 'funnels' },
