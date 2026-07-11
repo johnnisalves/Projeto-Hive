@@ -219,7 +219,7 @@ async function callOpenRouterText(apiKey: string, model: string, prompt: string,
  * Unified text generation: routes to OpenRouter when NANO_BANANA_PROVIDER=openrouter
  * (single key for text + image), otherwise falls back to native Google Gemini.
  */
-async function callText(prompt: string, imageUrl?: string): Promise<string> {
+export async function callText(prompt: string, imageUrl?: string): Promise<string> {
   const provider = await resolveTextProvider();
   if (!provider) throw new Error('No text provider configured');
   if (provider.kind === 'openrouter') {

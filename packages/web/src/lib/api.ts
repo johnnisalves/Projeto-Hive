@@ -109,6 +109,12 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  generateContentPlan: (body: { brandId?: string; month?: string; postsCount?: number; platforms?: string[]; goals?: string }) =>
+    request<{ month: string; brandName?: string; items: Array<{ day: number; weekday?: string; theme: string; format: string; hook: string; captionIdea: string; hashtags: string[]; objective?: string }> }>('/api/generate/content-plan', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+
   instagramStatus: () => request<{ connected: boolean }>('/api/instagram/status'),
 
   // Tasks

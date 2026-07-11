@@ -10,6 +10,7 @@ import { generateImagePromptForStudio } from '../services/caption.service';
 import { enrichImagePrompt } from '../services/artDirector.service';
 import { prisma } from '../config/database';
 import { resolveOwnerId } from '../helpers/resolveOwnerId';
+import { generateContentPlan } from '../services/content-planner.service';
 
 const router = Router();
 
@@ -40,6 +41,24 @@ router.use(authMiddleware);
 
 router.post('/image', validate(imageSchema), generateImageController);
 router.post('/caption', validate(captionSchema), generateCaptionController);
+
+// Planejador de conteúdo mensal com IA
+const contentPlanSchema = z.object({
+  brandId: z.string().optional(),
+  month: z.string().optional(),
+  postsCount: z.number().min(1).max(31).optional(),
+  platforms: z.array(z.string()).optional(),
+  goals: z.string().optional(),
+});
+router.post('/content-plan', validate(contentPlanSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    const result = await generateContentPlan({ ownerId, ...req.body });
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao gerar plano de conteúdo' });
+  }
+});
 
 const imagePromptSchema = z.object({
   topic: z.string().min(1),
