@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, PlusSquare, FileText, Calendar, CalendarRange, CheckSquare, FolderKanban, Settings, LogOut, Hexagon, Users, GitBranch, Video, Palette, Wand2, LayoutTemplate, BarChart3, MessageCircle, Moon, Sun } from 'lucide-react';
+import { Home, PlusSquare, FileText, Calendar, CalendarRange, CheckSquare, FolderKanban, Settings, LogOut, Hexagon, Users, GitBranch, Video, Palette, Wand2, LayoutTemplate, BarChart3, MessageCircle, Wallet, Moon, Sun } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { useTheme } from './ThemeProvider';
 
@@ -23,6 +23,7 @@ const links = [
   { href: '/funnels', label: 'Funis', icon: GitBranch, page: 'funnels' },
   { href: '/brands', label: 'Empresas', icon: Palette, page: 'brands' },
   { href: '/team', label: 'Equipe', icon: Users, page: 'team' },
+  { href: '/billing', label: 'Cobranca', icon: Wallet, page: 'billing' },
   { href: '/settings', label: 'Configuracoes', icon: Settings, page: 'settings' },
 ];
 

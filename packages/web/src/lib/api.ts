@@ -108,6 +108,14 @@ export const api = {
   setBranding: (body: { appName?: string | null; logoUrl?: string | null; primaryColor?: string | null }) =>
     request<any>(`/api/branding`, { method: 'PUT', body: JSON.stringify(body) }),
 
+  getBillingConfig: () => request<any>(`/api/billing/config`),
+  setBillingConfig: (body: { apiKey?: string | null; env?: 'sandbox' | 'production' }) =>
+    request<any>(`/api/billing/config`, { method: 'PUT', body: JSON.stringify(body) }),
+  testBilling: () => request<any>(`/api/billing/test`, { method: 'POST' }),
+  createCharge: (body: { customerName: string; cpfCnpj: string; value: number; billingType: string; dueDate: string; description?: string }) =>
+    request<any>(`/api/billing/charges`, { method: 'POST', body: JSON.stringify(body) }),
+  listCharges: () => request<any>(`/api/billing/charges`),
+
   generateImage: (prompt: string, aspectRatio?: string) =>
     request<{ imageUrl: string }>('/api/generate/image', {
       method: 'POST',
