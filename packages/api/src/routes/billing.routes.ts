@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate';
 import { resolveOwnerId } from '../helpers/resolveOwnerId';
-import { getBillingConfig, setBillingConfig, testConnection, createCharge, listCharges } from '../services/asaas.service';
+import { getBillingConfig, setBillingConfig, testConnection, createCharge, listCharges, getPlans, setPlans } from '../services/asaas.service';
 
 const router = Router();
 
@@ -77,6 +77,32 @@ router.get('/charges', async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data: await listCharges(ownerId) });
   } catch (e: any) {
     res.status(400).json({ success: false, error: e?.message || 'Falha ao listar' });
+  }
+});
+
+router.get('/plans', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    res.json({ success: true, data: await getPlans(ownerId) });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || 'Falha' });
+  }
+});
+
+const plansSchema = z.object({
+  plans: z.array(z.object({
+    id: z.string().optional(),
+    name: z.string().min(1),
+    price: z.number().nonnegative(),
+    description: z.string().optional(),
+  })).max(10),
+});
+router.put('/plans', validate(plansSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    res.json({ success: true, data: await setPlans(ownerId, req.body.plans) });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message || 'Falha ao salvar planos' });
   }
 });
 

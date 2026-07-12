@@ -115,6 +115,9 @@ export const api = {
   createCharge: (body: { customerName: string; cpfCnpj: string; value: number; billingType: string; dueDate: string; description?: string }) =>
     request<any>(`/api/billing/charges`, { method: 'POST', body: JSON.stringify(body) }),
   listCharges: () => request<any>(`/api/billing/charges`),
+  getPlans: () => request<any>(`/api/billing/plans`),
+  setPlans: (plans: Array<{ id?: string; name: string; price: number; description?: string }>) =>
+    request<any>(`/api/billing/plans`, { method: 'PUT', body: JSON.stringify({ plans }) }),
 
   generateImage: (prompt: string, aspectRatio?: string) =>
     request<{ imageUrl: string }>('/api/generate/image', {

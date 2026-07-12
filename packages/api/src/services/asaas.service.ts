@@ -95,6 +95,42 @@ export async function createCharge(
   };
 }
 
+// Planos de assinatura (editaveis pelo owner). Guardados como JSON num Setting.
+const DEFAULT_PLANS = [
+  { id: 'starter', name: 'Starter', price: 97, description: 'Ate 30 posts/mes, 1 conta social' },
+  { id: 'pro', name: 'Pro', price: 197, description: 'Posts ilimitados, 3 contas, agendamento' },
+  { id: 'agencia', name: 'Agencia', price: 397, description: 'Tudo do Pro + white-label + relatorios' },
+];
+
+export async function getPlans(userId: string) {
+  const row = await prisma.setting.findFirst({ where: { userId, key: 'billing_plans' } });
+  if (!row?.value) return DEFAULT_PLANS;
+  try {
+    const arr = JSON.parse(row.value);
+    return Array.isArray(arr) && arr.length ? arr : DEFAULT_PLANS;
+  } catch {
+    return DEFAULT_PLANS;
+  }
+}
+
+export async function setPlans(userId: string, plans: any[]) {
+  const clean = (plans || [])
+    .slice(0, 10)
+    .map((p, i) => ({
+      id: String(p.id || p.name || `plan${i}`).slice(0, 40),
+      name: String(p.name || '').slice(0, 60),
+      price: Math.max(0, Number(p.price) || 0),
+      description: String(p.description || '').slice(0, 200),
+    }))
+    .filter((p) => p.name);
+  await prisma.setting.upsert({
+    where: { userId_key: { userId, key: 'billing_plans' } },
+    update: { value: JSON.stringify(clean) },
+    create: { userId, key: 'billing_plans', value: JSON.stringify(clean) },
+  });
+  return clean;
+}
+
 export async function listCharges(userId: string) {
   const r = await asaasReq(userId, '/payments?limit=30&order=desc', 'GET');
   return (r?.data || []).map((p: any) => ({
