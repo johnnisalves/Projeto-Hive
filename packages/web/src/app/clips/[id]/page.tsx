@@ -27,8 +27,27 @@ export default function ClipDetailPage() {
   const [loading, setLoading] = useState(true);
   const [selectedMoments, setSelectedMoments] = useState<Set<number>>(new Set());
   const [format, setFormat] = useState('vertical');
-  const [burnSubs, setBurnSubs] = useState(false);
+  const [burnSubs, setBurnSubs] = useState(true);
   const [cutting, setCutting] = useState(false);
+  const [postingClip, setPostingClip] = useState<number | null>(null);
+
+  async function createReels(gc: any, idx: number) {
+    if (!gc.url) return;
+    setPostingClip(idx);
+    try {
+      await api.createPost({
+        caption: gc.title || clip?.title || '',
+        videoUrl: gc.url,
+        mediaType: 'VIDEO',
+        publishMode: 'REELS',
+        source: 'WEB',
+      });
+      router.push('/posts');
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao criar Reels');
+      setPostingClip(null);
+    }
+  }
 
   const loadClip = useCallback(async () => {
     try {
@@ -305,6 +324,16 @@ export default function ClipDetailPage() {
 
                 {/* Download Buttons */}
                 <div className="flex items-center gap-2 flex-wrap">
+                  {gc.url && (
+                    <button
+                      onClick={() => createReels(gc, idx)}
+                      disabled={postingClip === idx}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-fuchsia-500/10 text-fuchsia-600 text-xs font-semibold hover:bg-fuchsia-500/20 transition-colors disabled:opacity-50"
+                    >
+                      {postingClip === idx ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Film className="w-3.5 h-3.5" />}
+                      Criar Reels
+                    </button>
+                  )}
                   {gc.url && (
                     <a
                       href={gc.url}
