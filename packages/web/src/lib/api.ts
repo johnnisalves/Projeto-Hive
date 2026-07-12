@@ -103,6 +103,9 @@ export const api = {
   getInbox: () => request<any>(`/api/inbox`),
   replyToComment: (commentId: string, message: string) =>
     request<any>(`/api/inbox/reply`, { method: 'POST', body: JSON.stringify({ commentId, message }) }),
+  getDMs: () => request<any>(`/api/inbox/dms`),
+  replyDM: (recipientId: string, message: string) =>
+    request<any>(`/api/inbox/dm-reply`, { method: 'POST', body: JSON.stringify({ recipientId, message }) }),
 
   getBranding: () => request<any>(`/api/branding`),
   setBranding: (body: { appName?: string | null; logoUrl?: string | null; primaryColor?: string | null }) =>
