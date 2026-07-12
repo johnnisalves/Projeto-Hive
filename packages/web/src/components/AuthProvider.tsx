@@ -7,9 +7,16 @@ import { Zap, Loader2 } from 'lucide-react';
 
 const PUBLIC_PATHS = ['/invite'];
 
+interface Branding {
+  appName?: string | null;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+}
+
 interface AuthContextType {
   user: any;
   loading: boolean;
+  branding: Branding | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<void>;
   logout: () => void;
@@ -28,6 +35,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isPublicPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [branding, setBranding] = useState<Branding | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      api.getBranding().then((b) => setBranding(b)).catch(() => {});
+    } else {
+      setBranding(null);
+    }
+  }, [user]);
 
   useEffect(() => {
     const t = getToken();
@@ -84,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, branding, login, register, logout }}>
       {children}
     </AuthContext.Provider>
   );

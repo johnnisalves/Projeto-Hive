@@ -5,7 +5,7 @@ import { api } from '../../lib/api';
 import { useAuth } from '../../components/AuthProvider';
 import {
   Camera, Zap, Send, Monitor, LogOut, CheckCircle, XCircle, Plus, Trash2,
-  Loader2, Eye, EyeOff, Save, Copy, Check, ExternalLink, Hexagon, Cloud,
+  Loader2, Eye, EyeOff, Save, Copy, Check, ExternalLink, Hexagon, Cloud, Palette,
 } from 'lucide-react';
 import { useConfirm } from '@/components/ConfirmModal';
 
@@ -125,6 +125,30 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [mcpCopied, setMcpCopied] = useState(false);
+
+  // White-label (#10)
+  const [wlForm, setWlForm] = useState({ appName: '', logoUrl: '' });
+  const [wlSaving, setWlSaving] = useState(false);
+  const [wlSaved, setWlSaved] = useState(false);
+
+  useEffect(() => {
+    api.getBranding()
+      .then((b: any) => setWlForm({ appName: b?.appName || '', logoUrl: b?.logoUrl || '' }))
+      .catch(() => {});
+  }, []);
+
+  async function handleSaveBranding() {
+    setWlSaving(true);
+    setWlSaved(false);
+    try {
+      await api.setBranding({ appName: wlForm.appName || null, logoUrl: wlForm.logoUrl || null });
+      setWlSaved(true);
+      setTimeout(() => window.location.reload(), 700); // recarrega pra aplicar no menu
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao salvar');
+    }
+    setWlSaving(false);
+  }
 
   // Instagram accounts
   const [igAccounts, setIgAccounts] = useState<any[]>([]);
@@ -382,6 +406,50 @@ export default function SettingsPage() {
           </div>
           <ExternalLink className="w-4 h-4 text-text-muted group-hover:text-primary transition-colors flex-shrink-0" />
         </a>
+      </div>
+
+      {/* White-label (#10) */}
+      <div className="mb-6">
+        <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-3">White-label</p>
+        <div className="card p-5">
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-fuchsia-500/10 to-pink-500/10 flex items-center justify-center flex-shrink-0">
+              <Palette className="w-6 h-6 text-fuchsia-600" strokeWidth={1.5} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-text-primary">Sua marca na plataforma</h3>
+              <p className="text-xs text-text-secondary mt-0.5 mb-3">Personalize o nome e o logo que aparecem no menu — ideal para revender a plataforma com a sua marca.</p>
+
+              <label className="block text-xs font-semibold text-text-secondary mb-1">Nome do app</label>
+              <input
+                value={wlForm.appName}
+                onChange={(e) => setWlForm({ ...wlForm, appName: e.target.value })}
+                placeholder="DisparaAI"
+                maxLength={40}
+                className="input-field text-sm mb-3"
+              />
+
+              <label className="block text-xs font-semibold text-text-secondary mb-1">URL do logo (opcional)</label>
+              <input
+                value={wlForm.logoUrl}
+                onChange={(e) => setWlForm({ ...wlForm, logoUrl: e.target.value })}
+                placeholder="https://.../logo.png"
+                className="input-field text-sm mb-2"
+              />
+              {wlForm.logoUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={wlForm.logoUrl} alt="preview" className="h-8 max-w-[180px] object-contain mb-3" />
+              )}
+
+              <div className="flex items-center gap-3 mt-2">
+                <button onClick={handleSaveBranding} disabled={wlSaving} className="btn-cta px-4 py-2 text-sm disabled:opacity-50">
+                  {wlSaving ? 'Salvando...' : 'Salvar marca'}
+                </button>
+                {wlSaved && <span className="text-xs text-status-published font-medium">✓ Salvo</span>}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* MCP Connection */}

@@ -21,6 +21,8 @@ import whatsappRoutes from './routes/whatsapp.routes';
 import calendarRoutes from './routes/calendar.routes';
 import designSystemsRoutes from './routes/designSystems.routes';
 import analyticsRoutes from './routes/analytics.routes';
+import inboxRoutes from './routes/inbox.routes';
+import brandingRoutes from './routes/branding.routes';
 import { publishWorker } from './jobs/publish.worker';
 import { tokenRefreshWorker, initTokenRefreshJob } from './jobs/token-refresh.worker';
 import { taskReminderWorker } from './jobs/task-reminder.worker';
@@ -50,6 +52,8 @@ app.use('/api/whatsapp', whatsappRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/design-systems', designSystemsRoutes);
 app.use('/api/analytics', analyticsRoutes);
+app.use('/api/inbox', inboxRoutes);
+app.use('/api/branding', brandingRoutes);
 
 // Health check with env diagnostics
 app.get('/api/health', (_req, res) => {

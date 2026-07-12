@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, PlusSquare, FileText, Calendar, CalendarRange, CheckSquare, FolderKanban, Settings, LogOut, Hexagon, Users, GitBranch, Video, Palette, Wand2, LayoutTemplate, BarChart3, Moon, Sun } from 'lucide-react';
+import { Home, PlusSquare, FileText, Calendar, CalendarRange, CheckSquare, FolderKanban, Settings, LogOut, Hexagon, Users, GitBranch, Video, Palette, Wand2, LayoutTemplate, BarChart3, MessageCircle, Moon, Sun } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { useTheme } from './ThemeProvider';
 
@@ -14,6 +14,7 @@ const links = [
   { href: '/posts', label: 'Posts', icon: FileText, page: 'posts' },
   { href: '/calendar', label: 'Calendario', icon: Calendar, page: 'calendar' },
   { href: '/analytics', label: 'Analytics', icon: BarChart3, page: 'analytics' },
+  { href: '/inbox', label: 'Inbox', icon: MessageCircle, page: 'inbox' },
   { href: '/planner', label: 'Planejador IA', icon: CalendarRange, page: 'planner' },
   { href: '/ai-studio', label: 'Estudio IA', icon: Wand2, page: 'ai-studio' },
   { href: '/templates', label: 'Templates', icon: LayoutTemplate, page: 'templates' },
@@ -27,8 +28,11 @@ const links = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const { user, logout, branding } = useAuth();
   const { theme, toggle } = useTheme();
+
+  const appName = branding?.appName || 'DisparaAI';
+  const logoUrl = branding?.logoUrl || null;
 
   const isOwner = user?.role === 'OWNER' || !user?.role;
   const allowedPages: string[] = user?.allowedPages || [];
@@ -49,14 +53,21 @@ export function Sidebar() {
       {/* Logo Area */}
       <div className="p-6 flex flex-col items-start gap-1">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary via-accent-pink to-accent-orange flex items-center justify-center text-white shadow-sm">
-            <Hexagon className="w-5 h-5" strokeWidth={2.5} fill="currentColor" />
-          </div>
-          <span className="font-bold text-[20px] tracking-tight bg-gradient-to-r from-primary to-accent-pink bg-clip-text text-transparent">
-            DisparaAI
-          </span>
+          {logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt={appName} className="h-8 max-w-[180px] object-contain" />
+          ) : (
+            <>
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary via-accent-pink to-accent-orange flex items-center justify-center text-white shadow-sm">
+                <Hexagon className="w-5 h-5" strokeWidth={2.5} fill="currentColor" />
+              </div>
+              <span className="font-bold text-[20px] tracking-tight bg-gradient-to-r from-primary to-accent-pink bg-clip-text text-transparent">
+                {appName}
+              </span>
+            </>
+          )}
         </div>
-        <span className="text-[10px] font-bold tracking-[1px] text-text-muted ml-10">AI PLATFORM</span>
+        {!logoUrl && <span className="text-[10px] font-bold tracking-[1px] text-text-muted ml-10">AI PLATFORM</span>}
       </div>
 
       {/* Navigation */}

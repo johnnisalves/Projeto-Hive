@@ -100,6 +100,14 @@ export const api = {
   getAnalytics: (period: '7d' | '30d' | '90d' = '30d') =>
     request<any>(`/api/analytics?period=${period}`),
 
+  getInbox: () => request<any>(`/api/inbox`),
+  replyToComment: (commentId: string, message: string) =>
+    request<any>(`/api/inbox/reply`, { method: 'POST', body: JSON.stringify({ commentId, message }) }),
+
+  getBranding: () => request<any>(`/api/branding`),
+  setBranding: (body: { appName?: string | null; logoUrl?: string | null; primaryColor?: string | null }) =>
+    request<any>(`/api/branding`, { method: 'PUT', body: JSON.stringify(body) }),
+
   generateImage: (prompt: string, aspectRatio?: string) =>
     request<{ imageUrl: string }>('/api/generate/image', {
       method: 'POST',
