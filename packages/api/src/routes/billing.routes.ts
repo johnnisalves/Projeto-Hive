@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate';
 import { resolveOwnerId } from '../helpers/resolveOwnerId';
-import { getBillingConfig, setBillingConfig, testConnection, createCharge, listCharges, getPlans, setPlans } from '../services/asaas.service';
+import { getBillingConfig, setBillingConfig, testConnection, createCharge, listCharges, getPlans, setPlans, createSubscription, listSubscriptions, cancelSubscription } from '../services/asaas.service';
 
 const router = Router();
 
@@ -77,6 +77,41 @@ router.get('/charges', async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data: await listCharges(ownerId) });
   } catch (e: any) {
     res.status(400).json({ success: false, error: e?.message || 'Falha ao listar' });
+  }
+});
+
+const subSchema = z.object({
+  customerName: z.string().min(1),
+  cpfCnpj: z.string().min(8),
+  value: z.number().positive(),
+  billingType: z.enum(['PIX', 'BOLETO', 'CREDIT_CARD', 'UNDEFINED']).default('PIX'),
+  nextDueDate: z.string().min(8),
+  description: z.string().optional(),
+});
+router.post('/subscriptions', validate(subSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    res.json({ success: true, data: await createSubscription(ownerId, req.body) });
+  } catch (e: any) {
+    res.status(400).json({ success: false, error: e?.message || 'Falha ao criar assinatura' });
+  }
+});
+
+router.get('/subscriptions', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    res.json({ success: true, data: await listSubscriptions(ownerId) });
+  } catch (e: any) {
+    res.status(400).json({ success: false, error: e?.message || 'Falha ao listar' });
+  }
+});
+
+router.delete('/subscriptions/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    res.json({ success: true, data: await cancelSubscription(ownerId, String(req.params.id)) });
+  } catch (e: any) {
+    res.status(400).json({ success: false, error: e?.message || 'Falha ao cancelar' });
   }
 });
 

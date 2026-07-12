@@ -63,20 +63,63 @@ export async function testConnection(userId: string) {
   return { ok: true, account: { name: acc?.name || acc?.company || null, email: acc?.email || null } };
 }
 
+async function findOrCreateCustomer(userId: string, customerName: string, cpfCnpj: string) {
+  const cpf = cpfCnpj.replace(/\D/g, '');
+  const found = await asaasReq(userId, `/customers?cpfCnpj=${encodeURIComponent(cpf)}`, 'GET');
+  if (found?.data?.length) return found.data[0].id;
+  const created = await asaasReq(userId, '/customers', 'POST', { name: customerName, cpfCnpj: cpf });
+  return created.id;
+}
+
+export async function createSubscription(
+  userId: string,
+  input: { customerName: string; cpfCnpj: string; value: number; billingType: string; nextDueDate: string; description?: string },
+) {
+  const customerId = await findOrCreateCustomer(userId, input.customerName, input.cpfCnpj);
+  const sub = await asaasReq(userId, '/subscriptions', 'POST', {
+    customer: customerId,
+    billingType: input.billingType,
+    value: input.value,
+    nextDueDate: input.nextDueDate,
+    cycle: 'MONTHLY',
+    description: input.description || 'Assinatura mensal',
+  });
+  return {
+    id: sub.id,
+    status: sub.status,
+    value: sub.value,
+    nextDueDate: sub.nextDueDate,
+    cycle: sub.cycle,
+    billingType: sub.billingType,
+    description: sub.description,
+  };
+}
+
+export async function listSubscriptions(userId: string) {
+  const r = await asaasReq(userId, '/subscriptions?limit=30&order=desc', 'GET');
+  return (r?.data || []).map((s: any) => ({
+    id: s.id,
+    status: s.status,
+    value: s.value,
+    nextDueDate: s.nextDueDate,
+    cycle: s.cycle,
+    billingType: s.billingType,
+    description: s.description,
+    dateCreated: s.dateCreated,
+  }));
+}
+
+export async function cancelSubscription(userId: string, subscriptionId: string) {
+  await asaasReq(userId, `/subscriptions/${subscriptionId}`, 'DELETE');
+  return { ok: true };
+}
+
 export async function createCharge(
   userId: string,
   input: { customerName: string; cpfCnpj: string; value: number; billingType: string; dueDate: string; description?: string },
 ) {
-  const cpf = input.cpfCnpj.replace(/\D/g, '');
-  // 1) acha ou cria o cliente
-  let customerId: string | undefined;
-  const found = await asaasReq(userId, `/customers?cpfCnpj=${encodeURIComponent(cpf)}`, 'GET');
-  if (found?.data?.length) customerId = found.data[0].id;
-  if (!customerId) {
-    const created = await asaasReq(userId, '/customers', 'POST', { name: input.customerName, cpfCnpj: cpf });
-    customerId = created.id;
-  }
-  // 2) cria a cobranca
+  const customerId = await findOrCreateCustomer(userId, input.customerName, input.cpfCnpj);
+  // cria a cobranca
   const payment = await asaasReq(userId, '/payments', 'POST', {
     customer: customerId,
     billingType: input.billingType, // PIX | BOLETO | CREDIT_CARD | UNDEFINED

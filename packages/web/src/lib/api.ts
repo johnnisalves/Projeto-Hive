@@ -118,6 +118,10 @@ export const api = {
   getPlans: () => request<any>(`/api/billing/plans`),
   setPlans: (plans: Array<{ id?: string; name: string; price: number; description?: string }>) =>
     request<any>(`/api/billing/plans`, { method: 'PUT', body: JSON.stringify({ plans }) }),
+  createSubscription: (body: { customerName: string; cpfCnpj: string; value: number; billingType: string; nextDueDate: string; description?: string }) =>
+    request<any>(`/api/billing/subscriptions`, { method: 'POST', body: JSON.stringify(body) }),
+  listSubscriptions: () => request<any>(`/api/billing/subscriptions`),
+  cancelSubscription: (id: string) => request<any>(`/api/billing/subscriptions/${id}`, { method: 'DELETE' }),
 
   generateImage: (prompt: string, aspectRatio?: string) =>
     request<{ imageUrl: string }>('/api/generate/image', {

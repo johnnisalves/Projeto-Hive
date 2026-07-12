@@ -27,7 +27,9 @@ export default function BillingPage() {
   const [testMsg, setTestMsg] = useState('');
 
   const [form, setForm] = useState({ customerName: '', cpfCnpj: '', value: '', billingType: 'PIX', dueDate: '', description: '' });
+  const [recurring, setRecurring] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [subs, setSubs] = useState<any[]>([]);
 
   const [plans, setPlans] = useState<any[]>([]);
   const [savingPlans, setSavingPlans] = useState(false);
@@ -42,6 +44,7 @@ export default function BillingPage() {
       try { setPlans(await api.getPlans()); } catch { /* ignore */ }
       if (cfg?.configured) {
         try { setCharges(await api.listCharges()); } catch { setCharges([]); }
+        try { setSubs(await api.listSubscriptions()); } catch { setSubs([]); }
       }
     } catch { /* ignore */ }
     setLoading(false);
@@ -93,18 +96,29 @@ export default function BillingPage() {
     if (!form.customerName || !form.cpfCnpj || !form.value || !form.dueDate) { alert('Preencha nome, CPF/CNPJ, valor e vencimento.'); return; }
     setCreating(true);
     try {
-      await api.createCharge({
-        customerName: form.customerName,
-        cpfCnpj: form.cpfCnpj,
-        value: parseFloat(form.value.replace(',', '.')),
-        billingType: form.billingType,
-        dueDate: form.dueDate,
-        description: form.description || undefined,
-      });
+      const value = parseFloat(form.value.replace(',', '.'));
+      if (recurring) {
+        await api.createSubscription({
+          customerName: form.customerName, cpfCnpj: form.cpfCnpj, value,
+          billingType: form.billingType, nextDueDate: form.dueDate, description: form.description || undefined,
+        });
+        setSubs(await api.listSubscriptions());
+      } else {
+        await api.createCharge({
+          customerName: form.customerName, cpfCnpj: form.cpfCnpj, value,
+          billingType: form.billingType, dueDate: form.dueDate, description: form.description || undefined,
+        });
+        setCharges(await api.listCharges());
+      }
       setForm({ customerName: '', cpfCnpj: '', value: '', billingType: 'PIX', dueDate: '', description: '' });
-      setCharges(await api.listCharges());
     } catch (err: any) { alert(err?.message || 'Erro ao criar cobranca'); }
     setCreating(false);
+  }
+
+  async function cancelSub(id: string) {
+    if (!window.confirm('Cancelar esta assinatura? As próximas cobranças param.')) return;
+    try { await api.cancelSubscription(id); setSubs(await api.listSubscriptions()); }
+    catch (err: any) { alert(err?.message || 'Erro ao cancelar'); }
   }
 
   const fmtBRL = (v: number) => v?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -207,9 +221,33 @@ export default function BillingPage() {
             </select>
             <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Descrição (opcional)" className="input-field text-sm" />
           </div>
+          <label className="flex items-center gap-2 mt-3 cursor-pointer select-none">
+            <input type="checkbox" checked={recurring} onChange={(e) => setRecurring(e.target.checked)} className="accent-primary w-4 h-4" />
+            <span className="text-sm text-text-secondary">Assinatura recorrente (cobra todo mês automaticamente)</span>
+          </label>
           <button onClick={createCharge} disabled={creating} className="btn-cta px-4 py-2 text-sm mt-3 disabled:opacity-50 flex items-center gap-1">
-            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} Gerar cobrança
+            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />} {recurring ? 'Criar assinatura' : 'Gerar cobrança'}
           </button>
+        </div>
+      )}
+
+      {/* Assinaturas */}
+      {config?.configured && subs.length > 0 && (
+        <div className="card p-5">
+          <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-3">Assinaturas ativas</p>
+          <div className="space-y-2">
+            {subs.map((s) => (
+              <div key={s.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-bg-card-hover transition-colors">
+                <RefreshCw className="w-4 h-4 text-text-muted shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-text-primary font-medium">{fmtBRL(s.value)}/mês · {s.billingType}</p>
+                  <p className="text-xs text-text-muted">próx. {s.nextDueDate}{s.description ? ` · ${s.description}` : ''}</p>
+                </div>
+                <span className={`px-2 py-0.5 rounded-badge text-[10px] font-semibold ${s.status === 'ACTIVE' ? 'bg-emerald-500/10 text-status-published' : 'bg-bg-main text-text-secondary'}`}>{s.status === 'ACTIVE' ? 'Ativa' : s.status}</span>
+                <button onClick={() => cancelSub(s.id)} className="p-2 text-text-muted hover:text-status-failed" title="Cancelar assinatura"><Trash2 className="w-4 h-4" /></button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
