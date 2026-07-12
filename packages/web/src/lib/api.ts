@@ -97,6 +97,9 @@ export const api = {
   setPostEvergreen: (id: string, isEvergreen: boolean, evergreenIntervalDays?: number) =>
     request(`/api/posts/${id}/evergreen`, { method: 'PUT', body: JSON.stringify({ isEvergreen, evergreenIntervalDays }) }),
 
+  getAnalytics: (period: '7d' | '30d' | '90d' = '30d') =>
+    request<any>(`/api/analytics?period=${period}`),
+
   generateImage: (prompt: string, aspectRatio?: string) =>
     request<{ imageUrl: string }>('/api/generate/image', {
       method: 'POST',
