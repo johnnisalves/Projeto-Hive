@@ -127,13 +127,13 @@ export default function SettingsPage() {
   const [mcpCopied, setMcpCopied] = useState(false);
 
   // White-label (#10)
-  const [wlForm, setWlForm] = useState({ appName: '', logoUrl: '' });
+  const [wlForm, setWlForm] = useState({ appName: '', logoUrl: '', primaryColor: '' });
   const [wlSaving, setWlSaving] = useState(false);
   const [wlSaved, setWlSaved] = useState(false);
 
   useEffect(() => {
     api.getBranding()
-      .then((b: any) => setWlForm({ appName: b?.appName || '', logoUrl: b?.logoUrl || '' }))
+      .then((b: any) => setWlForm({ appName: b?.appName || '', logoUrl: b?.logoUrl || '', primaryColor: b?.primaryColor || '' }))
       .catch(() => {});
   }, []);
 
@@ -141,7 +141,7 @@ export default function SettingsPage() {
     setWlSaving(true);
     setWlSaved(false);
     try {
-      await api.setBranding({ appName: wlForm.appName || null, logoUrl: wlForm.logoUrl || null });
+      await api.setBranding({ appName: wlForm.appName || null, logoUrl: wlForm.logoUrl || null, primaryColor: wlForm.primaryColor || null });
       setWlSaved(true);
       setTimeout(() => window.location.reload(), 700); // recarrega pra aplicar no menu
     } catch (err: any) {
@@ -440,6 +440,27 @@ export default function SettingsPage() {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={wlForm.logoUrl} alt="preview" className="h-8 max-w-[180px] object-contain mb-3" />
               )}
+
+              <label className="block text-xs font-semibold text-text-secondary mb-1">Cor principal</label>
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="color"
+                  value={wlForm.primaryColor || '#6C5CE7'}
+                  onChange={(e) => setWlForm({ ...wlForm, primaryColor: e.target.value })}
+                  className="w-10 h-9 rounded-input border border-border bg-transparent cursor-pointer p-0.5"
+                />
+                <input
+                  value={wlForm.primaryColor}
+                  onChange={(e) => setWlForm({ ...wlForm, primaryColor: e.target.value })}
+                  placeholder="#6C5CE7"
+                  maxLength={7}
+                  className="input-field text-sm w-32"
+                />
+                {wlForm.primaryColor && (
+                  <button type="button" onClick={() => setWlForm({ ...wlForm, primaryColor: '' })} className="text-xs text-text-muted hover:text-status-failed">limpar</button>
+                )}
+                <span className="text-[11px] text-text-muted">aplica em botões, links e destaques do app</span>
+              </div>
 
               <div className="flex items-center gap-3 mt-2">
                 <button onClick={handleSaveBranding} disabled={wlSaving} className="btn-cta px-4 py-2 text-sm disabled:opacity-50">

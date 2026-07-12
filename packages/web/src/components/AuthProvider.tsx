@@ -30,6 +30,21 @@ export function useAuth() {
   return ctx;
 }
 
+// White-label: aplica a cor primaria (hex) como canais RGB na var CSS.
+// Sem cor -> remove a var e volta pro fallback (roxo original) definido no tailwind/globals.
+function applyPrimaryColor(hex?: string | null) {
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  if (!hex) { root.style.removeProperty('--color-primary-rgb'); return; }
+  const h = hex.replace('#', '').trim();
+  if (h.length !== 6) { root.style.removeProperty('--color-primary-rgb'); return; }
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  if ([r, g, b].some((n) => Number.isNaN(n))) { root.style.removeProperty('--color-primary-rgb'); return; }
+  root.style.setProperty('--color-primary-rgb', `${r} ${g} ${b}`);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const isPublicPath = PUBLIC_PATHS.some((p) => pathname.startsWith(p));
@@ -39,9 +54,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (user) {
-      api.getBranding().then((b) => setBranding(b)).catch(() => {});
+      api.getBranding()
+        .then((b) => { setBranding(b); applyPrimaryColor(b?.primaryColor); })
+        .catch(() => {});
     } else {
       setBranding(null);
+      applyPrimaryColor(null);
     }
   }, [user]);
 

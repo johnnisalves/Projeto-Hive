@@ -11,9 +11,10 @@ const config: Config = {
         'bg-card': 'var(--bg-card)',
         'bg-card-hover': 'var(--bg-card-hover)',
 
-        // Primary (roxo)
+        // Primary (roxo) — DEFAULT via CSS var (white-label). Fallback = roxo original.
+        // Canais RGB p/ suportar as variacoes de opacidade (bg-primary/10 etc).
         primary: {
-          DEFAULT: '#6C5CE7',
+          DEFAULT: 'rgb(var(--color-primary-rgb, 108 92 231) / <alpha-value>)',
           light: '#A29BFE',
           dark: '#5A4BD1',
         },
