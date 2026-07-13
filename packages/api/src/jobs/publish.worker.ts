@@ -3,6 +3,7 @@ import { redis } from '../config/redis';
 import { prisma } from '../config/database';
 import { publishToInstagram } from '../services/instagram.service';
 import { publishToPlatforms } from '../services/social-publisher';
+import { publishToWhatsappStatus } from '../services/whatsapp.service';
 import { deleteObject } from '../services/storage.service';
 
 // Erro-sentinela: publicacao parcial que ainda tem tentativas de retry restantes.
@@ -21,13 +22,34 @@ export const publishWorker = new Worker(
 
     try {
       const platforms = post.platforms as string[];
-      let publishedResults: Record<string, { id?: string; error?: string }> | null = null;
+      const sendWa = !!(post as any).sendWhatsappStatus;
+      let publishedResults: Record<string, { id?: string; error?: string }> = {};
 
+      // 1) Redes sociais (IG/FB/LinkedIn/X)
       if (platforms && platforms.length > 0 && !(platforms.length === 1 && platforms[0] === 'INSTAGRAM' && !post.publishedResults)) {
         publishedResults = await publishToPlatforms(postId, platforms as any[], accountId);
-      } else {
+      } else if (platforms && platforms.length > 0) {
         const result = await publishToInstagram(postId, accountId);
         publishedResults = { INSTAGRAM: { id: result.id } };
+      } else if (!sendWa) {
+        // Legado: sem plataformas e sem WhatsApp -> default Instagram
+        const result = await publishToInstagram(postId, accountId);
+        publishedResults = { INSTAGRAM: { id: result.id } };
+      }
+
+      // 2) Status do WhatsApp (adicional, junto das redes) — idempotente entre retries
+      if (sendWa) {
+        const prevWa = (post.publishedResults as any)?.WHATSAPP?.id;
+        if (prevWa) {
+          publishedResults.WHATSAPP = { id: prevWa };
+        } else {
+          try {
+            const wa = await publishToWhatsappStatus(postId);
+            publishedResults.WHATSAPP = { id: wa.id };
+          } catch (e: any) {
+            publishedResults.WHATSAPP = { error: e?.message || 'Falha no Status do WhatsApp' };
+          }
+        }
       }
 
       const allSucceeded = Object.values(publishedResults).every((r) => r.id);

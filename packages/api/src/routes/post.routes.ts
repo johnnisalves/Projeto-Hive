@@ -47,6 +47,7 @@ const createPostSchema = z.object({
   editorState: z.any().optional(),
   brandId: z.string().uuid().optional(),
   platforms: z.array(z.enum(['INSTAGRAM', 'FACEBOOK', 'LINKEDIN', 'X'])).optional(),
+  sendWhatsappStatus: z.boolean().optional(),
 });
 
 const scheduleSchema = z.object({

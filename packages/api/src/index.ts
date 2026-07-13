@@ -228,6 +228,8 @@ async function ensureBrandColumns() {
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "isEvergreen" BOOLEAN NOT NULL DEFAULT false`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "evergreenIntervalDays" INTEGER NOT NULL DEFAULT 7`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "evergreenLastRunAt" TIMESTAMP(3)`,
+    // WhatsApp Status como alvo de publicacao (junto de IG/FB)
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "sendWhatsappStatus" BOOLEAN NOT NULL DEFAULT false`,
   ];
   for (const sql of stmts) {
     try {

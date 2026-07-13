@@ -28,6 +28,26 @@ interface CarouselImage {
   prompt?: string;
 }
 
+// Detecta a proporcao mais proxima (1:1 / 4:5 / 9:16) a partir das dimensoes da imagem.
+function detectAspectRatioFromFile(file: File): Promise<'1:1' | '4:5' | '9:16'> {
+  return new Promise((resolve) => {
+    try {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        const ratio = img.naturalWidth / img.naturalHeight; // largura/altura
+        URL.revokeObjectURL(url);
+        // 1:1=1.0 · 4:5=0.8 · 9:16=0.5625. Landscape (ratio>=0.9) cai em 1:1.
+        if (ratio >= 0.9) resolve('1:1');
+        else if (ratio >= 0.68) resolve('4:5');
+        else resolve('9:16');
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve('1:1'); };
+      img.src = url;
+    } catch { resolve('1:1'); }
+  });
+}
+
 export default function NewPost() {
   const router = useRouter();
   const [caption, setCaption] = useState('');
@@ -46,6 +66,8 @@ export default function NewPost() {
   const [showFullImage, setShowFullImage] = useState(false);
   const [driveLink, setDriveLink] = useState('');
   const [platforms, setPlatforms] = useState<Platform[]>(['INSTAGRAM']);
+  const [sendWhatsappStatus, setSendWhatsappStatus] = useState(false);
+  const [hasWhatsapp, setHasWhatsapp] = useState(false);
   const [brands, setBrands] = useState<{ id: string; name: string; primaryColor: string; defaultPlatforms: string[] }[]>([]);
   const [selectedBrandId, setSelectedBrandId] = useState<string>('');
   const [postFile, setPostFile] = useState({ url: '', name: '' });
@@ -74,6 +96,10 @@ export default function NewPost() {
         setPlatforms((def.defaultPlatforms || ['INSTAGRAM']).filter((p: string) => PLATFORM_OPTIONS.some((o) => o.value === p)) as Platform[]);
       }
     }).catch(() => {});
+    api.listWhatsappConnections().then((res: any) => {
+      const items = res?.items || res || [];
+      setHasWhatsapp(Array.isArray(items) && items.length > 0);
+    }).catch(() => {});
   }, []);
 
   async function handleFileUpload(file: File) {
@@ -96,6 +122,13 @@ export default function NewPost() {
     setArtUploading(true);
     setMessage('');
     const picked = accepted.slice(0, remaining);
+    // Auto-detecta a proporcao a partir da 1a arte (quando ainda nao ha imagens)
+    if (images.length === 0 && picked[0]) {
+      try {
+        const ar = await detectAspectRatioFromFile(picked[0]);
+        setAspectRatio(ar);
+      } catch { /* mantem a proporcao atual */ }
+    }
     const uploaded: CarouselImage[] = [];
     for (const f of picked) {
       try {
@@ -349,6 +382,7 @@ export default function NewPost() {
         nanoPrompt: prompt || undefined,
         aspectRatio,
         platforms,
+        sendWhatsappStatus,
         publishMode,
       };
 
@@ -662,7 +696,34 @@ export default function NewPost() {
                 );
               })}
             </div>
-            <p className="text-[10px] text-text-muted mt-2">Selecione pelo menos 1 plataforma. O post será publicado em todas as selecionadas.</p>
+
+            {/* WhatsApp Status (alvo adicional) */}
+            <button
+              onClick={() => hasWhatsapp && setSendWhatsappStatus((v) => !v)}
+              disabled={!hasWhatsapp}
+              title={hasWhatsapp ? '' : 'Conecte um WhatsApp em Configurações para habilitar'}
+              className={`w-full mt-2 flex items-center gap-2.5 py-2.5 px-3 rounded-btn border transition-all duration-200 ${
+                sendWhatsappStatus
+                  ? 'border-green-500 bg-green-500/[0.06] shadow-sm'
+                  : hasWhatsapp
+                    ? 'border-border bg-bg-card hover:border-green-500/40'
+                    : 'border-border bg-bg-card opacity-50 cursor-not-allowed'
+              }`}
+            >
+              <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${sendWhatsappStatus ? 'bg-green-500' : 'bg-bg-main'}`}>
+                <MessageCircle className={`w-3.5 h-3.5 ${sendWhatsappStatus ? 'text-white' : 'text-text-muted'}`} strokeWidth={2} />
+              </div>
+              <span className={`text-xs font-semibold ${sendWhatsappStatus ? 'text-text-primary' : 'text-text-secondary'}`}>
+                Status do WhatsApp {!hasWhatsapp && <span className="font-normal text-text-muted">(configurar)</span>}
+              </span>
+              {sendWhatsappStatus && (
+                <span className="ml-auto w-4 h-4 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0">
+                  <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                </span>
+              )}
+            </button>
+
+            <p className="text-[10px] text-text-muted mt-2">Selecione ao menos 1 destino. Ao publicar/agendar, o post vai pra todos os selecionados (Instagram, Facebook e/ou Status do WhatsApp).</p>
           </div>
 
           {/* Caption */}
