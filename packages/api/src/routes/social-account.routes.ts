@@ -497,6 +497,69 @@ router.get('/facebook/profiles', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// POST /api/social-accounts/facebook/connect-from-instagram — conecta a Pagina do
+// Facebook vinculada a conta do Instagram ja conectada (1 clique, sem OAuth).
+router.post('/facebook/connect-from-instagram', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    let ig = await prisma.instagramToken.findFirst({ where: { userId, isDefault: true } });
+    if (!ig) ig = await prisma.instagramToken.findFirst({ where: { userId } });
+    if (!ig) {
+      res.status(400).json({ success: false, error: 'Conecte o Instagram primeiro em Configuracoes.' });
+      return;
+    }
+    const token = ig.accessToken;
+    if (!token.startsWith('EAA')) {
+      res.status(400).json({ success: false, error: 'Sua conexao do Instagram e do tipo "Instagram Login" e nao da acesso as Paginas do Facebook. Para publicar no Facebook, conecte via Login do Facebook (conta Business).' });
+      return;
+    }
+    // Lista as Paginas do Facebook que esse token gerencia
+    const r = await fetch(`${GRAPH_BASE}/me/accounts?fields=id,name,access_token,picture{url},instagram_business_account&limit=50&access_token=${token}`);
+    const j = (await r.json()) as any;
+    if (j.error) {
+      res.status(400).json({ success: false, error: `Facebook: ${j.error.message}` });
+      return;
+    }
+    const pages = j.data || [];
+    if (!pages.length) {
+      res.status(400).json({ success: false, error: 'Nenhuma Pagina do Facebook encontrada nessa conta. Verifique se voce administra uma Pagina e concedeu a permissao de Paginas.' });
+      return;
+    }
+    // Prioriza a Pagina ligada a conta do Instagram conectada; senao, conecta todas
+    const linked = pages.find((p: any) => p.instagram_business_account?.id === ig!.instagramUserId);
+    const chosen = linked ? [linked] : pages;
+
+    const connected: any[] = [];
+    for (const p of chosen) {
+      const existing = await prisma.socialAccount.findFirst({ where: { userId, platform: 'FACEBOOK', platformUserId: p.id } });
+      if (existing) {
+        await prisma.socialAccount.update({
+          where: { id: existing.id },
+          data: { accessToken: p.access_token, displayName: p.name, refreshedAt: new Date() },
+        });
+        connected.push({ id: existing.id, name: p.name, updated: true });
+      } else {
+        const count = await prisma.socialAccount.count({ where: { userId, platform: 'FACEBOOK' } });
+        const acc = await prisma.socialAccount.create({
+          data: {
+            platform: 'FACEBOOK',
+            accessToken: p.access_token,
+            platformUserId: p.id,
+            displayName: p.name,
+            username: p.name,
+            isDefault: count === 0,
+            userId,
+          },
+        });
+        connected.push({ id: acc.id, name: p.name, isDefault: acc.isDefault });
+      }
+    }
+    res.json({ success: true, data: { connected, count: connected.length } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao conectar o Facebook' });
+  }
+});
+
 // GET /api/social-accounts/linkedin/profile — LinkedIn profile + recent posts
 router.get('/linkedin/profile', async (req: AuthRequest, res: Response) => {
   try {

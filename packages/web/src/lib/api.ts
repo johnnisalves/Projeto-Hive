@@ -394,6 +394,8 @@ export const api = {
 
   // Social Accounts (multi-platform)
   listSocialAccounts: () => request<any[]>('/api/social-accounts'),
+  connectFacebookFromInstagram: () =>
+    request<any>('/api/social-accounts/facebook/connect-from-instagram', { method: 'POST' }),
   addSocialAccount: (body: { platform: string; accessToken: string; refreshToken?: string; platformUserId: string; username?: string; displayName?: string; pageId?: string; expiresAt?: string }) =>
     request('/api/social-accounts', { method: 'POST', body: JSON.stringify(body) }),
   setDefaultSocialAccount: (id: string) =>
