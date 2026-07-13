@@ -13,6 +13,8 @@ import crypto from 'crypto';
 const API_BASE = process.env.API_BASE_URL || `http://localhost:${env.PORT}`;
 const X_CALLBACK_BASE = process.env.X_TUNNEL_URL || API_BASE;
 const GRAPH_BASE = 'https://graph.facebook.com/v21.0';
+// URL publica de callback do Facebook (a api e servida em <frontend>/api).
+const FB_REDIRECT = ((process.env.API_BASE_URL || process.env.FRONTEND_URL || `http://localhost:${env.PORT}`).replace(/\/$/, '')) + '/api/social-accounts/facebook/callback';
 
 const router = Router();
 
@@ -214,8 +216,7 @@ router.get('/facebook/callback', async (req, res: Response) => {
     const appId = appIdSetting?.value || env.FACEBOOK_APP_ID;
     const appSecret = appSecretSetting?.value || env.FACEBOOK_APP_SECRET;
     if (!appId || !appSecret) { res.status(400).send(ERROR_HTML('App do Facebook nao configurado')); return; }
-
-    const redirectUri = `${API_BASE}/api/social-accounts/facebook/callback`;
+    const redirectUri = FB_REDIRECT;
     // 1) troca code por token de usuario
     const tokRes = await fetch(`${GRAPH_BASE}/oauth/access_token?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&client_secret=${appSecret}&code=${encodeURIComponent(code)}`);
     const tokJson = (await tokRes.json()) as any;
@@ -563,8 +564,7 @@ router.get('/facebook/auth-url', async (req: AuthRequest, res: Response) => {
     const appIdSetting = await prisma.setting.findUnique({ where: { userId_key: { userId, key: 'FACEBOOK_APP_ID' } } });
     const appId = appIdSetting?.value || env.FACEBOOK_APP_ID;
     if (!appId) { res.status(400).json({ success: false, error: 'App do Facebook nao configurado. Informe o App ID/Secret nas Configuracoes.' }); return; }
-
-    const redirectUri = `${API_BASE}/api/social-accounts/facebook/callback`;
+    const redirectUri = FB_REDIRECT;
     const randomPart = crypto.randomBytes(16).toString('hex');
     const state = `${userId}:${randomPart}`;
     const scope = 'public_profile,pages_show_list,pages_manage_posts,pages_read_engagement';
