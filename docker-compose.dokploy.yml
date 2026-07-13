@@ -53,7 +53,9 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN}
-      MINIO_ENDPOINT: minio
+      # Nome UNICO do container (nao "minio" que colide com o minio de outros projetos
+      # na dokploy-network compartilhada -> resolvia p/ 3 IPs -> SignatureDoesNotMatch).
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-disparaai-openhive-el3y0z-minio-1}
       MINIO_PORT: '9000'
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin_secret}

@@ -23,7 +23,7 @@ export async function uploadImageController(req: Request, res: Response) {
     res.json({ success: true, data: { imageUrl } });
   } catch (err) {
     console.error('[uploadImage] Error:', err);
-    res.status(500).json({ success: false, error: (err as any)?.message || 'Failed to upload image', code: (err as any)?.code });
+    res.status(500).json({ success: false, error: 'Falha ao enviar a imagem. Tente novamente.' });
   }
 }
 
@@ -135,6 +135,6 @@ export async function uploadFileController(req: Request, res: Response) {
     res.json({ success: true, data: { fileUrl, fileName: req.file.originalname, mimeType: req.file.mimetype } });
   } catch (err) {
     console.error('[uploadFile] Error:', err);
-    res.status(500).json({ success: false, error: (err as any)?.message || 'Failed to upload file', code: (err as any)?.code });
+    res.status(500).json({ success: false, error: 'Falha ao enviar o arquivo. Tente novamente.' });
   }
 }
