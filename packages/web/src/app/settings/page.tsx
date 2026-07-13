@@ -253,6 +253,29 @@ export default function SettingsPage() {
     } catch {}
   }
 
+  async function handleConnectFacebook() {
+    try {
+      // 1) Tenta o atalho: reaproveitar o token do Instagram (se for conta Business)
+      try {
+        const quick: any = await api.connectFacebookFromInstagram();
+        if (quick?.count > 0) {
+          await loadSocialAccounts();
+          alert(`Facebook conectado! Pagina(s): ${quick.connected.map((c: any) => c.name).join(', ')}`);
+          return;
+        }
+      } catch { /* segue pro Login do Facebook */ }
+      // 2) Login do Facebook (OAuth)
+      const data: any = await api.getFacebookAuthUrl();
+      if (data.authUrl) {
+        window.open(data.authUrl, '_blank', 'width=600,height=750');
+      } else {
+        alert('Configure o App ID e Secret do Facebook nas configuracoes acima e tente de novo.');
+      }
+    } catch (err: any) {
+      alert('Para conectar o Facebook: informe o "Facebook App ID" e "App Secret" nas configuracoes acima (secao Facebook App), depois clique aqui de novo. Detalhe: ' + (err?.message || ''));
+    }
+  }
+
   async function handleConnectLinkedIn() {
     try {
       const data: any = await api.getLinkedInAuthUrl();
@@ -812,7 +835,10 @@ export default function SettingsPage() {
                   <button onClick={handleConnectX} className="btn-cta text-xs w-full mb-2">Conectar via OAuth</button>
                 )}
                 {platform === 'FACEBOOK' && (
-                  <button onClick={() => { setShowAddSocial(true); setSocialForm({ ...socialForm, platform: 'FACEBOOK' }); }} className="btn-cta text-xs w-full mb-2">Adicionar Manualmente</button>
+                  <>
+                    <button onClick={handleConnectFacebook} className="btn-cta text-xs w-full mb-1.5">Conectar (Login do Facebook)</button>
+                    <button onClick={() => { setShowAddSocial(true); setSocialForm({ ...socialForm, platform: 'FACEBOOK' }); }} className="btn-ghost text-xs w-full mb-2">Adicionar Manualmente</button>
+                  </>
                 )}
                 {platformAccounts.length === 0 && (
                   <p className="text-[10px] text-text-muted">Nenhuma conta conectada</p>

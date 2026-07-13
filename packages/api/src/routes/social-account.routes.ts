@@ -196,6 +196,65 @@ router.get('/x/callback', async (req, res: Response) => {
   }
 });
 
+// GET /api/social-accounts/facebook/callback — Facebook Login OAuth callback (PUBLIC)
+router.get('/facebook/callback', async (req, res: Response) => {
+  try {
+    const { code, state, error, error_description, error_message } = req.query as Record<string, string>;
+    if (error) {
+      res.status(400).send(ERROR_HTML(`${error}: ${error_description || error_message || 'Autorizacao negada'}`));
+      return;
+    }
+    if (!code || !state) { res.status(400).send(ERROR_HTML('Codigo de autorizacao ausente')); return; }
+
+    const { userId } = parseState(state);
+    const ownerId = await resolveOwnerId(userId);
+
+    const appIdSetting = await prisma.setting.findUnique({ where: { userId_key: { userId: ownerId, key: 'FACEBOOK_APP_ID' } } });
+    const appSecretSetting = await prisma.setting.findUnique({ where: { userId_key: { userId: ownerId, key: 'FACEBOOK_APP_SECRET' } } });
+    const appId = appIdSetting?.value || env.FACEBOOK_APP_ID;
+    const appSecret = appSecretSetting?.value || env.FACEBOOK_APP_SECRET;
+    if (!appId || !appSecret) { res.status(400).send(ERROR_HTML('App do Facebook nao configurado')); return; }
+
+    const redirectUri = `${API_BASE}/api/social-accounts/facebook/callback`;
+    // 1) troca code por token de usuario
+    const tokRes = await fetch(`${GRAPH_BASE}/oauth/access_token?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&client_secret=${appSecret}&code=${encodeURIComponent(code)}`);
+    const tokJson = (await tokRes.json()) as any;
+    if (tokJson.error || !tokJson.access_token) {
+      res.status(400).send(ERROR_HTML(`Facebook: ${tokJson.error?.message || 'falha na troca do codigo'}`));
+      return;
+    }
+    let userToken = tokJson.access_token as string;
+    // 2) token de longa duracao (60 dias)
+    try {
+      const llRes = await fetch(`${GRAPH_BASE}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${userToken}`);
+      const llJson = (await llRes.json()) as any;
+      if (llJson.access_token) userToken = llJson.access_token;
+    } catch { /* mantem o token curto */ }
+
+    // 3) Paginas que o usuario administra (cada uma com seu token de Pagina)
+    const pagesRes = await fetch(`${GRAPH_BASE}/me/accounts?fields=id,name,access_token,instagram_business_account&limit=100&access_token=${userToken}`);
+    const pagesJson = (await pagesRes.json()) as any;
+    if (pagesJson.error) { res.status(400).send(ERROR_HTML(`Facebook: ${pagesJson.error.message}`)); return; }
+    const pages = pagesJson.data || [];
+    if (!pages.length) { res.status(400).send(ERROR_HTML('Nenhuma Pagina do Facebook encontrada. Voce precisa administrar ao menos 1 Pagina.')); return; }
+
+    for (const p of pages) {
+      const existing = await prisma.socialAccount.findFirst({ where: { userId: ownerId, platform: 'FACEBOOK', platformUserId: p.id } });
+      if (existing) {
+        await prisma.socialAccount.update({ where: { id: existing.id }, data: { accessToken: p.access_token, displayName: p.name, refreshedAt: new Date() } });
+      } else {
+        const count = await prisma.socialAccount.count({ where: { userId: ownerId, platform: 'FACEBOOK' } });
+        await prisma.socialAccount.create({
+          data: { platform: 'FACEBOOK', accessToken: p.access_token, platformUserId: p.id, displayName: p.name, username: p.name, isDefault: count === 0, userId: ownerId },
+        });
+      }
+    }
+    res.send(SUCCESS_HTML);
+  } catch (err: any) {
+    res.status(500).send(ERROR_HTML(err.message));
+  }
+});
+
 // ============================================================
 // AUTHENTICATED ROUTES — require Bearer token
 // ============================================================
@@ -492,6 +551,25 @@ router.get('/facebook/profiles', async (req: AuthRequest, res: Response) => {
     }));
 
     res.json({ success: true, data: results });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// GET /api/social-accounts/facebook/auth-url — inicia o Login do Facebook (autenticado)
+router.get('/facebook/auth-url', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const appIdSetting = await prisma.setting.findUnique({ where: { userId_key: { userId, key: 'FACEBOOK_APP_ID' } } });
+    const appId = appIdSetting?.value || env.FACEBOOK_APP_ID;
+    if (!appId) { res.status(400).json({ success: false, error: 'App do Facebook nao configurado. Informe o App ID/Secret nas Configuracoes.' }); return; }
+
+    const redirectUri = `${API_BASE}/api/social-accounts/facebook/callback`;
+    const randomPart = crypto.randomBytes(16).toString('hex');
+    const state = `${userId}:${randomPart}`;
+    const scope = 'public_profile,pages_show_list,pages_manage_posts,pages_read_engagement';
+    const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&scope=${encodeURIComponent(scope)}&response_type=code`;
+    res.json({ success: true, data: { authUrl, redirectUri } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message });
   }
