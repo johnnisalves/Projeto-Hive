@@ -382,6 +382,14 @@ export const api = {
     request<{ ok: boolean; detail?: string }>('/api/whatsapp/test', { method: 'POST', body: JSON.stringify(body) }),
   publishWhatsappStatus: (postId: string, connectionId?: string) =>
     request<{ id: string }>(`/api/whatsapp/status/${postId}`, { method: 'POST', body: JSON.stringify({ connectionId }) }),
+  connectWhatsapp: (id: string) =>
+    request<{ loggedIn: boolean; connected: boolean }>(`/api/whatsapp/connections/${id}/connect`, { method: 'POST' }),
+  getWhatsappQr: (id: string) =>
+    request<{ qr: string | null; loggedIn: boolean }>(`/api/whatsapp/connections/${id}/qr`),
+  getWhatsappStatus: (id: string) =>
+    request<{ loggedIn: boolean; connected: boolean; jid?: string | null }>(`/api/whatsapp/connections/${id}/status`),
+  logoutWhatsapp: (id: string) =>
+    request(`/api/whatsapp/connections/${id}/logout`, { method: 'POST' }),
 
   // Instagram Accounts
   listInstagramAccounts: () => request<any[]>('/api/instagram/accounts'),

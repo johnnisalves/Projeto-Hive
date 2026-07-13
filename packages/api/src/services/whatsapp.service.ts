@@ -111,3 +111,63 @@ export async function publishToWhatsappStatus(postId: string, connectionId?: str
   const id = d?.Id || d?.id || d?.messageid || d?.messageId || 'status-ok';
   return { id: String(id) };
 }
+
+// ============================================================
+// Conexao por QR (dentro do proprio DisparaAI)
+// ============================================================
+
+/** Abre/garante o socket da instancia no WuzAPI (necessario antes de gerar o QR). */
+export async function connectWhatsappSession(host: string, token: string): Promise<void> {
+  const base = normalizeHost(host);
+  try {
+    await fetch(`${base}/session/connect`, {
+      method: 'POST',
+      headers: { token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ Subscribe: ['Message'], Immediate: true }),
+    });
+  } catch {
+    /* se ja estiver conectado o WuzAPI responde erro — ignoramos, o status dira a verdade */
+  }
+}
+
+/** Status da sessao: loggedIn = numero vinculado; connected = socket aberto. */
+export async function getWhatsappSessionStatus(
+  host: string,
+  token: string,
+): Promise<{ loggedIn: boolean; connected: boolean; jid?: string | null }> {
+  const base = normalizeHost(host);
+  const res = await fetch(`${base}/session/status`, {
+    method: 'GET',
+    headers: { token, 'Content-Type': 'application/json' },
+  });
+  const data = (await res.json().catch(() => ({}))) as any;
+  const d = data?.data || data || {};
+  return {
+    loggedIn: (d.LoggedIn ?? d.loggedIn) === true,
+    connected: (d.Connected ?? d.connected) === true,
+    jid: d.jid ?? d.Jid ?? null,
+  };
+}
+
+/** Retorna o QR atual (data URI base64) para escanear. null se ja logado / sem QR. */
+export async function getWhatsappQr(host: string, token: string): Promise<{ qr: string | null }> {
+  const base = normalizeHost(host);
+  const res = await fetch(`${base}/session/qr`, {
+    method: 'GET',
+    headers: { token, 'Content-Type': 'application/json' },
+  });
+  const data = (await res.json().catch(() => ({}))) as any;
+  const d = data?.data || data || {};
+  const qr = d.QRCode || d.qrcode || d.qr || null;
+  return { qr: typeof qr === 'string' && qr.startsWith('data:') ? qr : null };
+}
+
+/** Desloga a instancia (libera o vinculo do numero). */
+export async function logoutWhatsappSession(host: string, token: string): Promise<void> {
+  const base = normalizeHost(host);
+  try {
+    await fetch(`${base}/session/logout`, { method: 'POST', headers: { token } });
+  } catch {
+    /* ignore */
+  }
+}

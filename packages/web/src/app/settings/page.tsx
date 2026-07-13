@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../components/AuthProvider';
 import {
   Camera, Zap, Send, Monitor, LogOut, CheckCircle, XCircle, Plus, Trash2,
   Loader2, Eye, EyeOff, Save, Copy, Check, ExternalLink, Hexagon, Cloud, Palette,
+  QrCode, Smartphone,
 } from 'lucide-react';
 import { useConfirm } from '@/components/ConfirmModal';
 
@@ -163,6 +164,12 @@ export default function SettingsPage() {
   const [waForm, setWaForm] = useState({ name: '', host: 'https://wapi.digitalcrm.com.br', token: '', phone: '' });
   const [waAdding, setWaAdding] = useState(false);
   const [waTest, setWaTest] = useState('');
+  // Modal de conexao por QR (ao vivo)
+  const [waQr, setWaQr] = useState<{ open: boolean; id: string; name: string; qr: string | null; loggedIn: boolean; loading: boolean; err: string }>(
+    { open: false, id: '', name: '', qr: null, loggedIn: false, loading: false, err: '' }
+  );
+  const waQrTimer = useRef<any>(null);
+  const waQrTick = useRef(0);
 
   // Social accounts (multi-platform)
   const [socialAccounts, setSocialAccounts] = useState<any[]>([]);
@@ -175,6 +182,7 @@ export default function SettingsPage() {
     loadIgAccounts();
     loadSocialAccounts();
     loadWaConns();
+    return () => { if (waQrTimer.current) clearInterval(waQrTimer.current); };
   }, []);
 
   async function loadWaConns() {
@@ -189,14 +197,61 @@ export default function SettingsPage() {
     setWaAdding(true);
     setWaTest('');
     try {
-      await api.addWhatsappConnection(waForm);
+      const r: any = await api.addWhatsappConnection(waForm);
+      const newId = r?.data?.id || r?.id;
+      const newName = waForm.name;
       setWaForm({ name: '', host: 'https://wapi.digitalcrm.com.br', token: '', phone: '' });
       setShowAddWa(false);
       await loadWaConns();
+      if (newId) openWaQr(newId, newName); // ja abre o QR pra conectar na hora
     } catch (e: any) {
       setWaTest('Erro ao salvar: ' + (e?.message || ''));
     }
     setWaAdding(false);
+  }
+
+  async function openWaQr(id: string, name: string) {
+    if (waQrTimer.current) { clearInterval(waQrTimer.current); waQrTimer.current = null; }
+    waQrTick.current = 0;
+    setWaQr({ open: true, id, name, qr: null, loggedIn: false, loading: true, err: '' });
+    try {
+      const r: any = await api.getWhatsappQr(id);
+      const d = r?.data || r;
+      if (d?.loggedIn) { setWaQr((s) => ({ ...s, loading: false, loggedIn: true, qr: null })); await loadWaConns(); return; }
+      setWaQr((s) => ({ ...s, loading: false, qr: d?.qr || null }));
+    } catch (e: any) {
+      setWaQr((s) => ({ ...s, loading: false, err: e?.message || 'Falha ao gerar QR' }));
+    }
+    waQrTimer.current = setInterval(async () => {
+      waQrTick.current++;
+      try {
+        const st: any = await api.getWhatsappStatus(id);
+        const sd = st?.data || st;
+        if (sd?.loggedIn) {
+          if (waQrTimer.current) { clearInterval(waQrTimer.current); waQrTimer.current = null; }
+          setWaQr((s) => ({ ...s, loggedIn: true, qr: null }));
+          await loadWaConns();
+          return;
+        }
+        // renova o QR a cada ~18s (WhatsApp expira o QR rapido)
+        if (waQrTick.current % 6 === 0) {
+          const r: any = await api.getWhatsappQr(id);
+          const d = r?.data || r;
+          if (d?.loggedIn) {
+            if (waQrTimer.current) { clearInterval(waQrTimer.current); waQrTimer.current = null; }
+            setWaQr((s) => ({ ...s, loggedIn: true, qr: null }));
+            await loadWaConns();
+            return;
+          }
+          setWaQr((s) => ({ ...s, qr: d?.qr || s.qr }));
+        }
+      } catch { /* transiente, ignora */ }
+    }, 3000);
+  }
+
+  function closeWaQr() {
+    if (waQrTimer.current) { clearInterval(waQrTimer.current); waQrTimer.current = null; }
+    setWaQr({ open: false, id: '', name: '', qr: null, loggedIn: false, loading: false, err: '' });
   }
 
   async function handleTestWaConn() {
@@ -797,6 +852,9 @@ export default function SettingsPage() {
                     <p className="text-[10px] text-text-muted">{c.phone || c.host}</p>
                   </div>
                   <div className="flex items-center gap-1">
+                    <button onClick={() => openWaQr(c.id, c.name)} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold text-white transition-colors" style={{ background: '#25D366' }}>
+                      <QrCode className="w-3.5 h-3.5" /> Conectar (QR)
+                    </button>
                     {!c.isDefault && (
                       <button onClick={() => handleSetDefaultWa(c.id)} className="px-2 py-1 rounded text-[10px] font-semibold text-primary hover:bg-primary/10 transition-colors">Tornar padrao</button>
                     )}
@@ -809,6 +867,55 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
+
+        {waQr.open && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" onClick={closeWaQr}>
+            <div className="bg-bg-card rounded-2xl p-6 max-w-sm w-full text-center" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+                  <Smartphone className="w-4 h-4 text-primary" /> Conectar WhatsApp {waQr.name ? `— ${waQr.name}` : ''}
+                </h3>
+                <button onClick={closeWaQr} className="text-text-muted hover:text-text-primary"><XCircle className="w-5 h-5" /></button>
+              </div>
+
+              {waQr.loggedIn ? (
+                <div className="py-8">
+                  <CheckCircle className="w-14 h-14 text-green-500 mx-auto mb-3" />
+                  <p className="text-sm font-bold text-text-primary">Conectado! ✅</p>
+                  <p className="text-xs text-text-secondary mt-1">O número está pronto para publicar no Status.</p>
+                  <button onClick={closeWaQr} className="btn-cta text-xs mt-4">Concluir</button>
+                </div>
+              ) : waQr.err ? (
+                <div className="py-8">
+                  <XCircle className="w-14 h-14 text-status-failed mx-auto mb-3" />
+                  <p className="text-sm font-semibold text-text-primary">Não foi possível gerar o QR</p>
+                  <p className="text-[11px] text-text-muted mt-1">{waQr.err}</p>
+                  <button onClick={() => openWaQr(waQr.id, waQr.name)} className="btn-ghost text-xs mt-4">Tentar de novo</button>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-white rounded-xl p-3 inline-block mx-auto min-h-[232px] min-w-[232px] flex items-center justify-center">
+                    {waQr.loading || !waQr.qr ? (
+                      <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={waQr.qr} alt="QR WhatsApp" width={208} height={208} className="w-52 h-52" />
+                    )}
+                  </div>
+                  <div className="mt-4 text-left text-xs text-text-secondary space-y-1">
+                    <p className="font-semibold text-text-primary text-center mb-2">📲 Escaneie com o WhatsApp</p>
+                    <p>1. Abra o WhatsApp no celular do número</p>
+                    <p>2. <b>⋮ → Aparelhos conectados → Conectar um aparelho</b></p>
+                    <p>3. Aponte a câmera para o QR acima</p>
+                  </div>
+                  <div className="mt-3 flex items-center justify-center gap-2 text-[11px] text-text-muted">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Aguardando leitura… (o QR se renova sozinho)
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-3">Contas Sociais</p>
 

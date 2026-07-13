@@ -4,7 +4,14 @@ import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate';
 import { prisma } from '../config/database';
 import { resolveOwnerId } from '../helpers/resolveOwnerId';
-import { publishToWhatsappStatus, testWhatsappConnection } from '../services/whatsapp.service';
+import {
+  publishToWhatsappStatus,
+  testWhatsappConnection,
+  connectWhatsappSession,
+  getWhatsappSessionStatus,
+  getWhatsappQr,
+  logoutWhatsappSession,
+} from '../services/whatsapp.service';
 
 const router = Router();
 router.use(authMiddleware);
@@ -73,6 +80,72 @@ router.delete('/connections/:id', async (req: AuthRequest, res: Response) => {
       if (next) await db().whatsappConnection.update({ where: { id: next.id }, data: { isDefault: true } });
     }
     res.json({ success: true, data: { deleted: true } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// Helper: pega a conexao (com host+token) validando ownership
+async function loadConn(userId: string, id: string) {
+  return db().whatsappConnection.findFirst({ where: { id, userId } });
+}
+
+// POST /api/whatsapp/connections/:id/connect - abre o socket (prepara o QR)
+router.post('/connections/:id/connect', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const id = String(req.params.id);
+    const conn = await loadConn(userId, id);
+    if (!conn) { res.status(404).json({ success: false, error: 'Conexao nao encontrada' }); return; }
+    await connectWhatsappSession(conn.host, conn.token);
+    const status = await getWhatsappSessionStatus(conn.host, conn.token);
+    res.json({ success: true, data: status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// GET /api/whatsapp/connections/:id/qr - QR atual (data URI) para escanear
+router.get('/connections/:id/qr', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const id = String(req.params.id);
+    const conn = await loadConn(userId, id);
+    if (!conn) { res.status(404).json({ success: false, error: 'Conexao nao encontrada' }); return; }
+    // garante socket aberto, senao nao ha QR
+    await connectWhatsappSession(conn.host, conn.token);
+    const status = await getWhatsappSessionStatus(conn.host, conn.token);
+    if (status.loggedIn) { res.json({ success: true, data: { qr: null, loggedIn: true } }); return; }
+    const { qr } = await getWhatsappQr(conn.host, conn.token);
+    res.json({ success: true, data: { qr, loggedIn: false } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// GET /api/whatsapp/connections/:id/status - loggedIn / connected
+router.get('/connections/:id/status', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const id = String(req.params.id);
+    const conn = await loadConn(userId, id);
+    if (!conn) { res.status(404).json({ success: false, error: 'Conexao nao encontrada' }); return; }
+    const status = await getWhatsappSessionStatus(conn.host, conn.token);
+    res.json({ success: true, data: status });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// POST /api/whatsapp/connections/:id/logout - desloga o numero
+router.post('/connections/:id/logout', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const id = String(req.params.id);
+    const conn = await loadConn(userId, id);
+    if (!conn) { res.status(404).json({ success: false, error: 'Conexao nao encontrada' }); return; }
+    await logoutWhatsappSession(conn.host, conn.token);
+    res.json({ success: true, data: { loggedOut: true } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message });
   }
