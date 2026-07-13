@@ -116,7 +116,17 @@ router.get('/connections/:id/qr', async (req: AuthRequest, res: Response) => {
     await connectWhatsappSession(conn.host, conn.token);
     const status = await getWhatsappSessionStatus(conn.host, conn.token);
     if (status.loggedIn) { res.json({ success: true, data: { qr: null, loggedIn: true } }); return; }
-    const { qr } = await getWhatsappQr(conn.host, conn.token);
+    // o WuzAPI leva ~1s para gerar o QR apos o connect — tenta algumas vezes
+    let qr: string | null = null;
+    for (let i = 0; i < 6 && !qr; i++) {
+      const r = await getWhatsappQr(conn.host, conn.token);
+      qr = r.qr;
+      if (!qr) {
+        const st = await getWhatsappSessionStatus(conn.host, conn.token);
+        if (st.loggedIn) { res.json({ success: true, data: { qr: null, loggedIn: true } }); return; }
+        await new Promise((ok) => setTimeout(ok, 600));
+      }
+    }
     res.json({ success: true, data: { qr, loggedIn: false } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message });
