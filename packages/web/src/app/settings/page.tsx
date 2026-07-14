@@ -165,8 +165,8 @@ export default function SettingsPage() {
   const [waAdding, setWaAdding] = useState(false);
   const [waTest, setWaTest] = useState('');
   // Modal de conexao por QR (ao vivo)
-  const [waQr, setWaQr] = useState<{ open: boolean; id: string; name: string; qr: string | null; loggedIn: boolean; loading: boolean; err: string }>(
-    { open: false, id: '', name: '', qr: null, loggedIn: false, loading: false, err: '' }
+  const [waQr, setWaQr] = useState<{ open: boolean; id: string; name: string; qr: string | null; loggedIn: boolean; loading: boolean; err: string; stalled: boolean }>(
+    { open: false, id: '', name: '', qr: null, loggedIn: false, loading: false, err: '', stalled: false }
   );
   const waQrTimer = useRef<any>(null);
   const waQrTick = useRef(0);
@@ -213,7 +213,7 @@ export default function SettingsPage() {
   async function openWaQr(id: string, name: string) {
     if (waQrTimer.current) { clearInterval(waQrTimer.current); waQrTimer.current = null; }
     waQrTick.current = 0;
-    setWaQr({ open: true, id, name, qr: null, loggedIn: false, loading: true, err: '' });
+    setWaQr({ open: true, id, name, qr: null, loggedIn: false, loading: true, err: '', stalled: false });
     try {
       const r: any = await api.getWhatsappQr(id);
       const d = r?.data || r;
@@ -224,6 +224,12 @@ export default function SettingsPage() {
     }
     waQrTimer.current = setInterval(async () => {
       waQrTick.current++;
+      // para de tentar apos ~2,5 min para nao ficar consultando pra sempre
+      if (waQrTick.current > 50) {
+        if (waQrTimer.current) { clearInterval(waQrTimer.current); waQrTimer.current = null; }
+        setWaQr((s) => ({ ...s, stalled: true }));
+        return;
+      }
       try {
         const st: any = await api.getWhatsappStatus(id);
         const sd = st?.data || st;
@@ -251,7 +257,7 @@ export default function SettingsPage() {
 
   function closeWaQr() {
     if (waQrTimer.current) { clearInterval(waQrTimer.current); waQrTimer.current = null; }
-    setWaQr({ open: false, id: '', name: '', qr: null, loggedIn: false, loading: false, err: '' });
+    setWaQr({ open: false, id: '', name: '', qr: null, loggedIn: false, loading: false, err: '', stalled: false });
   }
 
   async function handleTestWaConn() {
@@ -891,6 +897,13 @@ export default function SettingsPage() {
                   <p className="text-sm font-semibold text-text-primary">Não foi possível gerar o QR</p>
                   <p className="text-[11px] text-text-muted mt-1">{waQr.err}</p>
                   <button onClick={() => openWaQr(waQr.id, waQr.name)} className="btn-ghost text-xs mt-4">Tentar de novo</button>
+                </div>
+              ) : waQr.stalled ? (
+                <div className="py-8">
+                  <QrCode className="w-14 h-14 text-text-muted mx-auto mb-3" />
+                  <p className="text-sm font-semibold text-text-primary">Ainda não conectou</p>
+                  <p className="text-[11px] text-text-muted mt-1">O QR expirou. Confirme que liberou um aparelho no WhatsApp e gere um novo.</p>
+                  <button onClick={() => openWaQr(waQr.id, waQr.name)} className="btn-cta text-xs mt-4">Gerar novo QR</button>
                 </div>
               ) : (
                 <>
