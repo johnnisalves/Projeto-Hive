@@ -164,6 +164,13 @@ export default function SettingsPage() {
   const [waForm, setWaForm] = useState({ name: '', host: 'https://wapi.digitalcrm.com.br', token: '', phone: '' });
   const [waAdding, setWaAdding] = useState(false);
   const [waTest, setWaTest] = useState('');
+  const [waProvisioning, setWaProvisioning] = useState(false);
+  const [showWaAdvanced, setShowWaAdvanced] = useState(false);
+  // Config WUZAPI da plataforma (admin token) — habilita o "conectar so clicando"
+  const [waAdminCfg, setWaAdminCfg] = useState<{ host: string; hasAdminToken: boolean }>({ host: '', hasAdminToken: false });
+  const [showWaAdminCfg, setShowWaAdminCfg] = useState(false);
+  const [waAdminForm, setWaAdminForm] = useState({ host: '', adminToken: '' });
+  const [waAdminSaving, setWaAdminSaving] = useState(false);
   // Modal de conexao por QR (ao vivo)
   const [waQr, setWaQr] = useState<{ open: boolean; id: string; name: string; qr: string | null; loggedIn: boolean; loading: boolean; err: string; stalled: boolean }>(
     { open: false, id: '', name: '', qr: null, loggedIn: false, loading: false, err: '', stalled: false }
@@ -182,6 +189,7 @@ export default function SettingsPage() {
     loadIgAccounts();
     loadSocialAccounts();
     loadWaConns();
+    loadWaAdminCfg();
     return () => { if (waQrTimer.current) clearInterval(waQrTimer.current); };
   }, []);
 
@@ -190,6 +198,44 @@ export default function SettingsPage() {
       const res: any = await api.listWhatsappConnections();
       setWaConns(Array.isArray(res) ? res : res?.data || []);
     } catch {}
+  }
+
+  async function loadWaAdminCfg() {
+    try {
+      const r: any = await api.getWhatsappAdminConfig();
+      const d = r?.data || r;
+      setWaAdminCfg({ host: d?.host || '', hasAdminToken: !!d?.hasAdminToken });
+      setWaAdminForm((f) => ({ ...f, host: d?.host || 'https://wapi.digitalcrm.com.br' }));
+    } catch {}
+  }
+
+  // Fluxo automatico: cria a instancia no WuzAPI sozinho + abre o QR (sem colar token)
+  async function handleProvisionWa() {
+    if (!waForm.name) return;
+    setWaProvisioning(true);
+    setWaTest('');
+    try {
+      const r: any = await api.provisionWhatsapp({ name: waForm.name, phone: waForm.phone || undefined });
+      const newId = r?.data?.id || r?.id;
+      const newName = waForm.name;
+      setWaForm({ name: '', host: 'https://wapi.digitalcrm.com.br', token: '', phone: '' });
+      setShowAddWa(false);
+      await loadWaConns();
+      if (newId) openWaQr(newId, newName);
+    } catch (e: any) {
+      setWaTest('Erro ao conectar: ' + (e?.message || ''));
+    }
+    setWaProvisioning(false);
+  }
+
+  async function handleSaveWaAdminCfg() {
+    setWaAdminSaving(true);
+    try {
+      await api.setWhatsappAdminConfig({ host: waAdminForm.host || undefined, adminToken: waAdminForm.adminToken || undefined });
+      setWaAdminForm((f) => ({ ...f, adminToken: '' }));
+      await loadWaAdminCfg();
+    } catch {}
+    setWaAdminSaving(false);
   }
 
   async function handleAddWaConn() {
@@ -814,33 +860,77 @@ export default function SettingsPage() {
 
               {showAddWa && (
                 <div className="p-4 rounded-lg bg-bg-main space-y-3 mb-3">
+                  {/* FLUXO AUTOMATICO: so o nome -> conectar -> QR */}
                   <div>
                     <label className="block text-[11px] font-semibold text-text-muted mb-1">Nome / Empresa</label>
                     <input value={waForm.name} onChange={(e) => setWaForm({ ...waForm, name: e.target.value })} className="input-field text-xs" placeholder="Ex: Essenza" />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-text-muted mb-1">Host da API</label>
-                    <input value={waForm.host} onChange={(e) => setWaForm({ ...waForm, host: e.target.value })} className="input-field text-xs" placeholder="https://wapi.digitalcrm.com.br" />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-text-muted mb-1">Token da instancia</label>
-                    <input value={waForm.token} onChange={(e) => setWaForm({ ...waForm, token: e.target.value })} className="input-field text-xs" placeholder="token da instancia (painel wapi.digitalcrm.com.br)" type="password" />
-                  </div>
-                  <div>
                     <label className="block text-[11px] font-semibold text-text-muted mb-1">Telefone (opcional)</label>
                     <input value={waForm.phone} onChange={(e) => setWaForm({ ...waForm, phone: e.target.value })} className="input-field text-xs" placeholder="(87) 99999-9999" />
                   </div>
-                  <p className="text-[10px] text-text-muted">O token da instancia vem do seu painel em wapi.digitalcrm.com.br (aba Dados da instancia). O Status usa o destino especial status@broadcast.</p>
+
+                  {waAdminCfg.hasAdminToken ? (
+                    <p className="text-[10px] text-text-muted">✨ Clique em <b>Conectar</b> — a instancia e criada automaticamente e o QR aparece aqui. Escaneie no WhatsApp e pronto.</p>
+                  ) : (
+                    <p className="text-[10px] text-status-failed">⚠️ O conectar automatico precisa do <b>WUZAPI admin token</b> configurado (secao abaixo). Sem ele, use o modo avancado (host+token manual).</p>
+                  )}
                   {waTest && <p className="text-[11px] font-medium">{waTest}</p>}
-                  <div className="flex gap-2">
-                    <button onClick={handleAddWaConn} disabled={!waForm.name || !waForm.host || !waForm.token || waAdding} className="btn-cta text-xs">
-                      {waAdding ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando...</> : 'Adicionar'}
+
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={handleProvisionWa} disabled={!waForm.name || waProvisioning || !waAdminCfg.hasAdminToken} className="btn-cta text-xs">
+                      {waProvisioning ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Conectando...</> : <><QrCode className="w-3.5 h-3.5" /> Conectar (QR automatico)</>}
                     </button>
-                    <button onClick={handleTestWaConn} disabled={!waForm.host || !waForm.token} className="btn-ghost text-xs">Testar conexao</button>
-                    <button onClick={() => { setShowAddWa(false); setWaTest(''); }} className="btn-ghost text-xs">Cancelar</button>
+                    <button onClick={() => { setShowAddWa(false); setWaTest(''); setShowWaAdvanced(false); }} className="btn-ghost text-xs">Cancelar</button>
+                    <button onClick={() => setShowWaAdvanced(!showWaAdvanced)} className="text-[11px] text-text-muted hover:text-text-primary underline ml-auto self-center">
+                      {showWaAdvanced ? 'Ocultar modo avancado' : 'Avancado: colar host+token manual'}
+                    </button>
                   </div>
+
+                  {/* MODO AVANCADO: host + token manual (fallback) */}
+                  {showWaAdvanced && (
+                    <div className="pt-3 mt-1 border-t border-white/5 space-y-3">
+                      <div>
+                        <label className="block text-[11px] font-semibold text-text-muted mb-1">Host da API</label>
+                        <input value={waForm.host} onChange={(e) => setWaForm({ ...waForm, host: e.target.value })} className="input-field text-xs" placeholder="https://wapi.digitalcrm.com.br" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-text-muted mb-1">Token da instancia</label>
+                        <input value={waForm.token} onChange={(e) => setWaForm({ ...waForm, token: e.target.value })} className="input-field text-xs" placeholder="token da instancia (painel wapi.digitalcrm.com.br)" type="password" />
+                      </div>
+                      <div className="flex gap-2">
+                        <button onClick={handleAddWaConn} disabled={!waForm.name || !waForm.host || !waForm.token || waAdding} className="btn-ghost text-xs">
+                          {waAdding ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando...</> : 'Adicionar manual'}
+                        </button>
+                        <button onClick={handleTestWaConn} disabled={!waForm.host || !waForm.token} className="btn-ghost text-xs">Testar conexao</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
+
+              {/* Config da plataforma: WUZAPI admin token (habilita o conectar automatico) */}
+              <div className="mb-3">
+                <button onClick={() => setShowWaAdminCfg(!showWaAdminCfg)} className="text-[11px] text-text-muted hover:text-text-primary flex items-center gap-1">
+                  <Cloud className="w-3 h-3" /> Config WUZAPI (admin da plataforma) {waAdminCfg.hasAdminToken ? <span className="text-green-500 font-semibold">• configurado</span> : <span className="text-status-failed font-semibold">• pendente</span>}
+                </button>
+                {showWaAdminCfg && (
+                  <div className="p-3 mt-2 rounded-lg bg-bg-main space-y-2">
+                    <p className="text-[10px] text-text-muted">Token de admin do seu WUZAPI (painel wapi.digitalcrm.com.br). Com ele, cada cliente conecta so clicando — o sistema cria a instancia sozinho. Fica guardado uma vez, para toda a plataforma.</p>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-text-muted mb-1">Host WUZAPI</label>
+                      <input value={waAdminForm.host} onChange={(e) => setWaAdminForm({ ...waAdminForm, host: e.target.value })} className="input-field text-xs" placeholder="https://wapi.digitalcrm.com.br" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-text-muted mb-1">Admin Token</label>
+                      <input value={waAdminForm.adminToken} onChange={(e) => setWaAdminForm({ ...waAdminForm, adminToken: e.target.value })} className="input-field text-xs" placeholder={waAdminCfg.hasAdminToken ? '•••••• (ja configurado — preencha so para trocar)' : 'cole o admin token do WUZAPI'} type="password" />
+                    </div>
+                    <button onClick={handleSaveWaAdminCfg} disabled={waAdminSaving} className="btn-cta text-xs">
+                      {waAdminSaving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Salvando...</> : 'Salvar config'}
+                    </button>
+                  </div>
+                )}
+              </div>
 
               {waConns.length === 0 && !showAddWa && (
                 <p className="text-xs text-text-muted">Nenhuma conexao. Clique em "Adicionar Conexao".</p>

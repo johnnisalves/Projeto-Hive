@@ -11,6 +11,9 @@ import {
   getWhatsappSessionStatus,
   getWhatsappQr,
   logoutWhatsappSession,
+  provisionWhatsappInstance,
+  getWuzapiAdminConfigPublic,
+  setWuzapiAdminConfig,
 } from '../services/whatsapp.service';
 
 const router = Router();
@@ -89,6 +92,45 @@ router.delete('/connections/:id', async (req: AuthRequest, res: Response) => {
 async function loadConn(userId: string, id: string) {
   return db().whatsappConnection.findFirst({ where: { id, userId } });
 }
+
+// GET /api/whatsapp/admin-config - status da config do WuzAPI da plataforma (sem expor o token)
+router.get('/admin-config', async (_req: AuthRequest, res: Response) => {
+  try {
+    const cfg = await getWuzapiAdminConfigPublic();
+    res.json({ success: true, data: cfg });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// POST /api/whatsapp/admin-config - define host/adminToken do WuzAPI (config da plataforma)
+const adminCfgSchema = z.object({ host: z.string().optional(), adminToken: z.string().optional() });
+router.post('/admin-config', validate(adminCfgSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    await setWuzapiAdminConfig({ host: req.body?.host, adminToken: req.body?.adminToken });
+    const cfg = await getWuzapiAdminConfigPublic();
+    res.json({ success: true, data: cfg });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// POST /api/whatsapp/provision - cria instancia no WuzAPI sozinho + salva a conexao aqui
+const provisionSchema = z.object({ name: z.string().min(1), phone: z.string().optional() });
+router.post('/provision', validate(provisionSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const { name, phone } = req.body;
+    const { host, token } = await provisionWhatsappInstance(name);
+    const count = await db().whatsappConnection.count({ where: { userId } });
+    const conn = await db().whatsappConnection.create({
+      data: { name, host, token, phone: phone || null, isDefault: count === 0, userId },
+    });
+    res.json({ success: true, data: { id: conn.id, name: conn.name, isDefault: conn.isDefault } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
 
 // POST /api/whatsapp/connections/:id/connect - abre o socket (prepara o QR)
 router.post('/connections/:id/connect', async (req: AuthRequest, res: Response) => {

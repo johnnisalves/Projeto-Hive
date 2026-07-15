@@ -1,4 +1,5 @@
 import { prisma } from '../config/database';
+import crypto from 'crypto';
 
 // build: force-recreate 2026-07-10 (regenera roteamento/rede apos outage)
 /**
@@ -170,4 +171,79 @@ export async function logoutWhatsappSession(host: string, token: string): Promis
   } catch {
     /* ignore */
   }
+}
+
+// ============================================================
+// Auto-provisionamento (cria a instancia no WuzAPI sozinho)
+// O host + admin token do WuzAPI sao config da PLATAFORMA (do dono do SaaS),
+// compartilhados por todos os tenants. Ficam em Setting sob o owner-plataforma.
+// ============================================================
+
+const WUZAPI_HOST_KEY = 'WUZAPI_HOST';
+const WUZAPI_ADMIN_TOKEN_KEY = 'WUZAPI_ADMIN_TOKEN';
+const DEFAULT_WUZAPI_HOST = 'https://wapi.digitalcrm.com.br';
+
+/** Id do dono da plataforma (primeiro OWNER) — onde ficam as configs globais. */
+async function getPlatformOwnerId(): Promise<string> {
+  const first = await prisma.user.findFirst({
+    where: { role: 'OWNER', ownerId: null },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+  if (!first) throw new Error('Nenhum usuario dono da plataforma encontrado');
+  return first.id;
+}
+
+async function getPlatformSetting(key: string): Promise<string | null> {
+  const ownerId = await getPlatformOwnerId();
+  const s = await prisma.setting.findUnique({ where: { userId_key: { userId: ownerId, key } } });
+  return s?.value ?? null;
+}
+
+export async function setWuzapiAdminConfig(opts: { host?: string; adminToken?: string }): Promise<void> {
+  const ownerId = await getPlatformOwnerId();
+  const upsert = async (key: string, value: string) => {
+    await prisma.setting.upsert({
+      where: { userId_key: { userId: ownerId, key } },
+      update: { value },
+      create: { userId: ownerId, key, value },
+    });
+  };
+  if (opts.host !== undefined && opts.host !== '') await upsert(WUZAPI_HOST_KEY, normalizeHost(opts.host));
+  if (opts.adminToken !== undefined && opts.adminToken !== '') await upsert(WUZAPI_ADMIN_TOKEN_KEY, opts.adminToken);
+}
+
+/** Config publica (NUNCA retorna o admin token). */
+export async function getWuzapiAdminConfigPublic(): Promise<{ host: string; hasAdminToken: boolean }> {
+  const host = (await getPlatformSetting(WUZAPI_HOST_KEY)) || DEFAULT_WUZAPI_HOST;
+  const adminToken = await getPlatformSetting(WUZAPI_ADMIN_TOKEN_KEY);
+  return { host, hasAdminToken: !!adminToken };
+}
+
+/**
+ * Cria uma instancia nova no WuzAPI via admin token e devolve host+token dela.
+ * Usado pelo fluxo "clicar -> conectar" (sem colar token).
+ */
+export async function provisionWhatsappInstance(name: string): Promise<{ host: string; token: string }> {
+  const host = (await getPlatformSetting(WUZAPI_HOST_KEY)) || DEFAULT_WUZAPI_HOST;
+  const adminToken = await getPlatformSetting(WUZAPI_ADMIN_TOKEN_KEY);
+  if (!adminToken) {
+    throw new Error('WuzAPI admin token nao configurado na plataforma. Configure em Configuracoes (admin).');
+  }
+  const base = normalizeHost(host);
+  const instanceToken = crypto.randomBytes(16).toString('hex');
+  const safeName = (name || 'DisparaAI').slice(0, 60);
+
+  const res = await fetch(`${base}/admin/users`, {
+    method: 'POST',
+    headers: { Authorization: adminToken, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: safeName, token: instanceToken, events: 'Message', expiration: 0 }),
+  });
+  const data = (await res.json().catch(() => ({}))) as any;
+  if (!res.ok) {
+    throw new Error(`WuzAPI /admin/users HTTP ${res.status}: ${JSON.stringify(data).slice(0, 200)}`);
+  }
+  // WuzAPI pode ecoar o token; garantimos o que enviamos
+  const token = data?.data?.token || instanceToken;
+  return { host: base, token };
 }

@@ -390,6 +390,12 @@ export const api = {
     request<{ loggedIn: boolean; connected: boolean; jid?: string | null }>(`/api/whatsapp/connections/${id}/status`),
   logoutWhatsapp: (id: string) =>
     request(`/api/whatsapp/connections/${id}/logout`, { method: 'POST' }),
+  provisionWhatsapp: (body: { name: string; phone?: string }) =>
+    request<{ id: string; name: string; isDefault: boolean }>('/api/whatsapp/provision', { method: 'POST', body: JSON.stringify(body) }),
+  getWhatsappAdminConfig: () =>
+    request<{ host: string; hasAdminToken: boolean }>('/api/whatsapp/admin-config'),
+  setWhatsappAdminConfig: (body: { host?: string; adminToken?: string }) =>
+    request<{ host: string; hasAdminToken: boolean }>('/api/whatsapp/admin-config', { method: 'POST', body: JSON.stringify(body) }),
 
   // Instagram Accounts
   listInstagramAccounts: () => request<any[]>('/api/instagram/accounts'),
