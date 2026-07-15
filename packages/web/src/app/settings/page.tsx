@@ -746,13 +746,24 @@ export default function SettingsPage() {
                   <h3 className="text-sm font-bold text-text-primary">Instagram</h3>
                   <p className="text-xs text-text-secondary">Gerencie contas para publicacao automatica</p>
                 </div>
-                <button
-                  onClick={() => setShowAddIg(!showAddIg)}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Adicionar Conta
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleConnectFacebook}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-white text-xs font-semibold transition-colors"
+                    style={{ background: '#1877F2' }}
+                    title="Entra com o Facebook e conecta suas contas de Instagram automaticamente"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    Conectar (Login Facebook)
+                  </button>
+                  <button
+                    onClick={() => setShowAddIg(!showAddIg)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Manual
+                  </button>
+                </div>
               </div>
 
               {/* Add account form */}

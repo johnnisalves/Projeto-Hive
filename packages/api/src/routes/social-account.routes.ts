@@ -239,6 +239,7 @@ router.get('/facebook/callback', async (req, res: Response) => {
     const pages = pagesJson.data || [];
     if (!pages.length) { res.status(400).send(ERROR_HTML('Nenhuma Pagina do Facebook encontrada. Voce precisa administrar ao menos 1 Pagina.')); return; }
 
+    let igConnected = 0;
     for (const p of pages) {
       const existing = await prisma.socialAccount.findFirst({ where: { userId: ownerId, platform: 'FACEBOOK', platformUserId: p.id } });
       if (existing) {
@@ -249,7 +250,31 @@ router.get('/facebook/callback', async (req, res: Response) => {
           data: { platform: 'FACEBOOK', accessToken: p.access_token, platformUserId: p.id, displayName: p.name, username: p.name, isDefault: count === 0, userId: ownerId },
         });
       }
+
+      // Instagram profissional vinculado a essa Pagina -> conecta automaticamente tambem
+      const igId = p.instagram_business_account?.id;
+      if (igId) {
+        try {
+          const igRes = await fetch(`${GRAPH_BASE}/${igId}?fields=username&access_token=${p.access_token}`);
+          const igJson = (await igRes.json()) as any;
+          const igUsername = igJson?.username || `ig_${igId}`;
+          const existingIg = await prisma.instagramToken.findFirst({ where: { userId: ownerId, instagramUserId: igId } });
+          if (existingIg) {
+            await prisma.instagramToken.update({
+              where: { id: existingIg.id },
+              data: { accessToken: p.access_token, username: igUsername, expiresAt: new Date(Date.now() + 60 * 24 * 3600 * 1000) },
+            });
+          } else {
+            const igCount = await prisma.instagramToken.count({ where: { userId: ownerId } });
+            await prisma.instagramToken.create({
+              data: { accessToken: p.access_token, instagramUserId: igId, username: igUsername, isDefault: igCount === 0, expiresAt: new Date(Date.now() + 60 * 24 * 3600 * 1000), userId: ownerId },
+            });
+          }
+          igConnected++;
+        } catch { /* se o IG falhar nao bloqueia a conexao do Facebook */ }
+      }
     }
+    console.log(`[Facebook] Conectadas ${pages.length} Pagina(s) e ${igConnected} conta(s) Instagram para user ${ownerId}`);
     res.send(SUCCESS_HTML);
   } catch (err: any) {
     res.status(500).send(ERROR_HTML(err.message));
@@ -567,7 +592,8 @@ router.get('/facebook/auth-url', async (req: AuthRequest, res: Response) => {
     const redirectUri = FB_REDIRECT;
     const randomPart = crypto.randomBytes(16).toString('hex');
     const state = `${userId}:${randomPart}`;
-    const scope = 'public_profile,pages_show_list,pages_manage_posts,pages_read_engagement';
+    // pages_* conecta as Paginas; instagram_* conecta as contas de Instagram vinculadas (login unico FB+IG)
+    const scope = 'public_profile,pages_show_list,pages_manage_posts,pages_read_engagement,instagram_basic,instagram_content_publish,business_management';
     const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&scope=${encodeURIComponent(scope)}&response_type=code`;
     res.json({ success: true, data: { authUrl, redirectUri } });
   } catch (err: any) {
