@@ -31,6 +31,11 @@ import { evergreenWorker, initEvergreenJob } from './jobs/evergreen.worker';
 
 const app = express();
 
+// A api roda atras do Traefik. Sem isso, req.ip vira o IP do PROXY para todo mundo
+// e o rate limiter passa a contar TODOS os usuarios num balde unico (um usuario
+// derrubava o login de todos). Com trust proxy, cada cliente tem seu proprio limite.
+app.set('trust proxy', 1);
+
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(apiLimiter);
