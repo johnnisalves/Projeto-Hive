@@ -114,6 +114,18 @@ const SERVICES: ServiceConfig[] = [
       { key: 'X_CLIENT_SECRET', label: 'Client Secret', placeholder: 'Chave secreta do app X' },
     ],
   },
+  {
+    name: 'TikTok App (Content Posting API)',
+    description: 'Crie um app em developers.tiktok.com, adicione o produto "Content Posting API" + Login Kit. Sem a auditoria do TikTok, o post sai como privado (SELF_ONLY).',
+    icon: Hexagon,
+    iconBg: 'bg-pink-500/10',
+    iconColor: 'text-pink-600',
+    fields: [
+      { key: 'TIKTOK_CLIENT_KEY', label: 'Client Key', placeholder: 'awxxxxxxxxxxxxxx' },
+      { key: 'TIKTOK_CLIENT_SECRET', label: 'Client Secret', placeholder: 'Chave secreta do app TikTok' },
+      { key: 'TIKTOK_PRIVACY_LEVEL', label: 'Privacidade do post', placeholder: 'SELF_ONLY (padrao) ou PUBLIC_TO_EVERYONE (so com app auditado)' },
+    ],
+  },
 ];
 
 export default function SettingsPage() {
@@ -380,6 +392,20 @@ export default function SettingsPage() {
       }
     } catch (err: any) {
       alert('Para conectar o Facebook: informe o "Facebook App ID" e "App Secret" nas configuracoes acima (secao Facebook App), depois clique aqui de novo. Detalhe: ' + (err?.message || ''));
+    }
+  }
+
+  async function handleConnectTikTok() {
+    try {
+      const data: any = await api.getTikTokAuthUrl();
+      const url = data?.authUrl || data?.data?.authUrl;
+      if (url) {
+        window.open(url, '_blank', 'width=600,height=750');
+      } else {
+        alert('Configure o Client Key e Client Secret do TikTok nas configuracoes e tente de novo.');
+      }
+    } catch (err: any) {
+      alert('Para conectar o TikTok: informe o "TikTok Client Key" e "Client Secret" nas Configuracoes (secao TikTok App), depois clique aqui de novo. Detalhe: ' + (err?.message || ''));
     }
   }
 
@@ -1038,6 +1064,7 @@ export default function SettingsPage() {
             { platform: 'FACEBOOK', label: 'Facebook', icon: '📘', color: 'from-blue-500/10 to-blue-600/10', textColor: 'text-blue-600' },
             { platform: 'LINKEDIN', label: 'LinkedIn', icon: '💼', color: 'from-sky-500/10 to-sky-600/10', textColor: 'text-sky-600' },
             { platform: 'X', label: 'X / Twitter', icon: '𝕏', color: 'from-gray-500/10 to-gray-600/10', textColor: 'text-gray-600' },
+            { platform: 'TIKTOK', label: 'TikTok', icon: '🎵', color: 'from-pink-500/10 to-cyan-500/10', textColor: 'text-pink-600' },
           ].map(({ platform, label, icon, color, textColor }) => {
             const platformAccounts = socialAccounts.filter((a) => a.platform === platform);
             return (
@@ -1059,6 +1086,12 @@ export default function SettingsPage() {
                   <>
                     <button onClick={handleConnectFacebook} className="btn-cta text-xs w-full mb-1.5">Conectar (Login do Facebook)</button>
                     <button onClick={() => { setShowAddSocial(true); setSocialForm({ ...socialForm, platform: 'FACEBOOK' }); }} className="btn-ghost text-xs w-full mb-2">Adicionar Manualmente</button>
+                  </>
+                )}
+                {platform === 'TIKTOK' && (
+                  <>
+                    <button onClick={handleConnectTikTok} className="btn-cta text-xs w-full mb-1.5">Conectar (Login do TikTok)</button>
+                    <p className="text-[9px] text-text-muted mb-2 leading-tight">⚠️ Sem a auditoria do TikTok, o app so posta como <b>privado</b>. Video e o formato principal.</p>
                   </>
                 )}
                 {platformAccounts.length === 0 && (

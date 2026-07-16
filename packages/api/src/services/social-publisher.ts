@@ -2,6 +2,7 @@ import { publishToInstagram } from './instagram.service';
 import { publishToFacebook } from './facebook.service';
 import { publishToLinkedIn } from './linkedin.service';
 import { publishToX } from './x.service';
+import { publishToTikTok } from './tiktok.service';
 import { adaptCaptionForPlatforms } from './caption-adapter';
 import { prisma } from '../config/database';
 import type { SocialPlatform } from '@prisma/client';
@@ -14,6 +15,7 @@ const PUBLISHERS: Record<SocialPlatform, PublisherFn> = {
   FACEBOOK: publishToFacebook,
   LINKEDIN: publishToLinkedIn,
   X: publishToX,
+  TIKTOK: publishToTikTok,
 };
 
 export async function publishToPlatforms(

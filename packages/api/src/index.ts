@@ -230,6 +230,8 @@ async function ensureBrandColumns() {
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "evergreenLastRunAt" TIMESTAMP(3)`,
     // WhatsApp Status como alvo de publicacao (junto de IG/FB)
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "sendWhatsappStatus" BOOLEAN NOT NULL DEFAULT false`,
+    // TikTok como plataforma de publicacao
+    `ALTER TYPE "SocialPlatform" ADD VALUE IF NOT EXISTS 'TIKTOK'`,
   ];
   for (const sql of stmts) {
     try {

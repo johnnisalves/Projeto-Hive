@@ -8,6 +8,7 @@ import { resolveOwnerId } from '../helpers/resolveOwnerId';
 import { env } from '../config/env';
 import { getLinkedInAuthUrl, exchangeLinkedInCode } from '../services/linkedin.service';
 import { getXAuthUrl, exchangeXCode } from '../services/x.service';
+import { getTikTokAuthUrl, exchangeTikTokCode, getTikTokUserInfo } from '../services/tiktok.service';
 import crypto from 'crypto';
 
 const API_BASE = process.env.API_BASE_URL || `http://localhost:${env.PORT}`;
@@ -15,6 +16,8 @@ const X_CALLBACK_BASE = process.env.X_TUNNEL_URL || API_BASE;
 const GRAPH_BASE = 'https://graph.facebook.com/v21.0';
 // URL publica de callback do Facebook (a api e servida em <frontend>/api).
 const FB_REDIRECT = ((process.env.API_BASE_URL || process.env.FRONTEND_URL || `http://localhost:${env.PORT}`).replace(/\/$/, '')) + '/api/social-accounts/facebook/callback';
+// URL publica de callback do TikTok (precisa bater com a cadastrada no portal do TikTok)
+const TIKTOK_REDIRECT = ((process.env.API_BASE_URL || process.env.FRONTEND_URL || `http://localhost:${env.PORT}`).replace(/\/$/, '')) + '/api/social-accounts/tiktok/callback';
 
 const router = Router();
 
@@ -277,6 +280,52 @@ router.get('/facebook/callback', async (req, res: Response) => {
     console.log(`[Facebook] Conectadas ${pages.length} Pagina(s) e ${igConnected} conta(s) Instagram para user ${ownerId}`);
     res.send(SUCCESS_HTML);
   } catch (err: any) {
+    res.status(500).send(ERROR_HTML(err.message));
+  }
+});
+
+// GET /api/social-accounts/tiktok/callback — TikTok OAuth callback (PUBLIC)
+router.get('/tiktok/callback', async (req, res: Response) => {
+  try {
+    const { code, state, error, error_description } = req.query as Record<string, string>;
+    if (error) { res.status(400).send(ERROR_HTML(`${error}: ${error_description || 'Autorizacao negada'}`)); return; }
+    if (!code || !state) { res.status(400).send(ERROR_HTML('Codigo de autorizacao ausente')); return; }
+
+    const { userId } = parseState(state);
+    const ownerId = await resolveOwnerId(userId);
+
+    const keySetting = await prisma.setting.findUnique({ where: { userId_key: { userId: ownerId, key: 'TIKTOK_CLIENT_KEY' } } });
+    const secretSetting = await prisma.setting.findUnique({ where: { userId_key: { userId: ownerId, key: 'TIKTOK_CLIENT_SECRET' } } });
+    const clientKey = keySetting?.value || process.env.TIKTOK_CLIENT_KEY;
+    const clientSecret = secretSetting?.value || process.env.TIKTOK_CLIENT_SECRET;
+    if (!clientKey || !clientSecret) { res.status(400).send(ERROR_HTML('App do TikTok nao configurado (Client Key/Secret)')); return; }
+
+    const tokens = await exchangeTikTokCode(code, clientKey, clientSecret, TIKTOK_REDIRECT);
+    const info = await getTikTokUserInfo(tokens.access_token);
+    const openId = tokens.open_id || info.open_id || 'unknown';
+    const displayName = info.display_name || 'TikTok';
+
+    const existing = await prisma.socialAccount.findFirst({ where: { userId: ownerId, platform: 'TIKTOK', platformUserId: openId } });
+    const data = {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      displayName,
+      username: displayName,
+      expiresAt: new Date(Date.now() + (tokens.expires_in || 86400) * 1000),
+      refreshedAt: new Date(),
+    };
+    if (existing) {
+      await prisma.socialAccount.update({ where: { id: existing.id }, data });
+    } else {
+      const count = await prisma.socialAccount.count({ where: { userId: ownerId, platform: 'TIKTOK' } });
+      await prisma.socialAccount.create({
+        data: { platform: 'TIKTOK', platformUserId: openId, isDefault: count === 0, userId: ownerId, ...data },
+      });
+    }
+    console.log(`[TikTok] Conta conectada: ${displayName} (${openId}) para user ${ownerId}`);
+    res.send(SUCCESS_HTML);
+  } catch (err: any) {
+    console.error('[TikTok] Callback error:', err.message);
     res.status(500).send(ERROR_HTML(err.message));
   }
 });
@@ -596,6 +645,25 @@ router.get('/facebook/auth-url', async (req: AuthRequest, res: Response) => {
     const scope = 'public_profile,pages_show_list,pages_manage_posts,pages_read_engagement,instagram_basic,instagram_content_publish,business_management';
     const authUrl = `https://www.facebook.com/v21.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&scope=${encodeURIComponent(scope)}&response_type=code`;
     res.json({ success: true, data: { authUrl, redirectUri } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// GET /api/social-accounts/tiktok/auth-url — inicia o Login do TikTok (autenticado)
+router.get('/tiktok/auth-url', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const keySetting = await prisma.setting.findUnique({ where: { userId_key: { userId, key: 'TIKTOK_CLIENT_KEY' } } });
+    const clientKey = keySetting?.value || process.env.TIKTOK_CLIENT_KEY;
+    if (!clientKey) {
+      res.status(400).json({ success: false, error: 'App do TikTok nao configurado. Informe o Client Key/Secret nas Configuracoes.' });
+      return;
+    }
+    const randomPart = crypto.randomBytes(16).toString('hex');
+    const state = `${userId}:${randomPart}`;
+    const authUrl = getTikTokAuthUrl(clientKey, TIKTOK_REDIRECT, state);
+    res.json({ success: true, data: { authUrl, redirectUri: TIKTOK_REDIRECT } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message });
   }

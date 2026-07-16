@@ -4,15 +4,16 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '../../../lib/api';
-import { Zap, Image as ImageIcon, Clock, Send, Save, Loader2, X, Heart, MessageCircle, Share, ChevronLeft, ChevronRight, Layers, Plus, Trash2, Upload, FileText, Link as LinkIcon, Wand2, ArrowRight, Sparkles, Instagram, Facebook, Linkedin, Twitter, Palette } from 'lucide-react';
+import { Zap, Image as ImageIcon, Clock, Send, Save, Loader2, X, Heart, MessageCircle, Share, ChevronLeft, ChevronRight, Layers, Plus, Trash2, Upload, FileText, Link as LinkIcon, Wand2, ArrowRight, Sparkles, Instagram, Facebook, Linkedin, Twitter, Palette, Music2 } from 'lucide-react';
 
-type Platform = 'INSTAGRAM' | 'FACEBOOK' | 'LINKEDIN' | 'X';
+type Platform = 'INSTAGRAM' | 'FACEBOOK' | 'LINKEDIN' | 'X' | 'TIKTOK';
 
 const PLATFORM_OPTIONS: { value: Platform; label: string; icon: typeof Instagram; color: string }[] = [
   { value: 'INSTAGRAM', label: 'Instagram', icon: Instagram, color: 'bg-gradient-to-br from-purple-500 to-pink-500' },
   { value: 'FACEBOOK', label: 'Facebook', icon: Facebook, color: 'bg-blue-600' },
   { value: 'LINKEDIN', label: 'LinkedIn', icon: Linkedin, color: 'bg-sky-700' },
   { value: 'X', label: 'X/Twitter', icon: Twitter, color: 'bg-neutral-800' },
+  { value: 'TIKTOK', label: 'TikTok', icon: Music2, color: 'bg-gradient-to-br from-pink-500 to-cyan-400' },
 ];
 import { emptySlide, SlideState, AspectRatio, defaultGlobalStyle } from '../visual-editor/types';
 import { useEffect } from 'react';
