@@ -6,7 +6,8 @@
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --import tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@instapost/shared": "*",

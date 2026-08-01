@@ -8,6 +8,7 @@ import {
   Calendar, Send, Save, Trash2, Film, ChevronLeft,
 } from 'lucide-react';
 import Link from 'next/link';
+import InstagramOptions, { IgOptions, defaultIgOptions, igOptionsToPayload } from '../new/InstagramOptions';
 
 type PublishMode = 'REELS' | 'STORIES';
 
@@ -28,6 +29,8 @@ interface VideoItem {
   postId?: string;
   error?: string;
   previewUrl: string; // local blob URL
+  // Marcacao, colaboradores, trilha sonora, publi — por video
+  ig: IgOptions;
 }
 
 const MAX_SIZE_MB = 150;
@@ -76,6 +79,7 @@ export default function VideosBulkPage() {
         keepMedia: keepMediaDefault,
         publishMode: defaultPublishMode,
         previewUrl: URL.createObjectURL(file),
+        ig: defaultIgOptions(),
       });
     }
     setItems((prev) => [...prev, ...newItems]);
@@ -174,6 +178,7 @@ export default function VideosBulkPage() {
         keepMedia: item.keepMedia,
         aspectRatio: '9:16',
         hashtags: item.publishMode === 'STORIES' ? [] : item.hashtags.split(',').map((h) => h.trim()).filter(Boolean),
+        ...igOptionsToPayload(item.ig),
       })) as any;
 
       if (item.scheduledAt) {
@@ -537,6 +542,16 @@ export default function VideosBulkPage() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Marcacao, colaboradores, trilha sonora, publi (por video) */}
+                    <InstagramOptions
+                      value={item.ig}
+                      onChange={(next) => updateItem(item.id, { ig: next })}
+                      images={[]}
+                      activeImageIndex={0}
+                      isVideo
+                      isStories={item.publishMode === 'STORIES'}
+                    />
 
                     <label className="flex items-center gap-2 cursor-pointer pt-1">
                       <input

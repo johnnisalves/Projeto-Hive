@@ -179,7 +179,8 @@ export async function publishToTikTok(postId: string, accountId?: string): Promi
         disable_comment: false,
         disable_stitch: false,
       },
-      source_info: { source: 'PULL_FROM_URL', video_url: post.videoUrl },
+      // mixedVideoUrl e o video ja com a trilha sonora (audio-mixer.service)
+      source_info: { source: 'PULL_FROM_URL', video_url: post.mixedVideoUrl || post.videoUrl },
     };
   } else {
     const photos = (post.images?.length ? post.images.map((i) => i.imageUrl) : [post.imageUrl]).filter(Boolean) as string[];

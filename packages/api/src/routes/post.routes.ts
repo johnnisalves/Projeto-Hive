@@ -15,52 +15,9 @@ import {
   addImageToPost,
   removeImageFromPost,
 } from '../controllers/post.controller';
+import { createPostSchema, scheduleSchema, addImageSchema } from './post.schemas';
 
 const router = Router();
-
-const postImageSchema = z.object({
-  imageUrl: z.string().url(),
-  minioKey: z.string().optional(),
-  order: z.number().int().min(0).max(9).optional(),
-  source: z.enum(['NANOBANA', 'UPLOAD', 'URL']).optional(),
-  prompt: z.string().optional(),
-});
-
-const createPostSchema = z.object({
-  caption: z.string().max(2200).optional(),
-  imageUrl: z.string().optional(), // Allow comma-separated URLs from MCP clients
-  imageSource: z.enum(['NANOBANA', 'UPLOAD', 'URL']).optional(),
-  nanoPrompt: z.string().optional(),
-  source: z.enum(['WEB', 'TELEGRAM', 'MCP']).optional(),
-  hashtags: z.array(z.string()).optional(),
-  aspectRatio: z.string().optional(),
-  isCarousel: z.boolean().optional(),
-  images: z.array(postImageSchema).min(2).max(10).optional(),
-  // Video fields
-  mediaType: z.enum(['IMAGE', 'VIDEO', 'CAROUSEL']).optional(),
-  publishMode: z.enum(['FEED', 'REELS', 'STORIES']).optional(),
-  videoUrl: z.string().url().optional(),
-  videoMinioKey: z.string().optional(),
-  videoDurationSec: z.number().int().optional(),
-  videoSizeBytes: z.number().int().optional(),
-  keepMedia: z.boolean().optional(),
-  editorState: z.any().optional(),
-  brandId: z.string().uuid().optional(),
-  platforms: z.array(z.enum(['INSTAGRAM', 'FACEBOOK', 'LINKEDIN', 'X'])).optional(),
-  sendWhatsappStatus: z.boolean().optional(),
-});
-
-const scheduleSchema = z.object({
-  scheduledAt: z.string().datetime(),
-});
-
-const addImageSchema = z.object({
-  imageUrl: z.string().url(),
-  minioKey: z.string().optional(),
-  order: z.number().int().min(0).max(9).optional(),
-  source: z.enum(['NANOBANA', 'UPLOAD', 'URL']).optional(),
-  prompt: z.string().optional(),
-});
 
 router.use(authMiddleware);
 

@@ -130,6 +130,33 @@ model Post {
   fileUrl         String?
   platforms       SocialPlatform[] @default([INSTAGRAM])
   publishedResults Json?
+
+  // --- Recursos de publicacao do Instagram ---
+  // Marcacao de pessoas: [{ username, x, y, imageIndex? }] com x/y de 0.0 a 1.0
+  userTags        Json?
+  // Colaboradores (o post aparece no perfil de todos) — a API aceita ate 3
+  collaborators   String[] @default([])
+  // ID da Pagina de local (a API exige Page ID, nao texto livre)
+  locationId      String?
+  // Texto alternativo de acessibilidade — so vale para imagem, ate 1000 chars
+  altText         String?
+  // Reels: true mostra tambem no Feed; false deixa so na aba Reels
+  shareToFeed     Boolean  @default(true)
+  // Nome do audio original do Reels (so pode ser definido uma vez)
+  audioName       String?
+  // Capa do Reels: imagem propria ou o frame em milissegundos
+  coverUrl        String?
+  thumbOffsetMs   Int?
+  // Declaracao de conteudo gerado por IA (exigencia de politica do Meta)
+  isAiGenerated   Boolean  @default(false)
+  // Publipost: marca "Parceria paga" e os perfis patrocinadores (ate 2)
+  isPaidPartnership Boolean @default(false)
+  sponsorIds      String[] @default([])
+  // Trilha de audio mixada no video antes do upload (ver audio-mixer.service)
+  audioUrl        String?
+  audioVolume     Int?
+  // URL do video ja mixado, para nao remixar a cada tentativa de publicacao
+  mixedVideoUrl   String?
   brandId         String?
   brand           Brand?      @relation(fields: [brandId], references: [id])
   userId          String
