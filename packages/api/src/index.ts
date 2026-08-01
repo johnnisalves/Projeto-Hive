@@ -6,6 +6,7 @@ import { initMinio } from './config/minio';
 import { apiLimiter } from './middleware/rateLimiter';
 import authRoutes from './routes/auth.routes';
 import postRoutes from './routes/post.routes';
+import igContactsRoutes from './routes/ig-contacts.routes';
 import generateRoutes from './routes/generate.routes';
 import uploadRoutes from './routes/upload.routes';
 import taskRoutes from './routes/task.routes';
@@ -43,6 +44,7 @@ app.use(apiLimiter);
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/posts', postRoutes);
+app.use('/api/ig-contacts', igContactsRoutes);
 app.use('/api/generate', generateRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/tasks', taskRoutes);
@@ -252,6 +254,10 @@ async function ensureBrandColumns() {
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "audioUrl" TEXT`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "audioVolume" INTEGER`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "mixedVideoUrl" TEXT`,
+    // Agenda de @ para o autocomplete de marcacao/colaborador/patrocinador
+    `CREATE TABLE IF NOT EXISTS "IgContact" ("id" TEXT PRIMARY KEY, "username" TEXT NOT NULL, "displayName" TEXT, "verifiedAt" TIMESTAMP(3), "followers" INTEGER, "useCount" INTEGER NOT NULL DEFAULT 1, "lastUsedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "IgContact_userId_username_key" ON "IgContact"("userId", "username")`,
+    `CREATE INDEX IF NOT EXISTS "IgContact_userId_idx" ON "IgContact"("userId")`,
   ];
   for (const sql of stmts) {
     try {

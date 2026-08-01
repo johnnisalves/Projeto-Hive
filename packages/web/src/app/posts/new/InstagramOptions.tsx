@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { AtSign, Users, MapPin, Accessibility, Music, Sparkles, Handshake, X, Upload, Loader2, ChevronDown } from 'lucide-react';
 import { api } from '../../../lib/api';
+import MentionInput from './MentionInput';
 
 /**
  * Recursos extras de publicacao do Instagram.
@@ -33,7 +34,7 @@ interface Props {
 
 /** Campo de lista com chips (colaboradores, patrocinadores). */
 function ChipInput({
-  items, onAdd, onRemove, placeholder, max, prefix = '@',
+  items, onAdd, onRemove, placeholder, max, prefix = '@', mention = true,
 }: {
   items: string[];
   onAdd: (v: string) => void;
@@ -41,6 +42,8 @@ function ChipInput({
   placeholder: string;
   max: number;
   prefix?: string;
+  /** Liga o autocomplete da agenda. Desligado para campos que nao sao @. */
+  mention?: boolean;
 }) {
   const [draft, setDraft] = useState('');
   const full = items.length >= max;
@@ -52,17 +55,36 @@ function ChipInput({
     setDraft('');
   }
 
+  /** Vindo do autocomplete: o @ ja chega limpo. */
+  function commitPicked(username: string) {
+    const v = username.trim().replace(/^@/, '');
+    if (!v || full || items.includes(v)) { setDraft(''); return; }
+    onAdd(v);
+    setDraft('');
+  }
+
   return (
     <>
       <div className="flex gap-2">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
-          disabled={full}
-          placeholder={full ? `Limite de ${max} atingido` : placeholder}
-          className="input-field flex-1 disabled:opacity-50"
-        />
+        {mention ? (
+          <MentionInput
+            value={draft}
+            onChange={setDraft}
+            onSubmit={commitPicked}
+            disabled={full}
+            placeholder={full ? `Limite de ${max} atingido` : placeholder}
+            className="flex-1"
+          />
+        ) : (
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+            disabled={full}
+            placeholder={full ? `Limite de ${max} atingido` : placeholder}
+            className="input-field flex-1 disabled:opacity-50"
+          />
+        )}
         <button type="button" onClick={commit} disabled={full || !draft.trim()} className="btn-ghost px-3 text-xs disabled:opacity-40">
           Adicionar
         </button>
@@ -116,8 +138,9 @@ export default function InstagramOptions({ value, onChange, images, activeImageI
     setPendingName('');
   }
 
-  function confirmTag() {
-    const username = pendingName.trim().replace(/^@/, '');
+  /** `picked` vem do autocomplete; sem ele, usa o que foi digitado. */
+  function confirmTag(picked?: string) {
+    const username = (picked ?? pendingName).trim().replace(/^@/, '');
     if (!username || !pending) return;
     set({ userTags: [...value.userTags, { username, x: pending.x, y: pending.y, imageIndex: activeImageIndex }] });
     setPending(null);
@@ -197,18 +220,15 @@ export default function InstagramOptions({ value, onChange, images, activeImageI
                       style={{ left: `${pending.x * 100}%`, top: `${pending.y * 100}%` }}
                       className="absolute -translate-x-1/2 translate-y-1 z-10 flex gap-1 bg-bg-card border border-border rounded-lg p-1 shadow-lg"
                     >
-                      <input
+                      <MentionInput
+                        compact
                         autoFocus
                         value={pendingName}
-                        onChange={(e) => setPendingName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') { e.preventDefault(); confirmTag(); }
-                          if (e.key === 'Escape') setPending(null);
-                        }}
+                        onChange={setPendingName}
+                        onSubmit={(u) => confirmTag(u)}
                         placeholder="usuario"
-                        className="w-28 px-1.5 py-0.5 text-[11px] rounded border border-border bg-bg-main"
                       />
-                      <button type="button" onClick={confirmTag} className="px-1.5 text-[11px] font-semibold text-primary">OK</button>
+                      <button type="button" onClick={() => confirmTag()} className="px-1.5 text-[11px] font-semibold text-primary">OK</button>
                       <button type="button" onClick={() => setPending(null)} className="px-1 text-text-muted"><X className="w-3 h-3" /></button>
                     </div>
                   )}
@@ -433,6 +453,7 @@ export default function InstagramOptions({ value, onChange, images, activeImageI
                     placeholder="ID do perfil patrocinador"
                     max={2}
                     prefix=""
+                    mention={false}
                   />
                   <p className="text-[10px] text-text-muted mt-1.5">
                     Precisa da permissão <code>instagram_branded_content_creator</code> aprovada no App Review

@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { schedulePost, cancelScheduledPost, reschedulePost, publishQueue } from '../services/scheduler.service';
 import { resolveOwnerId } from '../helpers/resolveOwnerId';
+import { rememberContacts, usernamesFromPost } from '../services/ig-contacts.service';
 
 function paramId(req: AuthRequest): string {
   return req.params.id as string;
@@ -48,6 +49,12 @@ export async function createPost(req: AuthRequest, res: Response) {
       },
       include: { images: { orderBy: { order: 'asc' } } },
     });
+
+    // Alimenta a agenda de @ para o autocomplete das proximas vezes.
+    // Nao usa await: registrar contato nunca pode atrasar nem derrubar a
+    // resposta da criacao do post.
+    void rememberContacts(userId, usernamesFromPost(postData)).catch(() => {});
+
     res.status(201).json({ success: true, data: post });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Failed to create post' });

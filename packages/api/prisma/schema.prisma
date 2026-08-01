@@ -41,6 +41,7 @@ model User {
   socialAccounts  SocialAccount[]
   invitations    Invitation[]
   brands         Brand[]
+  igContacts     IgContact[]
   allowedPages   String[]        @default([])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -195,6 +196,29 @@ model PostImage {
 
   @@index([postId])
   @@unique([postId, order])
+}
+
+// Agenda de @ usados nos posts (marcacao, colaborador, patrocinador).
+//
+// POR QUE EXISTE: a API do Instagram nao tem busca de usuario por prefixo —
+// so o business_discovery, que exige o @ exato. Entao o autocomplete vem da
+// propria agenda: todo @ usado fica salvo e volta como sugestao depois.
+model IgContact {
+  id          String   @id @default(uuid())
+  username    String
+  displayName String?
+  // Preenchido quando o business_discovery confirma o perfil
+  verifiedAt  DateTime?
+  followers   Int?
+  // Ordena as sugestoes: quem voce mais usa aparece primeiro
+  useCount    Int      @default(1)
+  lastUsedAt  DateTime @default(now())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, username])
+  @@index([userId])
 }
 
 model InstagramToken {

@@ -1,0 +1,159 @@
+import { prisma } from '../config/database';
+
+/**
+ * Agenda de @ do Instagram.
+ *
+ * POR QUE EXISTE: a API do Meta nao oferece busca de usuario por prefixo.
+ * O unico endpoint de consulta e o business_discovery, que exige o @ exato e
+ * completo e so responde para contas Business/Creator publicas. Entao o
+ * autocomplete nao pode vir do Instagram — ele vem da agenda do proprio
+ * usuario, alimentada por todo @ que ele ja usou.
+ */
+
+/** Tira @, espacos e normaliza para minusculo — o Instagram nao diferencia caixa. */
+export function normalizeUsername(raw: string): string {
+  return raw.trim().replace(/^@+/, '').toLowerCase();
+}
+
+/**
+ * Sugestoes para o autocomplete.
+ *
+ * Ordena por prefixo primeiro (quem digita "jus" quer "jusciara" antes de
+ * "arjus"), depois pelos mais usados.
+ */
+export async function searchContacts(userId: string, query: string, limit = 8) {
+  const q = normalizeUsername(query);
+
+  const contacts = await prisma.igContact.findMany({
+    where: q
+      ? { userId, username: { contains: q, mode: 'insensitive' } }
+      : { userId },
+    orderBy: [{ useCount: 'desc' }, { lastUsedAt: 'desc' }],
+    take: limit * 3, // folga para reordenar por prefixo abaixo
+  });
+
+  if (!q) return contacts.slice(0, limit);
+
+  const startsWith = contacts.filter((c) => c.username.startsWith(q));
+  const contains = contacts.filter((c) => !c.username.startsWith(q));
+  return [...startsWith, ...contains].slice(0, limit);
+}
+
+/**
+ * Registra os @ usados num post. Chamado depois de criar/atualizar o post,
+ * de forma que a agenda cresca sozinha conforme o uso.
+ *
+ * Nunca lanca: falhar aqui nao pode derrubar a criacao do post.
+ */
+export async function rememberContacts(userId: string, usernames: string[]): Promise<void> {
+  const unique = Array.from(new Set(usernames.map(normalizeUsername).filter(Boolean)));
+  if (unique.length === 0) return;
+
+  for (const username of unique) {
+    try {
+      await prisma.igContact.upsert({
+        where: { userId_username: { userId, username } },
+        create: { userId, username },
+        update: { useCount: { increment: 1 }, lastUsedAt: new Date() },
+      });
+    } catch (err) {
+      console.warn(`[IgContacts] Falha ao registrar @${username}:`, (err as Error).message);
+    }
+  }
+}
+
+/** Extrai todos os @ de um payload de post (marcacao, colaborador, patrocinador). */
+export function usernamesFromPost(body: {
+  userTags?: Array<{ username: string }> | unknown;
+  collaborators?: string[] | unknown;
+}): string[] {
+  const out: string[] = [];
+  if (Array.isArray(body.userTags)) {
+    for (const t of body.userTags) {
+      if (t && typeof (t as any).username === 'string') out.push((t as any).username);
+    }
+  }
+  if (Array.isArray(body.collaborators)) {
+    for (const c of body.collaborators) if (typeof c === 'string') out.push(c);
+  }
+  return out;
+}
+
+/**
+ * Confirma um @ pelo business_discovery e guarda o resultado na agenda.
+ *
+ * LIMITES DO META (nao nossos):
+ *  - so funciona com token do Login do Facebook (EAA);
+ *  - so encontra conta Business/Creator PUBLICA — perfil pessoal nunca responde;
+ *  - exige o @ exato, nao aceita prefixo.
+ *
+ * Por isso o retorno distingue "nao encontrado" de "nao da para verificar":
+ * um @ pessoal valido cai no segundo caso e nao pode ser tratado como erro.
+ */
+export async function verifyContact(
+  userId: string,
+  rawUsername: string,
+): Promise<{ status: 'verified' | 'not_found' | 'unavailable'; username: string; displayName?: string; followers?: number; reason?: string }> {
+  const username = normalizeUsername(rawUsername);
+  if (!username) return { status: 'not_found', username };
+
+  const account = await prisma.instagramToken.findFirst({
+    where: { userId },
+    orderBy: { isDefault: 'desc' },
+  });
+
+  if (!account) {
+    return { status: 'unavailable', username, reason: 'Nenhuma conta do Instagram conectada.' };
+  }
+  if (!account.accessToken.startsWith('EAA')) {
+    return {
+      status: 'unavailable',
+      username,
+      reason: 'A confirmacao de perfil exige conta conectada via Login do Facebook.',
+    };
+  }
+
+  try {
+    const fields = `business_discovery.username(${encodeURIComponent(username)}){username,name,followers_count}`;
+    const url = `https://graph.facebook.com/v21.0/${account.instagramUserId}?fields=${fields}&access_token=${account.accessToken}`;
+    const res = await fetch(url);
+    const data = (await res.json()) as any;
+
+    const found = data?.business_discovery;
+    if (!found?.username) {
+      // O Meta responde erro tanto para @ inexistente quanto para conta
+      // pessoal. Nao da para separar os dois, entao nao afirmamos que o
+      // perfil nao existe — so que nao foi possivel confirmar.
+      return {
+        status: 'unavailable',
+        username,
+        reason: 'Perfil nao confirmado: pode ser conta pessoal ou privada, que o Meta nao expoe.',
+      };
+    }
+
+    await prisma.igContact.upsert({
+      where: { userId_username: { userId, username } },
+      create: {
+        userId,
+        username,
+        displayName: found.name || null,
+        followers: found.followers_count ?? null,
+        verifiedAt: new Date(),
+      },
+      update: {
+        displayName: found.name || null,
+        followers: found.followers_count ?? null,
+        verifiedAt: new Date(),
+      },
+    }).catch(() => {});
+
+    return {
+      status: 'verified',
+      username: found.username,
+      displayName: found.name,
+      followers: found.followers_count,
+    };
+  } catch (err) {
+    return { status: 'unavailable', username, reason: (err as Error).message };
+  }
+}
