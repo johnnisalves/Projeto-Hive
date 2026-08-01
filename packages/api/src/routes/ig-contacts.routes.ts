@@ -7,6 +7,7 @@ import {
   verifyContact,
   rememberContacts,
   normalizeUsername,
+  seedContactsFromHistory,
 } from '../services/ig-contacts.service';
 
 const router = Router();
@@ -20,6 +21,13 @@ router.use(authMiddleware);
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const ownerId = await resolveOwnerId(req.userId!);
+
+    // Primeira vez: a agenda esta vazia e o autocomplete nao teria o que
+    // sugerir. Populamos com os @ das legendas dos posts antigos, que sao
+    // exatamente as pessoas que este usuario costuma marcar.
+    const total = await prisma.igContact.count({ where: { userId: ownerId } });
+    if (total === 0) await seedContactsFromHistory(ownerId);
+
     const items = await searchContacts(ownerId, String(req.query.q || ''));
     res.json({ success: true, data: { items } });
   } catch (err: any) {

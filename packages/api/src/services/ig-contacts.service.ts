@@ -16,6 +16,66 @@ export function normalizeUsername(raw: string): string {
 }
 
 /**
+ * Extrai @ de um texto livre (legenda de post, por exemplo).
+ *
+ * O @ do Instagram aceita letra, numero, ponto e underline, ate 30 chars.
+ * Exigimos 2+ para nao capturar "@a" solto, e ignoramos e-mail — por isso
+ * o @ nao pode vir logo depois de caractere de palavra.
+ */
+export function extractMentions(text: string | null | undefined): string[] {
+  if (!text) return [];
+  const found = text.match(/(^|[^\w@])@([a-zA-Z0-9._]{2,30})/g) || [];
+  return found
+    .map((m) => normalizeUsername(m.slice(m.indexOf('@'))))
+    // "valeu @jus." termina frase: o ponto e pontuacao, nao parte do @.
+    // Ponto no meio ("loja.oficial") e valido e fica.
+    .map((u) => u.replace(/\.+$/, ''))
+    .filter((u) => u.length >= 2);
+}
+
+/**
+ * Popula a agenda a partir do historico do usuario.
+ *
+ * POR QUE: a agenda comecava vazia, entao no primeiro uso o autocomplete
+ * nao sugeria nada e parecia quebrado. As legendas dos posts antigos ja
+ * contem os @ que a pessoa realmente usa — e a melhor semente disponivel.
+ *
+ * Roda uma vez, quando a agenda esta vazia. Nunca lanca.
+ */
+export async function seedContactsFromHistory(userId: string): Promise<number> {
+  try {
+    const posts = await prisma.post.findMany({
+      where: { userId },
+      select: { caption: true },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+
+    const counts = new Map<string, number>();
+    for (const p of posts) {
+      for (const u of extractMentions(p.caption)) {
+        counts.set(u, (counts.get(u) || 0) + 1);
+      }
+    }
+    if (counts.size === 0) return 0;
+
+    for (const [username, useCount] of counts) {
+      await prisma.igContact.upsert({
+        where: { userId_username: { userId, username } },
+        create: { userId, username, useCount },
+        update: {},
+      }).catch(() => {});
+    }
+
+    console.log(`[IgContacts] Agenda populada com ${counts.size} @ das legendas antigas`);
+    return counts.size;
+  } catch (err) {
+    console.warn('[IgContacts] Falha ao popular agenda:', (err as Error).message);
+    return 0;
+  }
+}
+
+/**
  * Sugestoes para o autocomplete.
  *
  * Ordena por prefixo primeiro (quem digita "jus" quer "jusciara" antes de

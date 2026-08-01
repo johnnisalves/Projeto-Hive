@@ -61,7 +61,10 @@ export default function MentionInput({
         if (cancelled) return;
         setItems(res.items || []);
         setHighlight(0);
-        setOpen((res.items || []).length > 0);
+        // Abre tambem sem resultado, para mostrar a dica de "aperte Enter".
+        // Sem isso o campo parecia quebrado quando a agenda ainda nao tem
+        // o @ digitado.
+        setOpen((res.items || []).length > 0 || term.length >= 2);
       } catch {
         if (!cancelled) { setItems([]); setOpen(false); }
       } finally {
@@ -132,6 +135,18 @@ export default function MentionInput({
       />
       {loading && (
         <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-text-muted" />
+      )}
+
+      {open && items.length === 0 && !loading && (
+        <div className="absolute z-30 left-0 right-0 mt-1 rounded-lg border border-border bg-bg-card shadow-lg p-3">
+          <p className="text-xs text-text-primary font-semibold">
+            Aperte Enter para usar @{value.replace(/^@+/, '')}
+          </p>
+          <p className="text-[10px] text-text-muted mt-1">
+            Ainda não está na sua agenda. Depois de usar uma vez, ele passa a ser sugerido.
+            O Instagram não permite buscar perfis por aqui.
+          </p>
+        </div>
       )}
 
       {open && items.length > 0 && (
