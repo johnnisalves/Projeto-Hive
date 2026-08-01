@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import Link from 'next/link';
 import { AtSign, Users, MapPin, Accessibility, Music, Sparkles, Handshake, X, Upload, Loader2, ChevronDown } from 'lucide-react';
 import { api } from '../../../lib/api';
 
@@ -83,7 +84,8 @@ function ChipInput({
 }
 
 export default function InstagramOptions({ value, onChange, images, activeImageIndex, isVideo, isStories }: Props) {
-  const [open, setOpen] = useState(false);
+  // Aberto por padrao: fechado, o painel virava uma linha fina que ninguem acha.
+  const [open, setOpen] = useState(true);
   const [pending, setPending] = useState<{ x: number; y: number } | null>(null);
   const [pendingName, setPendingName] = useState('');
   const [audioUploading, setAudioUploading] = useState(false);
@@ -146,7 +148,7 @@ export default function InstagramOptions({ value, onChange, images, activeImageI
         className="w-full flex items-center justify-between"
       >
         <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
-          Recursos do Instagram
+          Marcar pessoas, colaboradores, música e mais
           {activeCount > 0 && (
             <span className="ml-2 px-1.5 py-0.5 rounded-badge bg-primary/10 text-primary text-[10px] normal-case tracking-normal">
               {activeCount} ativo{activeCount > 1 ? 's' : ''}
@@ -319,11 +321,26 @@ export default function InstagramOptions({ value, onChange, images, activeImageI
           )}
 
           {/* ---------- Trilha sonora ---------- */}
-          {isVideo && (
-            <div>
-              <label className="flex items-center gap-1.5 text-xs font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">
-                <Music className="w-3.5 h-3.5" strokeWidth={2} /> Trilha sonora
-              </label>
+          <div>
+            <label className="flex items-center gap-1.5 text-xs font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">
+              <Music className="w-3.5 h-3.5" strokeWidth={2} /> Trilha sonora
+            </label>
+            {!isVideo ? (
+              /* Post de foto: nao existe caminho para som. O audio so viaja
+                 dentro do arquivo de video, entao a musica vive no fluxo de
+                 Reels/Videos. Mostramos aqui para nao parecer que sumiu. */
+              <div className="p-3 rounded-lg bg-bg-main border border-dashed border-border">
+                <p className="text-xs text-text-secondary">
+                  Música só funciona em <strong>vídeo</strong>. Post de foto não carrega áudio — nem aqui, nem no
+                  app do Instagram.
+                </p>
+                <p className="text-[10px] text-text-muted mt-1.5">
+                  Para publicar com trilha, use <Link href="/posts/videos" className="text-primary hover:underline font-semibold">Reels / Vídeos</Link>:
+                  lá você sobe o vídeo, escolhe o áudio e ele é mixado antes de publicar.
+                </p>
+              </div>
+            ) : (
+            <>
               <input
                 ref={audioInputRef}
                 type="file"
@@ -370,8 +387,9 @@ export default function InstagramOptions({ value, onChange, images, activeImageI
                 já que a API não dá acesso ao catálogo de músicas do Instagram.
                 <strong className="block mt-1">Use áudio livre ou licenciado por você: música comercial pode ser silenciada pelo Instagram.</strong>
               </p>
-            </div>
-          )}
+            </>
+            )}
+          </div>
 
           {/* ---------- Conteudo gerado por IA ---------- */}
           <label className="flex items-start gap-2 cursor-pointer">

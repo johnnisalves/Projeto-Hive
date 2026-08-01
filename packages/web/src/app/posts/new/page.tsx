@@ -731,6 +731,17 @@ export default function NewPost() {
             <p className="text-[10px] text-text-muted mt-2">Selecione ao menos 1 destino. Ao publicar/agendar, o post vai pra todos os selecionados (Instagram, Facebook e/ou Status do WhatsApp).</p>
           </div>
 
+          {/* Marcar pessoas, colaboradores, local, publi, musica.
+              Fica logo apos os destinos e ANTES da legenda: e onde o usuario
+              decide o que acompanha o post, nao um extra escondido no fim. */}
+          <InstagramOptions
+            value={igOptions}
+            onChange={setIgOptions}
+            images={images}
+            activeImageIndex={activeImageIndex}
+            isStories={publishMode === 'STORIES'}
+          />
+
           {/* Caption */}
           <div className="card p-5">
             <div className="flex items-center justify-between mb-3">
@@ -793,15 +804,6 @@ export default function NewPost() {
               </div>
             )}
           </div>
-
-          {/* Recursos do Instagram: marcacao, colaboradores, trilha, publi */}
-          <InstagramOptions
-            value={igOptions}
-            onChange={setIgOptions}
-            images={images}
-            activeImageIndex={activeImageIndex}
-            isStories={publishMode === 'STORIES'}
-          />
 
           {/* Schedule / Publish now */}
           <div className="card p-5">
