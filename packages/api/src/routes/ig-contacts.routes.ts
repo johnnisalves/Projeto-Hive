@@ -31,13 +31,18 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     // sugerir. Populamos com os @ das legendas dos posts antigos e com os
     // contatos da conta do Instagram.
     const total = await prisma.igContact.count({ where: { userId: ownerId } });
+    let reason: string | undefined;
     if (total === 0) {
       await seedContactsFromHistory(ownerId);
-      await syncContactsFromInstagram(ownerId).catch(() => ({ added: 0, sources: [] }));
+      const sync = await syncContactsFromInstagram(ownerId)
+        .catch((e) => ({ added: 0, sources: [], reason: e?.message }));
+      reason = sync.reason;
     }
 
     const items = await searchContacts(ownerId, String(req.query.q || ''));
-    res.json({ success: true, data: { items } });
+    // `reason` explica por que a agenda esta vazia (conta nao conectada,
+    // nenhum @ encontrado). Sem isso a tela so consegue dizer "nao achei".
+    res.json({ success: true, data: { items, reason } });
   } catch (err: any) {
     // O autocomplete dispara a cada tecla: devolver 500 aqui entupiria o
     // console e, do lado do usuario, o campo so ficaria mudo. Respondemos
@@ -89,7 +94,13 @@ router.post('/sync', async (req: AuthRequest, res: Response) => {
     const total = await prisma.igContact.count({ where: { userId: ownerId } });
     res.json({
       success: true,
-      data: { total, fromHistory, fromInstagram: fromInstagram.added, sources: fromInstagram.sources },
+      data: {
+        total,
+        fromHistory,
+        fromInstagram: fromInstagram.added,
+        sources: fromInstagram.sources,
+        reason: total === 0 ? fromInstagram.reason : undefined,
+      },
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Falha ao sincronizar contatos' });

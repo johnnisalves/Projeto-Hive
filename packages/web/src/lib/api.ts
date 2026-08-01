@@ -211,13 +211,13 @@ export const api = {
   // Agenda de @ do Instagram. O autocomplete vem daqui, nao do Meta: a API
   // do Instagram nao tem busca de usuario por prefixo.
   searchIgContacts: (q: string) =>
-    request<{ items: Array<{ username: string; displayName?: string | null; followers?: number | null; verifiedAt?: string | null }>; warning?: string }>(
+    request<{ items: Array<{ username: string; displayName?: string | null; followers?: number | null; verifiedAt?: string | null }>; warning?: string; reason?: string }>(
       `/api/ig-contacts?q=${encodeURIComponent(q)}`,
     ),
 
   // Reimporta contatos das legendas e comentarios dos posts do Instagram.
   syncIgContacts: () =>
-    request<{ total: number; fromHistory: number; fromInstagram: number; sources: string[] }>(
+    request<{ total: number; fromHistory: number; fromInstagram: number; sources: string[]; reason?: string }>(
       '/api/ig-contacts/sync',
       { method: 'POST' },
     ),

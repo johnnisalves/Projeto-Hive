@@ -87,12 +87,22 @@ export async function seedContactsFromHistory(userId: string): Promise<number> {
  * Os comentarios exigem a permissao instagram_manage_comments. Se ela nao
  * estiver aprovada, essa parte falha sozinha e seguimos so com as legendas.
  */
-export async function syncContactsFromInstagram(userId: string): Promise<{ added: number; sources: string[] }> {
+export async function syncContactsFromInstagram(
+  userId: string,
+): Promise<{ added: number; sources: string[]; reason?: string }> {
   const account = await prisma.instagramToken.findFirst({
     where: { userId },
     orderBy: { isDefault: 'desc' },
   });
-  if (!account) return { added: 0, sources: [] };
+  // Sem conta conectada nao ha de onde puxar. Devolvemos o motivo em vez de
+  // um zero mudo, senao a tela so diz "nao achei" e ninguem sabe por que.
+  if (!account) {
+    return {
+      added: 0,
+      sources: [],
+      reason: 'Nenhuma conta do Instagram conectada. Conecte em Configuracoes para eu importar seus contatos.',
+    };
+  }
 
   const token = account.accessToken;
   const isBusiness = token.startsWith('EAA');
@@ -144,6 +154,23 @@ export async function syncContactsFromInstagram(userId: string): Promise<{ added
   }
   if (commentUsers) sources.push(`${commentUsers} comentarios`);
 
+  // --- 3. Quem marcou VOCE em posts (amigos de verdade) ---
+  // /tags devolve as midias em que a conta foi marcada, com o @ de quem
+  // marcou. E a fonte mais proxima de "meus amigos" que a API oferece.
+  try {
+    const res = await fetch(`${base}/${me}/tags?fields=username,caption&limit=100&access_token=${token}`);
+    const data = (await res.json()) as any;
+    if (data?.error) throw new Error(data.error.message);
+    let tagged = 0;
+    for (const m of data?.data || []) {
+      if (m.username) { bump(m.username, 2); tagged++; }
+      for (const u of extractMentions(m.caption)) bump(u);
+    }
+    if (tagged) sources.push(`${tagged} marcacoes em voce`);
+  } catch (err) {
+    console.warn('[IgContacts] /tags indisponivel:', (err as Error).message);
+  }
+
   // Nao guardamos a propria conta como contato
   if (account.username) found.delete(normalizeUsername(account.username));
 
@@ -156,7 +183,13 @@ export async function syncContactsFromInstagram(userId: string): Promise<{ added
   }
 
   console.log(`[IgContacts] Sync do Instagram: ${found.size} contatos (${sources.join(', ') || 'nenhuma fonte'})`);
-  return { added: found.size, sources };
+  return {
+    added: found.size,
+    sources,
+    reason: found.size === 0
+      ? 'Conta conectada, mas nao encontrei nenhum @ nas legendas, comentarios ou marcacoes dos seus posts.'
+      : undefined,
+  };
 }
 
 /**

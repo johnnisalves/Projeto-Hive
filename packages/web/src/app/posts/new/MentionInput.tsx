@@ -64,11 +64,11 @@ export default function MentionInput({
     try {
       const r = await api.syncIgContacts();
       if (r.total > 0) {
-        setSyncMsg(`${r.total} contatos na agenda${r.sources.length ? ` (${r.sources.join(', ')})` : ''}. Digite de novo.`);
+        setSyncMsg(`${r.total} contatos importados${r.sources.length ? ` (${r.sources.join(', ')})` : ''}.`);
         const res = await api.searchIgContacts(value.replace(/^@+/, ''));
         setItems(res.items || []);
       } else {
-        setSyncMsg('Nenhum contato encontrado. Verifique se a conta do Instagram está conectada em Configurações.');
+        setSyncMsg(r.reason || 'Nenhum contato encontrado nas suas legendas, comentários ou marcações.');
       }
     } catch (err: unknown) {
       setSyncMsg(err instanceof Error ? err.message : 'Falha ao buscar contatos');
@@ -89,6 +89,8 @@ export default function MentionInput({
         // O servidor responde 200 com `warning` quando a busca falha, para
         // nao devolver 500 a cada tecla. O motivo tem que chegar na tela.
         setError(res.warning || '');
+        // `reason` explica agenda vazia (conta desconectada, nada achado).
+        if (res.reason) setSyncMsg(res.reason);
         setHighlight(0);
         // Abre tambem sem resultado, para mostrar a dica de "aperte Enter".
         // Sem isso o campo parecia quebrado quando a agenda ainda nao tem
