@@ -76,6 +76,90 @@ export async function seedContactsFromHistory(userId: string): Promise<number> {
 }
 
 /**
+ * Puxa contatos da conta do Instagram do usuario.
+ *
+ * A API nao deixa buscar perfis nem listar seguidores, mas deixa ler o
+ * proprio conteudo. Duas fontes de gente de verdade saem dai:
+ *
+ *  1. legendas dos seus posts  -> quem voce marca
+ *  2. comentarios nos seus posts -> quem interage com voce
+ *
+ * Os comentarios exigem a permissao instagram_manage_comments. Se ela nao
+ * estiver aprovada, essa parte falha sozinha e seguimos so com as legendas.
+ */
+export async function syncContactsFromInstagram(userId: string): Promise<{ added: number; sources: string[] }> {
+  const account = await prisma.instagramToken.findFirst({
+    where: { userId },
+    orderBy: { isDefault: 'desc' },
+  });
+  if (!account) return { added: 0, sources: [] };
+
+  const token = account.accessToken;
+  const isBusiness = token.startsWith('EAA');
+  const base = isBusiness ? 'https://graph.facebook.com/v21.0' : 'https://graph.instagram.com/v21.0';
+  const me = isBusiness ? account.instagramUserId : 'me';
+
+  const found = new Map<string, number>();
+  const sources: string[] = [];
+  const bump = (u: string, n = 1) => {
+    const clean = normalizeUsername(u);
+    if (clean.length >= 2) found.set(clean, (found.get(clean) || 0) + n);
+  };
+
+  // --- 1. Legendas dos proprios posts ---
+  let mediaIds: string[] = [];
+  try {
+    const res = await fetch(`${base}/${me}/media?fields=id,caption,comments_count&limit=100&access_token=${token}`);
+    const data = (await res.json()) as any;
+    if (data?.error) throw new Error(data.error.message);
+    const items = data?.data || [];
+    for (const m of items) {
+      for (const u of extractMentions(m.caption)) bump(u, 2); // quem voce marca pesa mais
+      if ((m.comments_count ?? 0) > 0) mediaIds.push(m.id);
+    }
+    if (items.length) sources.push(`${items.length} posts`);
+  } catch (err) {
+    console.warn('[IgContacts] Nao consegui ler as midias do Instagram:', (err as Error).message);
+  }
+
+  // --- 2. Comentarios (quem interage com voce) ---
+  // Limitado aos 25 posts mais recentes com comentario, para nao estourar
+  // o rate limit do Meta numa unica sincronizacao.
+  let commentUsers = 0;
+  for (const mediaId of mediaIds.slice(0, 25)) {
+    try {
+      const res = await fetch(`${base}/${mediaId}/comments?fields=username,text&limit=50&access_token=${token}`);
+      const data = (await res.json()) as any;
+      if (data?.error) throw new Error(data.error.message);
+      for (const c of data?.data || []) {
+        if (c.username) { bump(c.username); commentUsers++; }
+        for (const u of extractMentions(c.text)) bump(u);
+      }
+    } catch (err) {
+      // Permissao de comentarios costuma nao estar aprovada. Nao e erro
+      // fatal: as legendas ja renderam contatos.
+      console.warn('[IgContacts] Comentarios indisponiveis:', (err as Error).message);
+      break;
+    }
+  }
+  if (commentUsers) sources.push(`${commentUsers} comentarios`);
+
+  // Nao guardamos a propria conta como contato
+  if (account.username) found.delete(normalizeUsername(account.username));
+
+  for (const [username, useCount] of found) {
+    await prisma.igContact.upsert({
+      where: { userId_username: { userId, username } },
+      create: { userId, username, useCount },
+      update: { useCount: { increment: 0 } },
+    }).catch(() => {});
+  }
+
+  console.log(`[IgContacts] Sync do Instagram: ${found.size} contatos (${sources.join(', ') || 'nenhuma fonte'})`);
+  return { added: found.size, sources };
+}
+
+/**
  * Sugestoes para o autocomplete.
  *
  * Ordena por prefixo primeiro (quem digita "jus" quer "jusciara" antes de

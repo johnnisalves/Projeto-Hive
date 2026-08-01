@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Check, Loader2 } from 'lucide-react';
+import { Check, Loader2, RefreshCw } from 'lucide-react';
 import { api } from '../../../lib/api';
 
 /**
@@ -48,7 +48,32 @@ export default function MentionInput({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [highlight, setHighlight] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState('');
   const boxRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * Importa contatos da conta do Instagram (legendas e comentarios dos
+   * posts). E o mais perto de "achar meus amigos" que a API permite —
+   * nao existe endpoint de busca de perfil nem de lista de seguidores.
+   */
+  async function runSync() {
+    setSyncing(true);
+    setSyncMsg('');
+    try {
+      const r = await api.syncIgContacts();
+      if (r.total > 0) {
+        setSyncMsg(`${r.total} contatos na agenda${r.sources.length ? ` (${r.sources.join(', ')})` : ''}. Digite de novo.`);
+        const res = await api.searchIgContacts(value.replace(/^@+/, ''));
+        setItems(res.items || []);
+      } else {
+        setSyncMsg('Nenhum contato encontrado. Verifique se a conta do Instagram está conectada em Configurações.');
+      }
+    } catch (err: unknown) {
+      setSyncMsg(err instanceof Error ? err.message : 'Falha ao buscar contatos');
+    }
+    setSyncing(false);
+  }
 
   // Busca com atraso curto: digitar rapido nao dispara uma chamada por tecla.
   useEffect(() => {
@@ -143,9 +168,18 @@ export default function MentionInput({
             Aperte Enter para usar @{value.replace(/^@+/, '')}
           </p>
           <p className="text-[10px] text-text-muted mt-1">
-            Ainda não está na sua agenda. Depois de usar uma vez, ele passa a ser sugerido.
-            O Instagram não permite buscar perfis por aqui.
+            Não achei esse @ na sua agenda.
           </p>
+          <button
+            type="button"
+            onMouseDown={(e) => { e.preventDefault(); runSync(); }}
+            disabled={syncing}
+            className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:underline disabled:opacity-50"
+          >
+            {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" strokeWidth={2.5} />}
+            {syncing ? 'Buscando...' : 'Buscar meus contatos do Instagram'}
+          </button>
+          {syncMsg && <p className="text-[10px] text-text-muted mt-1.5">{syncMsg}</p>}
         </div>
       )}
 

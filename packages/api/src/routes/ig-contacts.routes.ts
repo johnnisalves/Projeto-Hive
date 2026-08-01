@@ -8,6 +8,7 @@ import {
   rememberContacts,
   normalizeUsername,
   seedContactsFromHistory,
+  syncContactsFromInstagram,
 } from '../services/ig-contacts.service';
 
 const router = Router();
@@ -26,7 +27,12 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     // sugerir. Populamos com os @ das legendas dos posts antigos, que sao
     // exatamente as pessoas que este usuario costuma marcar.
     const total = await prisma.igContact.count({ where: { userId: ownerId } });
-    if (total === 0) await seedContactsFromHistory(ownerId);
+    if (total === 0) {
+      await seedContactsFromHistory(ownerId);
+      // E puxa tambem da conta do Instagram: legendas e comentarios dos
+      // posts reais rendem muito mais gente do que o historico local.
+      await syncContactsFromInstagram(ownerId).catch(() => ({ added: 0, sources: [] }));
+    }
 
     const items = await searchContacts(ownerId, String(req.query.q || ''));
     res.json({ success: true, data: { items } });
@@ -61,6 +67,25 @@ router.get('/verify', async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data: result });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Falha ao confirmar perfil' });
+  }
+});
+
+/**
+ * POST /api/ig-contacts/sync — reimporta os contatos da conta do Instagram.
+ * Usado pelo botao "Buscar meus contatos" quando a agenda esta magra.
+ */
+router.post('/sync', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    const fromHistory = await seedContactsFromHistory(ownerId);
+    const fromInstagram = await syncContactsFromInstagram(ownerId);
+    const total = await prisma.igContact.count({ where: { userId: ownerId } });
+    res.json({
+      success: true,
+      data: { total, fromHistory, fromInstagram: fromInstagram.added, sources: fromInstagram.sources },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao sincronizar contatos' });
   }
 });
 

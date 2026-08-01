@@ -215,6 +215,13 @@ export const api = {
       `/api/ig-contacts?q=${encodeURIComponent(q)}`,
     ),
 
+  // Reimporta contatos das legendas e comentarios dos posts do Instagram.
+  syncIgContacts: () =>
+    request<{ total: number; fromHistory: number; fromInstagram: number; sources: string[] }>(
+      '/api/ig-contacts/sync',
+      { method: 'POST' },
+    ),
+
   verifyIgContact: (username: string) =>
     request<{ status: 'verified' | 'not_found' | 'unavailable'; username: string; displayName?: string; followers?: number; reason?: string }>(
       `/api/ig-contacts/verify?username=${encodeURIComponent(username)}`,
