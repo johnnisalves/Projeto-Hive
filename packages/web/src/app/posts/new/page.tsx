@@ -16,6 +16,7 @@ const PLATFORM_OPTIONS: { value: Platform; label: string; icon: typeof Instagram
   { value: 'TIKTOK', label: 'TikTok', icon: Music2, color: 'bg-gradient-to-br from-pink-500 to-cyan-400' },
 ];
 import { emptySlide, SlideState, AspectRatio, defaultGlobalStyle } from '../visual-editor/types';
+import InstagramOptions, { IgOptions, defaultIgOptions, igOptionsToPayload } from './InstagramOptions';
 import { useEffect } from 'react';
 
 const ASPECT_RATIOS = [
@@ -80,6 +81,8 @@ export default function NewPost() {
   const [captionLoading, setCaptionLoading] = useState(false);
   const [captionMode, setCaptionMode] = useState<'engajar' | 'vender' | 'educar'>('engajar');
   const [publishMode, setPublishMode] = useState<'FEED' | 'STORIES'>('FEED');
+  // Marcacao, colaboradores, trilha, publi — ver InstagramOptions.tsx
+  const [igOptions, setIgOptions] = useState<IgOptions>(defaultIgOptions());
 
   function togglePlatform(p: Platform) {
     setPlatforms((prev) =>
@@ -385,6 +388,7 @@ export default function NewPost() {
         platforms,
         sendWhatsappStatus,
         publishMode,
+        ...igOptionsToPayload(igOptions),
       };
 
       if (selectedBrandId) payload.brandId = selectedBrandId;
@@ -789,6 +793,15 @@ export default function NewPost() {
               </div>
             )}
           </div>
+
+          {/* Recursos do Instagram: marcacao, colaboradores, trilha, publi */}
+          <InstagramOptions
+            value={igOptions}
+            onChange={setIgOptions}
+            images={images}
+            activeImageIndex={activeImageIndex}
+            isStories={publishMode === 'STORIES'}
+          />
 
           {/* Schedule / Publish now */}
           <div className="card p-5">

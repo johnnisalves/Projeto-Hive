@@ -237,6 +237,21 @@ async function ensureBrandColumns() {
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "sendWhatsappStatus" BOOLEAN NOT NULL DEFAULT false`,
     // TikTok como plataforma de publicacao
     `ALTER TYPE "SocialPlatform" ADD VALUE IF NOT EXISTS 'TIKTOK'`,
+    // Recursos de publicacao do Instagram (marcacao, colaboradores, publi, audio)
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "userTags" JSONB`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "collaborators" TEXT[] NOT NULL DEFAULT '{}'`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "locationId" TEXT`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "altText" TEXT`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "shareToFeed" BOOLEAN NOT NULL DEFAULT true`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "audioName" TEXT`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "coverUrl" TEXT`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "thumbOffsetMs" INTEGER`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "isAiGenerated" BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "isPaidPartnership" BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "sponsorIds" TEXT[] NOT NULL DEFAULT '{}'`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "audioUrl" TEXT`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "audioVolume" INTEGER`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "mixedVideoUrl" TEXT`,
   ];
   for (const sql of stmts) {
     try {

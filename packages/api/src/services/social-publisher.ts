@@ -4,6 +4,7 @@ import { publishToLinkedIn } from './linkedin.service';
 import { publishToX } from './x.service';
 import { publishToTikTok } from './tiktok.service';
 import { adaptCaptionForPlatforms } from './caption-adapter';
+import { mixAudioIntoVideo } from './audio-mixer.service';
 import { prisma } from '../config/database';
 import type { SocialPlatform } from '@prisma/client';
 
@@ -30,6 +31,26 @@ export async function publishToPlatforms(
 
   const brand = post.brandId ? await prisma.brand.findUnique({ where: { id: post.brandId } }) : null;
   const originalCaption = post.caption || '';
+
+  // Trilha sonora: mixa UMA vez, antes do loop, para todas as plataformas
+  // usarem o mesmo arquivo. mixedVideoUrl serve de cache — se ja existe,
+  // um retry nao remixa.
+  if (post.mediaType === 'VIDEO' && post.audioUrl && post.videoUrl && !post.mixedVideoUrl) {
+    try {
+      const mixedUrl = await mixAudioIntoVideo(post.videoUrl, post.audioUrl, post.audioVolume ?? 80);
+      await prisma.post.update({ where: { id: postId }, data: { mixedVideoUrl: mixedUrl } });
+      console.log(`[SocialPublisher] Trilha mixada no video: ${mixedUrl}`);
+    } catch (err: unknown) {
+      // Falhar a mixagem nao pode derrubar a publicacao: publicamos o video
+      // original e registramos o motivo para o usuario ver.
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[SocialPublisher] Mixagem de audio falhou, publicando sem trilha: ${msg}`);
+      await prisma.post.update({
+        where: { id: postId },
+        data: { lastError: `Trilha sonora nao aplicada: ${msg}`.slice(0, 1000) },
+      }).catch(() => {});
+    }
+  }
 
   // Idempotencia: plataformas que ja publicaram com sucesso (retry nao reposta)
   const previous = (post.publishedResults as Record<string, { id?: string; error?: string }> | null) || {};

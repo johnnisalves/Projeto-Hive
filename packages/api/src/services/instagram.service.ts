@@ -99,6 +99,96 @@ function resolveUserIdForToken(token: string, storedUserId: string): string {
 }
 
 /**
+ * Recursos extras de publicacao aceitos pela API do Instagram.
+ *
+ * Cada parametro so vale em alguns tipos de midia: a API rejeita o container
+ * inteiro se receber um parametro fora do tipo dele, entao aplicamos por tipo
+ * em vez de mandar tudo em todo lugar. Referencia:
+ * developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/media
+ */
+export interface IgFeatures {
+  userTags?: Array<{ username: string; x: number; y: number; imageIndex?: number }>;
+  collaborators?: string[];
+  locationId?: string | null;
+  altText?: string | null;
+  shareToFeed?: boolean;
+  audioName?: string | null;
+  coverUrl?: string | null;
+  thumbOffsetMs?: number | null;
+  isAiGenerated?: boolean;
+  isPaidPartnership?: boolean;
+  sponsorIds?: string[];
+}
+
+/** Marcacoes de uma foto especifica do carrossel (ou do post simples). */
+export function tagsForImage(features: IgFeatures, imageIndex?: number) {
+  const tags = features.userTags || [];
+  if (imageIndex === undefined) {
+    // Post simples: aceita as marcacoes sem indice (ou com indice 0).
+    return tags.filter((t) => t.imageIndex === undefined || t.imageIndex === 0);
+  }
+  return tags.filter((t) => t.imageIndex === imageIndex);
+}
+
+/**
+ * Marcacao de pessoas. A API espera JSON e coordenadas de 0.0 a 1.0 medidas a
+ * partir do canto superior esquerdo. imageIndex e nosso, nao vai para o Meta.
+ */
+export function appendUserTags(params: URLSearchParams, tags: IgFeatures['userTags']) {
+  if (!tags || tags.length === 0) return;
+  const payload = tags.map((t) => ({
+    username: t.username.replace(/^@/, ''),
+    x: Math.min(Math.max(t.x, 0), 1),
+    y: Math.min(Math.max(t.y, 0), 1),
+  }));
+  params.append('user_tags', JSON.stringify(payload));
+}
+
+/** Parametros que valem em qualquer tipo de midia. */
+export function appendUniversal(params: URLSearchParams, features: IgFeatures) {
+  if (features.isAiGenerated) params.append('is_ai_generated', 'true');
+}
+
+/**
+ * Publi / parceria paga. Exige a permissao instagram_branded_content_creator
+ * (App Review) e token de Login do Facebook; com token IGAA o Meta rejeita.
+ * Nao vale em Stories.
+ *
+ * Quando a conta e IGAA nos NAO mandamos os parametros: o Meta rejeita o
+ * container inteiro, o que derrubaria a publicacao por causa de um selo
+ * opcional. Melhor publicar sem o selo e avisar no log.
+ */
+export function appendBrandedContent(params: URLSearchParams, features: IgFeatures, token: string) {
+  const wants = (features.sponsorIds || []).length > 0 || features.isPaidPartnership;
+  if (wants && !token.startsWith('EAA')) {
+    console.warn('[Instagram] Parceria paga ignorada: a conta usa Login do Instagram (IGAA). O selo exige conexao via Login do Facebook.');
+    return;
+  }
+  const sponsors = (features.sponsorIds || []).filter(Boolean);
+  if (sponsors.length > 0) {
+    params.append('branded_content_sponsor_ids', JSON.stringify(sponsors.slice(0, 2)));
+    // O Meta ja liga is_paid_partnership sozinho quando vem patrocinador,
+    // mas mandamos explicito para o caso de a conta so querer o selo.
+    params.append('is_paid_partnership', 'true');
+  } else if (features.isPaidPartnership) {
+    params.append('is_paid_partnership', 'true');
+  }
+}
+
+/** Local: a API exige o ID de uma Pagina com local verificado, nao texto livre. */
+export function appendLocation(params: URLSearchParams, features: IgFeatures) {
+  if (features.locationId) params.append('location_id', features.locationId);
+}
+
+/** Colaboradores: ate 3 perfis, o post aparece no feed de todos. */
+export function appendCollaborators(params: URLSearchParams, features: IgFeatures) {
+  const list = (features.collaborators || []).filter(Boolean).slice(0, 3);
+  if (list.length > 0) {
+    params.append('collaborators', JSON.stringify(list.map((u) => u.replace(/^@/, ''))));
+  }
+}
+
+/**
  * Retry a function on transient Instagram API errors (code 2, is_transient: true).
  * Uses exponential backoff: 5s, 15s, 30s
  */
@@ -193,7 +283,12 @@ async function publishContainer(containerId: string, token: string, igUserId: st
   return { id: result.id };
 }
 
-async function createChildContainer(publicUrl: string, token: string, igUserId: string): Promise<string> {
+async function createChildContainer(
+  publicUrl: string,
+  token: string,
+  igUserId: string,
+  childOptions: { userTags?: IgFeatures['userTags']; altText?: string | null } = {},
+): Promise<string> {
   const base = getGraphBase(token);
   const userPath = resolveUserIdForToken(token, igUserId);
 
@@ -204,6 +299,10 @@ async function createChildContainer(publicUrl: string, token: string, igUserId: 
     media_type: 'IMAGE',
     access_token: token,
   });
+  // Num carrossel, marcacao e texto alternativo pertencem a cada foto;
+  // o container pai nao aceita esses dois.
+  appendUserTags(qs, childOptions.userTags);
+  if (childOptions.altText) qs.append('alt_text', childOptions.altText.slice(0, 1000));
   const url = `${base}/${userPath}/media?${qs.toString()}`;
 
   console.log(`[Instagram] Child container request URL (without token): ${url.replace(token, 'TOKEN_HIDDEN')}`);
@@ -220,7 +319,13 @@ async function createChildContainer(publicUrl: string, token: string, igUserId: 
   return data.id;
 }
 
-async function publishSingleImage(imageUrl: string, caption: string, token: string, igUserId: string) {
+async function publishSingleImage(
+  imageUrl: string,
+  caption: string,
+  token: string,
+  igUserId: string,
+  features: IgFeatures = {},
+) {
   const publicImageUrl = await ensureMetaCompatibleUrl(imageUrl);
   const base = getGraphBase(token);
   const userPath = resolveUserIdForToken(token, igUserId);
@@ -234,13 +339,25 @@ async function publishSingleImage(imageUrl: string, caption: string, token: stri
   await verifyPublicUrl(publicImageUrl, 'Image');
 
   const createData = await withRetry(async () => {
+    const params = new URLSearchParams({
+      image_url: publicImageUrl,
+      caption,
+      access_token: token,
+    });
+    // Imagem simples aceita o conjunto completo: marcacao, colaborador,
+    // local, texto alternativo e publi.
+    appendUserTags(params, tagsForImage(features));
+    appendCollaborators(params, features);
+    appendLocation(params, features);
+    appendBrandedContent(params, features, token);
+    appendUniversal(params, features);
+    if (features.altText) params.append('alt_text', features.altText.slice(0, 1000));
+
+    console.log('[Instagram] Extra params:', Array.from(params.keys()).filter((k) => k !== 'access_token').join(', '));
+
     const createRes = await fetch(`${base}/${userPath}/media`, {
       method: 'POST',
-      body: new URLSearchParams({
-        image_url: publicImageUrl,
-        caption,
-        access_token: token,
-      }),
+      body: params,
     });
     const data = (await createRes.json()) as any;
     console.log('[Instagram] Create container response:', JSON.stringify(data));
@@ -254,7 +371,12 @@ async function publishSingleImage(imageUrl: string, caption: string, token: stri
   return await publishContainer(createData.id, token, igUserId);
 }
 
-async function publishImageStory(imageUrl: string, token: string, igUserId: string) {
+async function publishImageStory(
+  imageUrl: string,
+  token: string,
+  igUserId: string,
+  features: IgFeatures = {},
+) {
   const publicImageUrl = await ensureMetaCompatibleUrl(imageUrl);
   const base = getGraphBase(token);
   const userPath = resolveUserIdForToken(token, igUserId);
@@ -265,13 +387,19 @@ async function publishImageStory(imageUrl: string, token: string, igUserId: stri
   await verifyPublicUrl(publicImageUrl, 'Story image');
 
   const createData = await withRetry(async () => {
+    const params = new URLSearchParams({
+      image_url: publicImageUrl,
+      media_type: 'STORIES',
+      access_token: token,
+    });
+    // Stories aceitam marcacao de pessoa (x/y sao opcionais aqui), mas nao
+    // local, colaborador nem publi, e nenhum sticker interativo pela API.
+    appendUserTags(params, tagsForImage(features));
+    appendUniversal(params, features);
+
     const createRes = await fetch(`${base}/${userPath}/media`, {
       method: 'POST',
-      body: new URLSearchParams({
-        image_url: publicImageUrl,
-        media_type: 'STORIES',
-        access_token: token,
-      }),
+      body: params,
     });
     const data = (await createRes.json()) as any;
     console.log('[Instagram] Create STORY container response:', JSON.stringify(data));
@@ -290,6 +418,7 @@ async function publishCarousel(
   caption: string,
   token: string,
   igUserId: string,
+  features: IgFeatures = {},
 ) {
   console.log(`[Instagram] Creating carousel with ${images.length} images...`);
 
@@ -313,7 +442,11 @@ async function publishCarousel(
     console.log(`[Instagram] Creating child container ${i + 1}/${publicUrls.length}: ${publicUrl}`);
 
     const childId = await withRetry(
-      () => createChildContainer(publicUrl, token, igUserId),
+      () => createChildContainer(publicUrl, token, igUserId, {
+        userTags: tagsForImage(features, i),
+        // O texto alternativo informado vale para a primeira foto do carrossel.
+        altText: i === 0 ? features.altText : null,
+      }),
       `Child container ${i + 1}`,
     );
 
@@ -343,6 +476,12 @@ async function publishCarousel(
       caption,
       access_token: token,
     });
+    // No pai vao os atributos do post inteiro; marcacao/alt_text ficaram nos filhos.
+    appendCollaborators(params, features);
+    appendLocation(params, features);
+    appendBrandedContent(params, features, token);
+    appendUniversal(params, features);
+
     const carouselRes = await fetch(`${base}/${userPath}/media`, {
       method: 'POST',
       body: params,
@@ -370,6 +509,7 @@ async function publishVideoMedia(
   token: string,
   igUserId: string,
   mode: VideoPublishMode = 'REELS',
+  features: IgFeatures = {},
 ) {
   const base = getGraphBase(token);
   const userPath = resolveUserIdForToken(token, igUserId);
@@ -391,6 +531,14 @@ async function publishVideoMedia(
     if (mode === 'REELS') {
       params.append('media_type', 'REELS');
       if (caption) params.append('caption', caption);
+      // share_to_feed=false deixa o Reels so na aba Reels, fora do Feed.
+      if (features.shareToFeed === false) params.append('share_to_feed', 'false');
+      // O nome do audio original so pode ser definido UMA vez, aqui ou depois
+      // pela pagina do audio; nao da para renomear numa segunda tentativa.
+      if (features.audioName) params.append('audio_name', features.audioName.slice(0, 100));
+      appendCollaborators(params, features);
+      appendLocation(params, features);
+      appendBrandedContent(params, features, token);
     } else if (mode === 'STORIES') {
       params.append('media_type', 'STORIES');
       // Stories don't accept caption text via the API
@@ -398,7 +546,17 @@ async function publishVideoMedia(
       // FEED video (deprecated by Instagram in favor of REELS, but still works)
       params.append('media_type', 'VIDEO');
       if (caption) params.append('caption', caption);
+      appendLocation(params, features);
+      appendBrandedContent(params, features, token);
     }
+
+    // Capa: cover_url tem prioridade e faz o Meta ignorar thumb_offset.
+    if (mode !== 'STORIES') {
+      if (features.coverUrl) params.append('cover_url', features.coverUrl);
+      else if (features.thumbOffsetMs != null) params.append('thumb_offset', String(features.thumbOffsetMs));
+    }
+    appendUserTags(params, tagsForImage(features));
+    appendUniversal(params, features);
 
     console.log('[Instagram] Create container params:', Array.from(params.keys()).join(', '));
 
@@ -480,26 +638,42 @@ export async function publishToInstagram(postId: string, accountId?: string) {
     .filter(Boolean)
     .join('\n\n');
 
+  const features: IgFeatures = {
+    userTags: Array.isArray(post.userTags) ? (post.userTags as IgFeatures['userTags']) : undefined,
+    collaborators: post.collaborators,
+    locationId: post.locationId,
+    altText: post.altText,
+    shareToFeed: post.shareToFeed,
+    audioName: post.audioName,
+    coverUrl: post.coverUrl,
+    thumbOffsetMs: post.thumbOffsetMs,
+    isAiGenerated: post.isAiGenerated,
+    isPaidPartnership: post.isPaidPartnership,
+    sponsorIds: post.sponsorIds,
+  };
+
   // Video (Reels / Stories / Feed)
   if (post.mediaType === 'VIDEO') {
-    if (!post.videoUrl) throw new Error('Video post has no videoUrl');
+    // mixedVideoUrl e o video ja com a trilha mixada (ver audio-mixer.service).
+    const videoUrl = post.mixedVideoUrl || post.videoUrl;
+    if (!videoUrl) throw new Error('Video post has no videoUrl');
     // publishMode field defines where to post (defaults to REELS for videos)
     const mode = (post.publishMode === 'FEED' ? 'FEED' : post.publishMode === 'STORIES' ? 'STORIES' : 'REELS') as VideoPublishMode;
-    return await publishVideoMedia(post.videoUrl, caption, token, igUserId, mode);
+    return await publishVideoMedia(videoUrl, caption, token, igUserId, mode, features);
   }
 
   // Image Story (Stories nao aceitam carrossel nem caption — usa a imagem de capa)
   if (post.publishMode === 'STORIES') {
     const storyUrl = post.imageUrl || (post.images && post.images[0]?.imageUrl);
     if (!storyUrl) throw new Error('Post has no image for Story');
-    return await publishImageStory(storyUrl, token, igUserId);
+    return await publishImageStory(storyUrl, token, igUserId, features);
   }
 
   // Carousel or single image (Feed)
   if (post.isCarousel && post.images && post.images.length >= 2) {
-    return await publishCarousel(post.images, caption, token, igUserId);
+    return await publishCarousel(post.images, caption, token, igUserId, features);
   } else {
     if (!post.imageUrl) throw new Error('Post has no image');
-    return await publishSingleImage(post.imageUrl, caption, token, igUserId);
+    return await publishSingleImage(post.imageUrl, caption, token, igUserId, features);
   }
 }

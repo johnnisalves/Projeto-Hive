@@ -208,6 +208,21 @@ export const api = {
     return data.data as { fileUrl: string; fileName: string; mimeType: string };
   },
 
+  // Trilha sonora do post: o audio e mixado no video no servidor antes de publicar.
+  uploadAudio: async (file: File) => {
+    const formData = new FormData();
+    formData.append('audio', file);
+    const t = getToken();
+    const res = await fetch(`${BASE_URL}/api/upload/audio`, {
+      method: 'POST',
+      headers: t ? { Authorization: `Bearer ${t}` } : {},
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || 'Falha ao enviar o audio');
+    return data.data as { audioUrl: string; audioMinioKey: string; fileName: string; sizeBytes: number };
+  },
+
   uploadVideo: async (file: File, onProgress?: (pct: number) => void) => {
     const formData = new FormData();
     formData.append('video', file);

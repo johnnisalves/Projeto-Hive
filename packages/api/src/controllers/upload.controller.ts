@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { uploadImage, uploadFile, uploadVideo } from '../services/storage.service';
+import { uploadImage, uploadFile, uploadVideo, uploadAudio } from '../services/storage.service';
 
 export async function uploadImageController(req: Request, res: Response) {
   try {
@@ -111,6 +111,38 @@ export async function uploadVideoController(req: Request, res: Response) {
   } catch (err: any) {
     console.error('[uploadVideo] Error:', err);
     res.status(500).json({ success: false, error: err?.message || 'Failed to upload video' });
+  }
+}
+
+// Trilha sonora para mixar no video antes de publicar (ver audio-mixer.service).
+const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/aac', 'audio/mp4', 'audio/x-m4a', 'audio/ogg'];
+const MAX_AUDIO_SIZE = 20 * 1024 * 1024; // 20MB
+
+export async function uploadAudioController(req: Request, res: Response) {
+  try {
+    if (!req.file) {
+      res.status(400).json({ success: false, error: 'Nenhum audio enviado' });
+      return;
+    }
+
+    if (!ALLOWED_AUDIO_TYPES.includes(req.file.mimetype)) {
+      res.status(400).json({ success: false, error: 'Formato de audio nao permitido (use MP3, WAV, AAC, M4A ou OGG)' });
+      return;
+    }
+
+    if (req.file.size > MAX_AUDIO_SIZE) {
+      res.status(400).json({ success: false, error: `Audio muito grande (max 20MB, atual: ${(req.file.size / 1024 / 1024).toFixed(1)}MB)` });
+      return;
+    }
+
+    const { audioUrl, key } = await uploadAudio(req.file.buffer, req.file.mimetype, req.file.originalname);
+    res.json({
+      success: true,
+      data: { audioUrl, audioMinioKey: key, fileName: req.file.originalname, sizeBytes: req.file.size },
+    });
+  } catch (err: any) {
+    console.error('[uploadAudio] Error:', err);
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao enviar o audio' });
   }
 }
 

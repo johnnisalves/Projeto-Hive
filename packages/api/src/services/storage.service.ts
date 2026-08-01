@@ -42,6 +42,25 @@ export async function uploadVideo(
   };
 }
 
+export async function uploadAudio(
+  buffer: Buffer,
+  mimetype: string,
+  originalName?: string,
+): Promise<{ audioUrl: string; key: string }> {
+  const fromName = originalName?.split('.').pop()?.toLowerCase();
+  const ext = fromName || (mimetype === 'audio/wav' ? 'wav' : mimetype === 'audio/aac' ? 'aac' : 'mp3');
+  const key = `audio/${randomUUID()}.${ext}`;
+
+  await minioClient.putObject(env.MINIO_BUCKET, key, buffer, buffer.length, {
+    'Content-Type': mimetype,
+  });
+
+  return {
+    audioUrl: `${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/${key}`,
+    key,
+  };
+}
+
 export async function deleteImage(key: string): Promise<void> {
   await minioClient.removeObject(env.MINIO_BUCKET, key);
 }
