@@ -20,24 +20,31 @@ router.use(authMiddleware);
  * Sem `q`, devolve os mais usados — util para mostrar a lista ao focar o campo.
  */
 router.get('/', async (req: AuthRequest, res: Response) => {
-  try {
-    const ownerId = await resolveOwnerId(req.userId!);
+  const ownerId = await resolveOwnerId(req.userId!).catch(() => null);
+  if (!ownerId) {
+    res.status(500).json({ success: false, error: 'Nao consegui identificar o usuario' });
+    return;
+  }
 
+  try {
     // Primeira vez: a agenda esta vazia e o autocomplete nao teria o que
-    // sugerir. Populamos com os @ das legendas dos posts antigos, que sao
-    // exatamente as pessoas que este usuario costuma marcar.
+    // sugerir. Populamos com os @ das legendas dos posts antigos e com os
+    // contatos da conta do Instagram.
     const total = await prisma.igContact.count({ where: { userId: ownerId } });
     if (total === 0) {
       await seedContactsFromHistory(ownerId);
-      // E puxa tambem da conta do Instagram: legendas e comentarios dos
-      // posts reais rendem muito mais gente do que o historico local.
       await syncContactsFromInstagram(ownerId).catch(() => ({ added: 0, sources: [] }));
     }
 
     const items = await searchContacts(ownerId, String(req.query.q || ''));
     res.json({ success: true, data: { items } });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err?.message || 'Falha ao buscar contatos' });
+    // O autocomplete dispara a cada tecla: devolver 500 aqui entupiria o
+    // console e, do lado do usuario, o campo so ficaria mudo. Respondemos
+    // 200 com lista vazia e o motivo, para a interface poder mostrar.
+    const message = err?.message || 'Falha ao buscar contatos';
+    console.error('[IgContacts] Busca falhou:', message);
+    res.json({ success: true, data: { items: [], warning: message } });
   }
 });
 

@@ -50,6 +50,7 @@ export default function MentionInput({
   const [highlight, setHighlight] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
+  const [error, setError] = useState('');
   const boxRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -85,13 +86,22 @@ export default function MentionInput({
         const res = await api.searchIgContacts(term);
         if (cancelled) return;
         setItems(res.items || []);
+        // O servidor responde 200 com `warning` quando a busca falha, para
+        // nao devolver 500 a cada tecla. O motivo tem que chegar na tela.
+        setError(res.warning || '');
         setHighlight(0);
         // Abre tambem sem resultado, para mostrar a dica de "aperte Enter".
         // Sem isso o campo parecia quebrado quando a agenda ainda nao tem
         // o @ digitado.
         setOpen((res.items || []).length > 0 || term.length >= 2);
-      } catch {
-        if (!cancelled) { setItems([]); setOpen(false); }
+      } catch (err: unknown) {
+        // Antes isso fechava a lista em silencio, e uma falha da API ficava
+        // indistinguivel de "nao achei ninguem". O erro agora aparece.
+        if (!cancelled) {
+          setItems([]);
+          setError(err instanceof Error ? err.message : 'Falha ao buscar contatos');
+          setOpen(term.length >= 2);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -154,6 +164,19 @@ export default function MentionInput({
         disabled={disabled}
         autoFocus={autoFocus}
         placeholder={placeholder}
+        // O Chrome tratava este campo como nome/endereco e abria o autofill
+        // dele por cima da nossa lista. autoComplete="off" sozinho nao basta:
+        // o Chrome ignora quando acha que reconheceu o campo. Um `name` que
+        // nao lembra nada conhecido, mais os data-* dos gerenciadores de
+        // senha, resolvem.
+        name="ig-mention"
+        autoComplete="off"
+        data-lpignore="true"
+        data-1p-ignore="true"
+        data-form-type="other"
+        spellCheck={false}
+        autoCorrect="off"
+        autoCapitalize="none"
         className={compact
           ? 'w-36 px-1.5 py-0.5 text-[11px] rounded border border-border bg-bg-main'
           : 'input-field w-full disabled:opacity-50'}
@@ -167,9 +190,11 @@ export default function MentionInput({
           <p className="text-xs text-text-primary font-semibold">
             Aperte Enter para usar @{value.replace(/^@+/, '')}
           </p>
-          <p className="text-[10px] text-text-muted mt-1">
-            Não achei esse @ na sua agenda.
-          </p>
+          {error ? (
+            <p className="text-[10px] text-status-failed mt-1">Erro ao buscar: {error}</p>
+          ) : (
+            <p className="text-[10px] text-text-muted mt-1">Não achei esse @ na sua agenda.</p>
+          )}
           <button
             type="button"
             onMouseDown={(e) => { e.preventDefault(); runSync(); }}

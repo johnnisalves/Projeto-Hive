@@ -211,7 +211,7 @@ export const api = {
   // Agenda de @ do Instagram. O autocomplete vem daqui, nao do Meta: a API
   // do Instagram nao tem busca de usuario por prefixo.
   searchIgContacts: (q: string) =>
-    request<{ items: Array<{ username: string; displayName?: string | null; followers?: number | null; verifiedAt?: string | null }> }>(
+    request<{ items: Array<{ username: string; displayName?: string | null; followers?: number | null; verifiedAt?: string | null }>; warning?: string }>(
       `/api/ig-contacts?q=${encodeURIComponent(q)}`,
     ),
 
