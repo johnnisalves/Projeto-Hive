@@ -241,6 +241,12 @@ export const api = {
       body: JSON.stringify({ text }),
     }),
 
+  // Busca local pelo nome e devolve os IDs que o Instagram aceita.
+  searchPlaces: (q: string) =>
+    request<{ items: Array<{ id: string; name: string; where: string }>; reason?: string }>(
+      `/api/ig-contacts/places?q=${encodeURIComponent(q)}`,
+    ),
+
   verifyIgContact: (username: string) =>
     request<{ status: 'verified' | 'not_found' | 'unavailable'; username: string; displayName?: string; followers?: number; reason?: string }>(
       `/api/ig-contacts/verify?username=${encodeURIComponent(username)}`,

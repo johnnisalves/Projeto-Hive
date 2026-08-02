@@ -4,7 +4,7 @@ import { publishToLinkedIn } from './linkedin.service';
 import { publishToX } from './x.service';
 import { publishToTikTok } from './tiktok.service';
 import { adaptCaptionForPlatforms } from './caption-adapter';
-import { mixAudioIntoVideo } from './audio-mixer.service';
+import { mixAudioIntoVideo, imageWithAudioToVideo } from './audio-mixer.service';
 import { prisma } from '../config/database';
 import type { SocialPlatform } from '@prisma/client';
 
@@ -35,6 +35,27 @@ export async function publishToPlatforms(
   // Trilha sonora: mixa UMA vez, antes do loop, para todas as plataformas
   // usarem o mesmo arquivo. mixedVideoUrl serve de cache — se ja existe,
   // um retry nao remixa.
+  // Foto com trilha: o Instagram nao aceita audio em post de imagem, entao
+  // a foto vira video (imagem parada + audio) e sai como Reels. Mesmo
+  // truque do story musical.
+  if (post.mediaType !== 'VIDEO' && post.audioUrl && post.imageUrl && !post.mixedVideoUrl) {
+    try {
+      const videoUrl = await imageWithAudioToVideo(post.imageUrl, post.audioUrl, post.audioVolume ?? 80);
+      await prisma.post.update({
+        where: { id: postId },
+        data: { mixedVideoUrl: videoUrl, publishMode: post.publishMode === 'STORIES' ? 'STORIES' : 'REELS' },
+      });
+      console.log(`[SocialPublisher] Foto com trilha virou video: ${videoUrl}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[SocialPublisher] Falha ao montar video da foto, publicando sem trilha: ${msg}`);
+      await prisma.post.update({
+        where: { id: postId },
+        data: { lastError: `Trilha nao aplicada na foto: ${msg}`.slice(0, 1000) },
+      }).catch(() => {});
+    }
+  }
+
   if (post.mediaType === 'VIDEO' && post.audioUrl && post.videoUrl && !post.mixedVideoUrl) {
     try {
       const mixedUrl = await mixAudioIntoVideo(post.videoUrl, post.audioUrl, post.audioVolume ?? 80);

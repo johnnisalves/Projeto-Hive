@@ -652,8 +652,11 @@ export async function publishToInstagram(postId: string, accountId?: string) {
     sponsorIds: post.sponsorIds,
   };
 
-  // Video (Reels / Stories / Feed)
-  if (post.mediaType === 'VIDEO') {
+  // Video (Reels / Stories / Feed).
+  // mixedVideoUrl tambem aparece quando o post era uma FOTO com trilha: a
+  // imagem virou video para poder sair com musica. Nesse caso publicamos
+  // como video mesmo o mediaType sendo IMAGE.
+  if (post.mediaType === 'VIDEO' || post.mixedVideoUrl) {
     // mixedVideoUrl e o video ja com a trilha mixada (ver audio-mixer.service).
     const videoUrl = post.mixedVideoUrl || post.videoUrl;
     if (!videoUrl) throw new Error('Video post has no videoUrl');

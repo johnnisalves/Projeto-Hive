@@ -129,6 +129,92 @@ export async function mixLocalFiles(
   console.log(`[AudioMixer] Mixado: ${(stats.size / 1024 / 1024).toFixed(1)}MB`);
 }
 
+/** Duracao do audio em segundos, para saber o tamanho do video gerado. */
+async function audioDuration(filePath: string): Promise<number> {
+  try {
+    const out = await run('ffprobe', [
+      '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', filePath,
+    ], 30_000);
+    const d = parseFloat(out.trim());
+    return Number.isFinite(d) && d > 0 ? d : 15;
+  } catch {
+    return 15;
+  }
+}
+
+/**
+ * Transforma UMA FOTO em video com trilha sonora.
+ *
+ * POR QUE ISTO EXISTE: o Instagram nao aceita audio em post de foto — nem
+ * pela API, nem no app. A unica forma de uma imagem sair com musica e ela
+ * virar video. E o mesmo truque do story musical: imagem parada + audio.
+ * O resultado e publicado como Reels.
+ *
+ * Duracao: a do audio, limitada a 60s. Reels aceita ate 90s, mas trilha
+ * longa em imagem parada cansa e derruba a retencao.
+ */
+export async function buildVideoFromImage(
+  imagePath: string,
+  audioPath: string,
+  outputPath: string,
+  volume = 80,
+): Promise<void> {
+  const dur = Math.min(await audioDuration(audioPath), 60);
+  const gain = (Math.min(Math.max(volume, 0), 100) / 100).toFixed(2);
+
+  await run('ffmpeg', [
+    '-y',
+    '-loop', '1', '-i', imagePath,   // imagem parada repetida
+    '-i', audioPath,
+    // 9:16 com barra preta: o Reels corta o que fugir dessa proporcao.
+    // setsar=1 evita pixel nao quadrado, que o Meta rejeita.
+    '-vf', 'scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1',
+    '-filter:a', `volume=${gain}`,
+    '-c:v', 'libx264',
+    '-tune', 'stillimage',            // otimiza para quadro parado
+    '-pix_fmt', 'yuv420p',            // sem isso o video nao abre em varios players
+    '-c:a', 'aac',
+    '-b:a', '192k',
+    '-r', '30',
+    '-t', String(dur),
+    '-shortest',
+    '-movflags', '+faststart',
+    outputPath,
+  ]);
+
+  const stats = fs.statSync(outputPath);
+  if (stats.size === 0) throw new Error('ffmpeg gerou um arquivo vazio');
+  console.log(`[AudioMixer] Foto virou video de ${dur.toFixed(0)}s (${(stats.size / 1024 / 1024).toFixed(1)}MB)`);
+}
+
+/**
+ * Baixa imagem e audio, monta o video e devolve a URL publica.
+ * Usado quando o post e de foto e tem trilha escolhida.
+ */
+export async function imageWithAudioToVideo(
+  imageUrl: string,
+  audioUrl: string,
+  volume = 80,
+): Promise<string> {
+  const workDir = path.join(os.tmpdir(), 'disparaai-img-audio', randomUUID());
+  fs.mkdirSync(workDir, { recursive: true });
+
+  const imagePath = path.join(workDir, 'input-image');
+  const audioPath = path.join(workDir, 'input-audio');
+  const outputPath = path.join(workDir, 'output.mp4');
+
+  try {
+    await Promise.all([
+      download(imageUrl, imagePath, 'imagem'),
+      download(audioUrl, audioPath, 'audio'),
+    ]);
+    await buildVideoFromImage(imagePath, audioPath, outputPath, volume);
+    return await uploadMixedVideo(outputPath);
+  } finally {
+    fs.rm(workDir, { recursive: true, force: true }, () => {});
+  }
+}
+
 /**
  * Baixa video e audio, mixa e devolve a URL publica do resultado.
  *

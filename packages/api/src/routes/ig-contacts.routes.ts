@@ -149,6 +149,61 @@ router.post('/bulk', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/**
+ * GET /api/ig-contacts/places?q=pizzaria
+ * Busca local pelo NOME e devolve os IDs que o Instagram aceita.
+ *
+ * O parametro location_id do Meta exige o ID de uma Pagina com local
+ * verificado — digitar "Petrolina" nunca funcionaria. Esta rota traduz
+ * nome em ID usando /pages/search (o antigo /search?type=place foi
+ * descontinuado na v8.0).
+ *
+ * Exige token do Login do Facebook: com token do Login do Instagram o
+ * endpoint nao existe.
+ */
+router.get('/places', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    const q = String(req.query.q || '').trim();
+    if (q.length < 2) { res.json({ success: true, data: { items: [] } }); return; }
+
+    const account = await prisma.instagramToken.findFirst({
+      where: { userId: ownerId },
+      orderBy: { isDefault: 'desc' },
+    });
+    if (!account) {
+      res.json({ success: true, data: { items: [], reason: 'Conecte uma conta do Instagram para buscar locais.' } });
+      return;
+    }
+    if (!account.accessToken.startsWith('EAA')) {
+      res.json({
+        success: true,
+        data: { items: [], reason: 'A busca de locais exige conta conectada via Login do Facebook.' },
+      });
+      return;
+    }
+
+    const url = `https://graph.facebook.com/v21.0/pages/search?q=${encodeURIComponent(q)}`
+      + `&fields=id,name,location&limit=10&access_token=${account.accessToken}`;
+    const r = await fetch(url);
+    const data = (await r.json()) as any;
+    if (data?.error) {
+      res.json({ success: true, data: { items: [], reason: data.error.message } });
+      return;
+    }
+
+    const items = (data?.data || []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      // Monta "Cidade, UF" a partir do que vier — nem todo local tem tudo.
+      where: [p.location?.city, p.location?.state, p.location?.country].filter(Boolean).join(', '),
+    }));
+    res.json({ success: true, data: { items } });
+  } catch (err: any) {
+    res.json({ success: true, data: { items: [], reason: err?.message || 'Falha ao buscar locais' } });
+  }
+});
+
 /** DELETE /api/ig-contacts/:username — tira um @ da agenda. */
 router.delete('/:username', async (req: AuthRequest, res: Response) => {
   try {
