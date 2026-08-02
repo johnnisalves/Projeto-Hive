@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { Layers, CalendarRange, Sparkles, Loader2, Send, X } from 'lucide-react';
+import { Layers, CalendarRange, Sparkles, Loader2, Send, X, Lightbulb } from 'lucide-react';
 import { api } from '../../../lib/api';
 import {
-  Cadence, CADENCE_LABEL, buildCampaignSchedule, campaignSpanDays, formatSlot, toDatetimeLocal,
+  Cadence, cadenceLabel, buildCampaignSchedule, campaignSpanDays, formatSlot, toDatetimeLocal,
+  slotsFor, recommendCadence, MAX_CADENCE,
 } from './campaign';
 
 /**
@@ -36,7 +37,10 @@ interface Props {
 }
 
 export default function CampaignPlanner({ images, brandId, platforms, aspectRatio, onCancel, onDone }: Props) {
-  const [cadence, setCadence] = useState<Cadence>(2);
+  // Comeca no ritmo recomendado para a quantidade de imagens, em vez de um
+  // numero fixo: assim quem nao quer pensar so aperta o botao.
+  const recomendado = recommendCadence(images.length);
+  const [cadence, setCadence] = useState<Cadence>(recomendado.perDay);
   const [items, setItems] = useState<Item[] | null>(null);
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState('');
@@ -122,26 +126,50 @@ export default function CampaignPlanner({ images, brandId, platforms, aspectRati
           {images.length} imagens viram {images.length} publicações separadas, agendadas ao longo dos dias.
         </p>
 
-        <label className="block text-xs font-semibold text-text-secondary mb-2 uppercase tracking-wider">Ritmo</label>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {([1, 2, 3, 6] as Cadence[]).map((c) => {
-            const dias = campaignSpanDays(buildCampaignSchedule(images.length, c));
-            return (
+        <div className="flex items-baseline justify-between mb-2">
+          <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Ritmo</label>
+          <span className="text-sm font-bold text-primary">{cadenceLabel(cadence)}</span>
+        </div>
+
+        <input
+          type="range"
+          min={1}
+          max={MAX_CADENCE}
+          step={1}
+          value={cadence}
+          onChange={(e) => setCadence(Number(e.target.value))}
+          className="w-full accent-primary"
+          aria-label="Publicações por dia"
+        />
+        <div className="flex justify-between text-[10px] text-text-muted px-0.5">
+          {Array.from({ length: MAX_CADENCE }, (_, i) => i + 1).map((n) => (
+            <span key={n} className={n === cadence ? 'text-primary font-bold' : ''}>{n}</span>
+          ))}
+        </div>
+
+        {/* Recomendacao: quem nao quer decidir aperta e segue. */}
+        <div className={`mt-3 p-3 rounded-lg border ${
+          cadence === recomendado.perDay ? 'border-primary/40 bg-primary/[0.06]' : 'border-border bg-bg-main'
+        }`}>
+          <div className="flex items-start gap-2">
+            <Lightbulb className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" strokeWidth={2} />
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] text-text-primary font-semibold">
+                Recomendado: {cadenceLabel(recomendado.perDay)}
+                {cadence === recomendado.perDay && <span className="ml-1.5 text-primary font-normal">· em uso</span>}
+              </p>
+              <p className="text-[10px] text-text-muted mt-0.5">{recomendado.why}</p>
+            </div>
+            {cadence !== recomendado.perDay && (
               <button
-                key={c}
                 type="button"
-                onClick={() => setCadence(c)}
-                className={`py-2.5 px-2 rounded-btn border text-center transition-all ${
-                  cadence === c ? 'border-primary bg-primary/10' : 'border-border bg-bg-card hover:border-primary/40'
-                }`}
+                onClick={() => setCadence(recomendado.perDay)}
+                className="text-[11px] font-semibold text-primary hover:underline flex-shrink-0"
               >
-                <span className={`block text-xs font-bold ${cadence === c ? 'text-primary' : 'text-text-primary'}`}>
-                  {CADENCE_LABEL[c]}
-                </span>
-                <span className="block text-[10px] text-text-muted mt-0.5">{dias} dia{dias > 1 ? 's' : ''}</span>
+                Usar
               </button>
-            );
-          })}
+            )}
+          </div>
         </div>
 
         <div className="mt-4 p-3 rounded-lg bg-bg-main border border-border">
@@ -152,7 +180,7 @@ export default function CampaignPlanner({ images, brandId, platforms, aspectRati
             )}
           </p>
           <p className="text-[10px] text-text-muted mt-1">
-            Horários de maior movimento. Você pode mudar qualquer um antes de confirmar.
+            Horários: {slotsFor(cadence).map((h) => `${h}h`).join(' · ')}. Você pode mudar qualquer um antes de confirmar.
           </p>
         </div>
 

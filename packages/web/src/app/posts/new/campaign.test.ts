@@ -1,6 +1,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildCampaignSchedule, campaignSpanDays, CADENCE_SLOTS } from './campaign';
+import {
+  buildCampaignSchedule, campaignSpanDays, slotsFor, recommendCadence, MAX_CADENCE,
+} from './campaign';
 
 /**
  * O que esta sendo protegido: uma data errada aqui vira post publicado na
@@ -34,7 +36,7 @@ describe('buildCampaignSchedule', () => {
 
   test('6 por dia usa os seis horarios do dia', () => {
     const d = buildCampaignSchedule(6, 6, manhaCedo);
-    assert.deepEqual(d.map((x) => x.getHours()), CADENCE_SLOTS[6]);
+    assert.deepEqual(d.map((x) => x.getHours()), slotsFor(6));
   });
 
   // A regra mais importante: agendar no passado faria o worker publicar
@@ -80,6 +82,66 @@ describe('buildCampaignSchedule', () => {
 
   test('zero imagens devolve lista vazia', () => {
     assert.deepEqual(buildCampaignSchedule(0, 3, manhaCedo), []);
+  });
+});
+
+/**
+ * A barra deixa escolher qualquer ritmo, inclusive os que nao tem
+ * curadoria de horario. Se slotsFor devolver hora repetida ou fora da
+ * faixa, o dia perde um post ou ele sai de madrugada.
+ */
+describe('slotsFor', () => {
+  test('todo ritmo de 1 a 8 tem a quantidade certa de horarios', () => {
+    for (let n = 1; n <= MAX_CADENCE; n++) {
+      assert.equal(slotsFor(n).length, n, `${n} por dia devolveu ${slotsFor(n).length} horarios`);
+    }
+  });
+
+  test('horarios sempre em ordem, sem repetir', () => {
+    for (let n = 1; n <= MAX_CADENCE; n++) {
+      const s = slotsFor(n);
+      assert.deepEqual(s, [...new Set(s)].sort((a, b) => a - b), `${n} por dia tem hora repetida ou fora de ordem`);
+    }
+  });
+
+  test('nunca agenda de madrugada', () => {
+    for (let n = 1; n <= MAX_CADENCE; n++) {
+      for (const h of slotsFor(n)) {
+        assert.ok(h >= 8 && h <= 21, `${n} por dia gerou ${h}h`);
+      }
+    }
+  });
+
+  test('valor fora da faixa e limitado, nao quebra', () => {
+    assert.equal(slotsFor(0).length, 1);
+    assert.equal(slotsFor(-5).length, 1);
+    assert.equal(slotsFor(99).length, MAX_CADENCE);
+  });
+
+  test('ritmos sem curadoria (7 e 8) tambem funcionam', () => {
+    assert.equal(buildCampaignSchedule(7, 7, manhaCedo).length, 7);
+    assert.equal(buildCampaignSchedule(8, 8, manhaCedo).length, 8);
+  });
+});
+
+describe('recommendCadence', () => {
+  test('ate uma semana de conteudo: 1 por dia', () => {
+    assert.equal(recommendCadence(3).perDay, 1);
+    assert.equal(recommendCadence(7).perDay, 1);
+  });
+
+  test('mais que isso sobe o ritmo', () => {
+    assert.equal(recommendCadence(8).perDay, 2);
+    assert.equal(recommendCadence(20).perDay, 3);
+    assert.equal(recommendCadence(50).perDay, 4);
+  });
+
+  test('a recomendacao sempre cabe na barra', () => {
+    for (const n of [1, 5, 10, 25, 60, 200]) {
+      const r = recommendCadence(n);
+      assert.ok(r.perDay >= 1 && r.perDay <= MAX_CADENCE);
+      assert.ok(r.why.length > 10, 'recomendacao sem explicacao');
+    }
   });
 });
 

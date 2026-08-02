@@ -6,27 +6,67 @@
  * na madrugada ou no passado — coisa que so apareceria em producao.
  */
 
-export type Cadence = 1 | 2 | 3 | 6;
+export type Cadence = number;
+
+/** Limite da barra. Acima disso vira spam e os horarios se atropelam. */
+export const MAX_CADENCE = 8;
 
 /**
- * Horarios por ritmo, em hora cheia local.
- *
- * Sao as janelas de maior movimento no Brasil. Quanto mais posts por dia,
- * mais espalhados — publicar 6 vezes em 3 horas queima o alcance.
+ * Horarios escolhidos a mao para os ritmos comuns, em hora cheia local.
+ * Sao as janelas de maior movimento no Brasil, e ficam bem distribuidas.
  */
-export const CADENCE_SLOTS: Record<Cadence, number[]> = {
+const CURATED: Record<number, number[]> = {
   1: [12],
   2: [9, 18],
   3: [9, 12, 18],
+  4: [9, 12, 15, 19],
+  5: [8, 11, 14, 17, 20],
   6: [8, 10, 12, 15, 18, 21],
 };
 
-export const CADENCE_LABEL: Record<Cadence, string> = {
-  1: '1 por dia',
-  2: '2 por dia',
-  3: '3 por dia',
-  6: '6 por dia',
-};
+/**
+ * Horarios de um ritmo qualquer.
+ *
+ * Para 7 ou 8 por dia nao ha curadoria: espalhamos igualmente entre 8h e
+ * 21h. Publicar varias vezes seguidas na mesma faixa queima o alcance —
+ * o Instagram mostra os posts para grupos parecidos de seguidores.
+ */
+export function slotsFor(perDay: number): number[] {
+  const n = Math.max(1, Math.min(Math.round(perDay), MAX_CADENCE));
+  if (CURATED[n]) return CURATED[n];
+
+  const inicio = 8;
+  const fim = 21;
+  const passo = (fim - inicio) / (n - 1);
+  const horas = Array.from({ length: n }, (_, i) => Math.round(inicio + i * passo));
+  // Arredondar pode gerar hora repetida; sem isso o dia perderia um slot.
+  return Array.from(new Set(horas)).sort((a, b) => a - b);
+}
+
+export function cadenceLabel(perDay: number): string {
+  return perDay === 1 ? '1 por dia' : `${perDay} por dia`;
+}
+
+/**
+ * Ritmo recomendado para a quantidade de imagens.
+ *
+ * O criterio e presenca sem cansar: publicar demais no mesmo dia derruba o
+ * alcance dos proprios posts, porque eles competem entre si pelo mesmo
+ * publico. Ate uma semana de conteudo, 1 por dia; acima disso subimos o
+ * ritmo para a campanha nao se arrastar por mais de duas semanas.
+ */
+export function recommendCadence(count: number): { perDay: number; why: string } {
+  if (count <= 7) {
+    return { perDay: 1, why: 'Uma por dia mantém presença diária sem os posts competirem entre si.' };
+  }
+  if (count <= 16) {
+    return { perDay: 2, why: 'Duas por dia cobrem tudo em cerca de uma semana, com folga entre elas.' };
+  }
+  if (count <= 30) {
+    return { perDay: 3, why: 'Três por dia evitam que a campanha se arraste por mais de duas semanas.' };
+  }
+  return { perDay: 4, why: 'São muitas imagens: quatro por dia mantêm a campanha em prazo razoável.' };
+}
 
 /**
  * Monta as datas de publicacao.
@@ -40,7 +80,7 @@ export const CADENCE_LABEL: Record<Cadence, string> = {
  * senao amanha.
  */
 export function buildCampaignSchedule(count: number, perDay: Cadence, from: Date = new Date()): Date[] {
-  const slots = CADENCE_SLOTS[perDay];
+  const slots = slotsFor(perDay);
   const dates: Date[] = [];
 
   // Comeca no dia de `from`, zerado, e caminha dia a dia.
