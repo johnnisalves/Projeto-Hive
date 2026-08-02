@@ -149,6 +149,56 @@ export async function replyDM(userId: string, recipientId: string, message: stri
   return json;
 }
 
+/**
+ * Oculta ou reexibe um comentario.
+ *
+ * Ocultar deixa o comentario visivel so para quem escreveu — a pessoa nao
+ * percebe, e nao ha a briga que apagar costuma gerar. E reversivel, ao
+ * contrario de apagar.
+ */
+export async function setCommentHidden(userId: string, commentId: string, hide: boolean) {
+  const account = await getAccount(userId);
+  const base = graphBase(account.token);
+  const res = await fetch(`${base}/${commentId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hide, access_token: account.token }),
+  });
+  const json: any = await res.json();
+  if (json.error) throw new Error(json.error.message || 'Falha ao ocultar comentario');
+  return json;
+}
+
+/**
+ * Apaga um comentario. IRREVERSIVEL — o Meta nao devolve.
+ * So funciona em comentario na sua propria midia.
+ */
+export async function deleteComment(userId: string, commentId: string) {
+  const account = await getAccount(userId);
+  const base = graphBase(account.token);
+  const res = await fetch(`${base}/${commentId}?access_token=${account.token}`, { method: 'DELETE' });
+  const json: any = await res.json();
+  if (json.error) throw new Error(json.error.message || 'Falha ao apagar comentario');
+  return json;
+}
+
+/**
+ * Liga ou desliga os comentarios de um post.
+ * Util em post polemico ou promocao que atrai spam.
+ */
+export async function setCommentsEnabled(userId: string, mediaId: string, enabled: boolean) {
+  const account = await getAccount(userId);
+  const base = graphBase(account.token);
+  const res = await fetch(`${base}/${mediaId}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ comment_enabled: enabled, access_token: account.token }),
+  });
+  const json: any = await res.json();
+  if (json.error) throw new Error(json.error.message || 'Falha ao alterar os comentarios do post');
+  return json;
+}
+
 export async function replyToComment(userId: string, commentId: string, message: string) {
   const account = await getAccount(userId);
   const base = graphBase(account.token);

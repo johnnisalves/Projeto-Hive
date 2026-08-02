@@ -3,7 +3,10 @@ import { z } from 'zod';
 import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate';
 import { resolveOwnerId } from '../helpers/resolveOwnerId';
-import { getInbox, replyToComment, getDMs, replyDM } from '../services/inbox.service';
+import {
+  getInbox, replyToComment, getDMs, replyDM,
+  setCommentHidden, deleteComment, setCommentsEnabled,
+} from '../services/inbox.service';
 
 const router = Router();
 
@@ -33,6 +36,44 @@ router.post('/reply', validate(replySchema), async (req: AuthRequest, res: Respo
 });
 
 // GET /api/inbox/dms — mensagens diretas (requer instagram_manage_messages)
+/**
+ * POST /api/inbox/hide — oculta ou reexibe um comentario.
+ * Ocultar e reversivel e discreto: so quem escreveu continua vendo.
+ */
+const hideSchema = z.object({ commentId: z.string().min(1), hide: z.boolean() });
+router.post('/hide', validate(hideSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    await setCommentHidden(userId, req.body.commentId, req.body.hide);
+    res.json({ success: true, data: { hidden: req.body.hide } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao ocultar comentario' });
+  }
+});
+
+/** DELETE /api/inbox/comment/:id — apaga de vez. Nao tem volta. */
+router.delete('/comment/:id', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    await deleteComment(userId, String(req.params.id));
+    res.json({ success: true, data: { deleted: true } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao apagar comentario' });
+  }
+});
+
+/** POST /api/inbox/comments-enabled — liga/desliga comentarios de um post. */
+const enabledSchema = z.object({ mediaId: z.string().min(1), enabled: z.boolean() });
+router.post('/comments-enabled', validate(enabledSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    await setCommentsEnabled(userId, req.body.mediaId, req.body.enabled);
+    res.json({ success: true, data: { enabled: req.body.enabled } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao alterar comentarios' });
+  }
+});
+
 router.get('/dms', async (req: AuthRequest, res: Response) => {
   try {
     const ownerId = await resolveOwnerId(req.userId!);

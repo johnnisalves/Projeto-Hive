@@ -214,6 +214,10 @@ export const api = {
       '/api/posts/publishing-limit',
     ),
 
+  // Horarios em que os seguidores estao online (do maior para o menor).
+  getBestHours: () =>
+    request<{ horas: number[]; disponivel: boolean; motivo?: string }>('/api/posts/best-hours'),
+
   // Plano de divulgacao: N imagens viram N posts agendados de uma vez.
   createCampaign: (body: {
     items: Array<{ imageUrl: string; caption?: string; hashtags?: string[]; scheduledAt: string }>;

@@ -17,7 +17,7 @@ import {
 } from '../controllers/post.controller';
 import { createPostSchema, scheduleSchema, addImageSchema, campaignSchema } from './post.schemas';
 import { schedulePost } from '../services/scheduler.service';
-import { getPublishingLimit } from '../services/instagram.service';
+import { getPublishingLimit, getBestHours } from '../services/instagram.service';
 import { rememberContacts, usernamesFromPost } from '../services/ig-contacts.service';
 
 const router = Router();
@@ -47,6 +47,20 @@ router.get('/publishing-limit', async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data: limite });
   } catch (err: any) {
     res.json({ success: true, data: { usados: 0, total: 50, restantes: 50, disponivel: false, motivo: err?.message } });
+  }
+});
+
+/**
+ * GET /api/posts/best-hours
+ * Horarios em que os seguidores estao online, do maior para o menor.
+ * A campanha usa isso no lugar dos horarios padrao quando ha dado.
+ */
+router.get('/best-hours', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    res.json({ success: true, data: await getBestHours(userId) });
+  } catch (err: any) {
+    res.json({ success: true, data: { horas: [], disponivel: false, motivo: err?.message } });
   }
 });
 

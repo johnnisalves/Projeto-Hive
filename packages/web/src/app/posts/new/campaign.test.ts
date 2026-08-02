@@ -124,6 +124,42 @@ describe('slotsFor', () => {
   });
 });
 
+/**
+ * Com dado de seguidores online, os horarios do publico substituem a
+ * curadoria. Se isso quebrar, a campanha volta silenciosamente ao padrao —
+ * ninguem percebe que o dado real esta sendo ignorado.
+ */
+describe('horarios do publico', () => {
+  // Vem da API ordenado por audiencia, nao pelo relogio.
+  const doPublico = [20, 13, 8, 19, 11];
+
+  test('usa as melhores horas quando ha dado suficiente', () => {
+    assert.deepEqual(slotsFor(3, doPublico), [8, 13, 20]);
+  });
+
+  test('devolve em ordem de relogio, nao de audiencia', () => {
+    const s = slotsFor(4, doPublico);
+    assert.deepEqual(s, [...s].sort((a, b) => a - b));
+  });
+
+  test('sem dado suficiente, cai na curadoria', () => {
+    assert.deepEqual(slotsFor(6, [20, 13]), slotsFor(6));
+    assert.deepEqual(slotsFor(3, []), slotsFor(3));
+    assert.deepEqual(slotsFor(3, undefined), slotsFor(3));
+  });
+
+  test('o agendamento respeita os horarios do publico', () => {
+    const d = buildCampaignSchedule(3, 3, manhaCedo, doPublico);
+    assert.deepEqual(d.map((x) => x.getHours()), [8, 13, 20]);
+  });
+
+  test('a regra de nunca agendar no passado continua valendo', () => {
+    for (const when of buildCampaignSchedule(6, 3, noite, doPublico)) {
+      assert.ok(when.getTime() > noite.getTime());
+    }
+  });
+});
+
 describe('recommendCadence', () => {
   test('ate uma semana de conteudo: 1 por dia', () => {
     assert.equal(recommendCadence(3).perDay, 1);

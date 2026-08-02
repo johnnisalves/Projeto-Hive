@@ -626,6 +626,64 @@ export async function getPublishingLimit(userId: string): Promise<{
   }
 }
 
+/**
+ * Horarios em que os seguidores estao online.
+ *
+ * A metrica online_followers devolve, por hora do dia, quantos seguidores
+ * estao ativos. E o dado que transforma a recomendacao de horario da
+ * campanha de "boa pratica generica" em "o seu publico".
+ *
+ * LIMITES DO META: exige instagram_manage_insights, conta Business (Creator
+ * nao serve) e um minimo de 100 seguidores. Fora disso volta vazio — e nao
+ * e erro, e so ausencia de dado.
+ */
+export async function getBestHours(userId: string): Promise<{
+  horas: number[]; disponivel: boolean; motivo?: string;
+}> {
+  const semDado = (motivo: string) => ({ horas: [], disponivel: false, motivo });
+
+  try {
+    const account = await prisma.instagramToken.findFirst({
+      where: { userId },
+      orderBy: { isDefault: 'desc' },
+    });
+    if (!account) return semDado('Nenhuma conta do Instagram conectada.');
+
+    const token = account.accessToken;
+    const base = getGraphBase(token);
+    const userPath = resolveUserIdForToken(token, account.instagramUserId);
+
+    const res = await fetch(
+      `${base}/${userPath}/insights?metric=online_followers&period=lifetime&access_token=${token}`,
+    );
+    const data = (await res.json()) as any;
+    if (data?.error) return semDado(data.error.message);
+
+    // A resposta traz varios dias; somamos a mesma hora entre eles para
+    // achar o padrao, em vez de depender de um dia solto.
+    const soma = new Map<number, number>();
+    for (const valor of data?.data?.[0]?.values || []) {
+      for (const [hora, qtd] of Object.entries(valor?.value || {})) {
+        const h = Number(hora);
+        if (Number.isInteger(h)) soma.set(h, (soma.get(h) || 0) + Number(qtd || 0));
+      }
+    }
+    if (soma.size === 0) {
+      return semDado('Sem dados de seguidores online. Exige conta Business com 100+ seguidores.');
+    }
+
+    // Descarta madrugada: publicar as 3h nao ajuda mesmo que o numero suba.
+    const horas = [...soma.entries()]
+      .filter(([h]) => h >= 7 && h <= 22)
+      .sort((a, b) => b[1] - a[1])
+      .map(([h]) => h);
+
+    return { horas, disponivel: horas.length > 0 };
+  } catch (err) {
+    return semDado((err as Error).message);
+  }
+}
+
 export async function publishToInstagram(postId: string, accountId?: string) {
   const post = await prisma.post.findUniqueOrThrow({
     where: { id: postId },

@@ -47,16 +47,22 @@ export default function CampaignPlanner({ images, brandId, platforms, aspectRati
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const previewDates = buildCampaignSchedule(images.length, cadence);
+  const previewDates = buildCampaignSchedule(images.length, cadence, undefined, horasPublico);
   const spanDays = campaignSpanDays(previewDates);
 
   // Teto de publicacao do Instagram: 50 posts por 24h. Sem este aviso, uma
   // campanha grande falharia no meio sem o usuario entender por que.
   const [limite, setLimite] = useState<{ restantes: number; total: number; disponivel: boolean } | null>(null);
+  // Horarios reais dos seguidores online. Sem eles, cai na curadoria padrao.
+  const [horasPublico, setHorasPublico] = useState<number[] | undefined>(undefined);
+
   useEffect(() => {
     api.getPublishingLimit()
       .then((l) => setLimite(l.disponivel ? l : null))
       .catch(() => setLimite(null));
+    api.getBestHours()
+      .then((h) => setHorasPublico(h.disponivel && h.horas.length ? h.horas : undefined))
+      .catch(() => setHorasPublico(undefined));
   }, []);
 
   // So alerta quando a campanha estoura hoje E o ritmo concentra posts no
@@ -70,7 +76,7 @@ export default function CampaignPlanner({ images, brandId, platforms, aspectRati
   async function planCampaign() {
     setGenerating(true);
     setError('');
-    const dates = buildCampaignSchedule(images.length, cadence);
+    const dates = buildCampaignSchedule(images.length, cadence, undefined, horasPublico);
     const next: Item[] = [];
 
     for (let i = 0; i < images.length; i++) {
@@ -196,7 +202,11 @@ export default function CampaignPlanner({ images, brandId, platforms, aspectRati
             )}
           </p>
           <p className="text-[10px] text-text-muted mt-1">
-            Horários: {slotsFor(cadence).map((h) => `${h}h`).join(' · ')}. Você pode mudar qualquer um antes de confirmar.
+            Horários: {slotsFor(cadence, horasPublico).map((h) => `${h}h`).join(' · ')}
+            {horasPublico
+              ? ' — calculados pelos seus seguidores online.'
+              : ' — janelas de maior movimento.'}
+            {' '}Você pode mudar qualquer um antes de confirmar.
           </p>
         </div>
 

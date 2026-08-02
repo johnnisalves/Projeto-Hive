@@ -31,8 +31,15 @@ const CURATED: Record<number, number[]> = {
  * 21h. Publicar varias vezes seguidas na mesma faixa queima o alcance —
  * o Instagram mostra os posts para grupos parecidos de seguidores.
  */
-export function slotsFor(perDay: number): number[] {
+export function slotsFor(perDay: number, horasDoPublico?: number[]): number[] {
   const n = Math.max(1, Math.min(Math.round(perDay), MAX_CADENCE));
+
+  // Com dado real de seguidores online, ele ganha da curadoria: pegamos as
+  // n melhores horas e ordenamos pelo relogio, para o dia sair na sequencia.
+  if (horasDoPublico && horasDoPublico.length >= n) {
+    return horasDoPublico.slice(0, n).sort((a, b) => a - b);
+  }
+
   if (CURATED[n]) return CURATED[n];
 
   const inicio = 8;
@@ -79,8 +86,13 @@ export function recommendCadence(count: number): { perDay: number; why: string }
  * passou, a campanha comeca no proximo slot livre — hoje mesmo se houver,
  * senao amanha.
  */
-export function buildCampaignSchedule(count: number, perDay: Cadence, from: Date = new Date()): Date[] {
-  const slots = slotsFor(perDay);
+export function buildCampaignSchedule(
+  count: number,
+  perDay: Cadence,
+  from: Date = new Date(),
+  horasDoPublico?: number[],
+): Date[] {
+  const slots = slotsFor(perDay, horasDoPublico);
   const dates: Date[] = [];
 
   // Comeca no dia de `from`, zerado, e caminha dia a dia.
