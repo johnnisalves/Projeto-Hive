@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { api } from '../../lib/api';
 import {
   MessageCircle, Loader2, AlertTriangle, Instagram, Send, ExternalLink, RefreshCw, Heart,
+  Sparkles, EyeOff, Trash2,
 } from 'lucide-react';
 
 function timeAgo(ts?: string) {
@@ -26,6 +27,54 @@ export default function InboxPage() {
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
+  const [sugerindo, setSugerindo] = useState<string | null>(null);
+  const [avisoIa, setAvisoIa] = useState<Record<string, string>>({});
+  const [acao, setAcao] = useState<string | null>(null);
+  // Comentario ocultado ou apagado some da lista sem esperar recarregar.
+  const [sumiram, setSumiram] = useState<Set<string>>(new Set());
+
+  /** Preenche o campo de resposta com o rascunho da IA. */
+  async function sugerir(commentId: string, texto: string, autor?: string) {
+    setSugerindo(commentId);
+    setAvisoIa((a) => ({ ...a, [commentId]: '' }));
+    try {
+      const s = await api.suggestReply({ comentario: texto, autor });
+      setReplyText(s.texto);
+      setAvisoIa((a) => ({
+        ...a,
+        [commentId]: s.fallback
+          ? 'A IA não respondeu; usei um texto neutro. Revise antes de enviar.'
+          : `Detectei: ${s.intencao}. Revise antes de enviar.`,
+      }));
+    } catch (err: any) {
+      setAvisoIa((a) => ({ ...a, [commentId]: err?.message || 'Falha ao sugerir' }));
+    }
+    setSugerindo(null);
+  }
+
+  async function ocultar(commentId: string) {
+    setAcao(commentId);
+    try {
+      await api.hideComment(commentId, true);
+      setSumiram((s) => new Set(s).add(commentId));
+    } catch (err: any) {
+      alert(err?.message || 'Falha ao ocultar');
+    }
+    setAcao(null);
+  }
+
+  async function apagar(commentId: string) {
+    // Apagar nao tem volta no Instagram — confirmacao obrigatoria.
+    if (!confirm('Apagar este comentário? Isso não pode ser desfeito.')) return;
+    setAcao(commentId);
+    try {
+      await api.deleteComment(commentId);
+      setSumiram((s) => new Set(s).add(commentId));
+    } catch (err: any) {
+      alert(err?.message || 'Falha ao apagar');
+    }
+    setAcao(null);
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -128,7 +177,7 @@ export default function InboxPage() {
           )}
 
           <div className="space-y-3">
-            {data.items?.map((c: any) => (
+            {data.items?.filter((c: any) => !sumiram.has(c.id)).map((c: any) => (
               <div key={c.id} className="card p-4">
                 <div className="flex items-start gap-3">
                   {c.media?.thumb ? (
@@ -159,22 +208,55 @@ export default function InboxPage() {
                           <ExternalLink className="w-3 h-3" /> ver post
                         </a>
                       )}
+
+                      {/* Ocultar some para todo mundo menos para quem
+                          escreveu: resolve spam sem gerar briga, e da para
+                          desfazer. Por isso vem antes de apagar. */}
+                      <button
+                        onClick={() => ocultar(c.id)}
+                        disabled={acao === c.id}
+                        className="text-xs text-text-muted hover:text-amber-500 flex items-center gap-1 disabled:opacity-50"
+                      >
+                        <EyeOff className="w-3 h-3" /> ocultar
+                      </button>
+                      <button
+                        onClick={() => apagar(c.id)}
+                        disabled={acao === c.id}
+                        className="text-xs text-text-muted hover:text-status-failed flex items-center gap-1 disabled:opacity-50"
+                      >
+                        <Trash2 className="w-3 h-3" /> apagar
+                      </button>
                     </div>
 
                     {replyOpen === c.id && (
-                      <div className="mt-2 flex items-center gap-2">
-                        <input
-                          value={replyText}
-                          onChange={(e) => setReplyText(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') sendReply(c.id); }}
-                          placeholder="Escreva uma resposta..."
-                          className="input-field flex-1 text-sm"
-                          autoFocus
-                        />
-                        <button onClick={() => sendReply(c.id)} disabled={sending || !replyText.trim()} className="px-3 py-2 rounded-badge bg-primary text-white text-xs font-semibold hover:bg-primary-dark disabled:opacity-50 flex items-center gap-1">
-                          {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                          Enviar
+                      <div className="mt-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={replyText}
+                            onChange={(e) => setReplyText(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') sendReply(c.id); }}
+                            placeholder="Escreva uma resposta..."
+                            className="input-field flex-1 text-sm"
+                            autoFocus
+                          />
+                          <button onClick={() => sendReply(c.id)} disabled={sending || !replyText.trim()} className="px-3 py-2 rounded-badge bg-primary text-white text-xs font-semibold hover:bg-primary-dark disabled:opacity-50 flex items-center gap-1">
+                            {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                            Enviar
+                          </button>
+                        </div>
+
+                        {/* A IA preenche o campo; quem envia e o usuario.
+                            Resposta automatica em rede social erra em
+                            publico, e o estrago passa do tempo poupado. */}
+                        <button
+                          onClick={() => sugerir(c.id, c.text, c.username)}
+                          disabled={sugerindo === c.id}
+                          className="mt-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:underline disabled:opacity-50"
+                        >
+                          {sugerindo === c.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" strokeWidth={2.5} />}
+                          {sugerindo === c.id ? 'Escrevendo...' : 'Sugerir resposta com IA'}
                         </button>
+                        {avisoIa[c.id] && <p className="text-[10px] text-text-muted mt-1">{avisoIa[c.id]}</p>}
                       </div>
                     )}
                   </div>

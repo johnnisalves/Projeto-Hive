@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
-import { Plus, Trash2, Pencil, Star, X, Loader2, Palette, Upload, Image as ImageIcon, Instagram, Facebook, Linkedin, Twitter, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Pencil, Star, X, Loader2, Palette, Upload, Image as ImageIcon, Instagram, Facebook, Linkedin, Twitter, Sparkles, Link as LinkIcon } from 'lucide-react';
 import { useConfirm } from '@/components/ConfirmModal';
 
 interface Brand {
@@ -69,6 +69,38 @@ export default function BrandsPage() {
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(['INSTAGRAM']);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [links, setLinks] = useState<Record<string, string>>({});
+  const [gerando, setGerando] = useState<string | null>(null);
+  const [copiado, setCopiado] = useState<string | null>(null);
+
+  /**
+   * Gera o link do portal de aprovacao e ja copia.
+   *
+   * Cada clique sorteia um token novo, o que INVALIDA o link anterior —
+   * e assim que se tira o acesso de um cliente que saiu. Por isso o rotulo
+   * muda para "Copiar" depois do primeiro: quem so quer o link de novo nao
+   * deve derrubar o que ja mandou.
+   */
+  async function gerarLink(brandId: string) {
+    if (links[brandId]) {
+      await navigator.clipboard.writeText(links[brandId]).catch(() => {});
+      setCopiado(brandId);
+      setTimeout(() => setCopiado(null), 2000);
+      return;
+    }
+    setGerando(brandId);
+    try {
+      const r = await api.createApprovalLink(brandId);
+      const url = `${window.location.origin}/aprovar/${r.token}`;
+      setLinks((l) => ({ ...l, [brandId]: url }));
+      await navigator.clipboard.writeText(url).catch(() => {});
+      setCopiado(brandId);
+      setTimeout(() => setCopiado(null), 2000);
+    } catch (err: any) {
+      alert(err?.message || 'Falha ao gerar o link');
+    }
+    setGerando(null);
+  }
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function loadBrands() {
@@ -288,6 +320,24 @@ export default function BrandsPage() {
                   </div>
                 </div>
               )}
+
+              {/* Link do portal de aprovacao do cliente */}
+              <div className="pt-3 border-t border-border">
+                <button
+                  onClick={() => gerarLink(brand.id)}
+                  disabled={gerando === brand.id}
+                  className="w-full px-3 py-1.5 rounded-badge text-xs font-semibold bg-primary/10 text-primary hover:bg-primary/20 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {gerando === brand.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LinkIcon className="w-3.5 h-3.5" strokeWidth={2} />}
+                  {links[brand.id] ? 'Copiar link de aprovação' : 'Gerar link de aprovação'}
+                </button>
+                {links[brand.id] && (
+                  <p className="text-[10px] text-text-muted mt-1.5 break-all">
+                    {copiado === brand.id ? '✓ Copiado! ' : ''}
+                    {links[brand.id]}
+                  </p>
+                )}
+              </div>
 
               {/* Actions */}
               <div className="flex gap-2 pt-3 border-t border-border">
