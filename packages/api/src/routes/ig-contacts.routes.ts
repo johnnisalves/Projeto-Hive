@@ -33,35 +33,36 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     const total = await prisma.igContact.count({ where: { userId: ownerId } });
     let reason: string | undefined;
 
-    if (total === 0) {
-      // O autocomplete chama esta rota a CADA tecla. Sem trava, uma agenda
-      // vazia disparava a importacao inteira a cada letra digitada — nos
-      // logs deram 4 sincronizacoes em 4 segundos, cada uma com dezenas de
-      // chamadas ao Meta. Isso queima o rate limit e trava o campo.
-      // Uma tentativa por hora e suficiente: o botao manual continua para
-      // quem quiser forcar agora.
-      const KEY = 'IG_CONTACTS_LAST_SYNC';
-      const last = await prisma.setting.findUnique({
+    // A agenda se mantem sozinha: sincroniza com o Instagram sempre que
+    // estiver velha, mesmo ja tendo contatos. Assim quem comecou a falar
+    // com voce hoje aparece amanha, sem ninguem apertar nada.
+    //
+    // A trava de tempo e obrigatoria: o autocomplete chama esta rota a CADA
+    // tecla, e sem ela os logs mostraram 4 sincronizacoes em 4 segundos —
+    // cada uma com dezenas de chamadas ao Meta, queimando o rate limit.
+    // Agenda vazia tenta de hora em hora (pode ser conta nova); agenda
+    // cheia, a cada 6 horas.
+    const KEY = 'IG_CONTACTS_LAST_SYNC';
+    const last = await prisma.setting.findUnique({
+      where: { userId_key: { userId: ownerId, key: KEY } },
+    }).catch(() => null);
+
+    const lastAt = last?.value ? Number(last.value) : 0;
+    const intervalo = total === 0 ? 60 * 60 * 1000 : 6 * 60 * 60 * 1000;
+
+    if (Date.now() - lastAt > intervalo) {
+      await prisma.setting.upsert({
         where: { userId_key: { userId: ownerId, key: KEY } },
-      }).catch(() => null);
+        create: { userId: ownerId, key: KEY, value: String(Date.now()) },
+        update: { value: String(Date.now()) },
+      }).catch(() => {});
 
-      const lastAt = last?.value ? Number(last.value) : 0;
-      const umaHora = 60 * 60 * 1000;
-
-      if (Date.now() - lastAt > umaHora) {
-        await prisma.setting.upsert({
-          where: { userId_key: { userId: ownerId, key: KEY } },
-          create: { userId: ownerId, key: KEY, value: String(Date.now()) },
-          update: { value: String(Date.now()) },
-        }).catch(() => {});
-
-        await seedContactsFromHistory(ownerId);
-        const sync = await syncContactsFromInstagram(ownerId)
-          .catch((e) => ({ added: 0, sources: [], reason: e?.message }));
-        reason = sync.reason;
-      } else {
-        reason = 'Sua conta do Instagram nao tem @ nas legendas, comentarios nem marcacoes. Digite o @ inteiro uma vez — ele fica salvo.';
-      }
+      await seedContactsFromHistory(ownerId);
+      const sync = await syncContactsFromInstagram(ownerId)
+        .catch((e) => ({ added: 0, sources: [], reason: e?.message }));
+      if (total === 0) reason = sync.reason;
+    } else if (total === 0) {
+      reason = 'Nao encontrei @ nas legendas, comentarios, marcacoes nem conversas da sua conta. Digite o @ inteiro uma vez — ele fica salvo.';
     }
 
     const items = await searchContacts(ownerId, String(req.query.q || ''));

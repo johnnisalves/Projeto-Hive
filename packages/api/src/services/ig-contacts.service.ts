@@ -171,6 +171,29 @@ export async function syncContactsFromInstagram(
     console.warn('[IgContacts] /tags indisponivel:', (err as Error).message);
   }
 
+  // --- 4. Conversas do Direct (quem fala com voce) ---
+  // Para a maioria das contas esta e a fonte mais rica: todo mundo que ja
+  // mandou mensagem. Exige a Pagina do Facebook vinculada, token EAA e a
+  // permissao instagram_manage_messages.
+  if (isBusiness && account.pageId) {
+    try {
+      const res = await fetch(
+        `${base}/${account.pageId}/conversations?platform=instagram&fields=participants&limit=100&access_token=${token}`,
+      );
+      const data = (await res.json()) as any;
+      if (data?.error) throw new Error(data.error.message);
+      let people = 0;
+      for (const conv of data?.data || []) {
+        for (const p of conv?.participants?.data || []) {
+          if (p.username) { bump(p.username, 3); people++; } // conversa e o sinal mais forte
+        }
+      }
+      if (people) sources.push(`${people} conversas`);
+    } catch (err) {
+      console.warn('[IgContacts] Conversas indisponiveis:', (err as Error).message);
+    }
+  }
+
   // Nao guardamos a propria conta como contato
   if (account.username) found.delete(normalizeUsername(account.username));
 
