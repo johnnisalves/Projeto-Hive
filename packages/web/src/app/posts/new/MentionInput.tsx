@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Check, Loader2, RefreshCw } from 'lucide-react';
+import { Check, Loader2, RefreshCw, ClipboardList } from 'lucide-react';
 import { api } from '../../../lib/api';
 
 /**
@@ -51,6 +51,27 @@ export default function MentionInput({
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
   const [error, setError] = useState('');
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkText, setBulkText] = useState('');
+
+  /** Cola uma lista inteira de @ na agenda de uma vez. */
+  async function runBulk() {
+    setSyncing(true);
+    setSyncMsg('');
+    try {
+      const r = await api.addIgContactsBulk(bulkText);
+      setSyncMsg(r.added > 0
+        ? `${r.added} contatos adicionados. Agora sao ${r.total} na agenda.`
+        : 'Nenhum @ valido encontrado no texto colado.');
+      setBulkText('');
+      setBulkOpen(false);
+      const res = await api.searchIgContacts(value.replace(/^@+/, ''));
+      setItems(res.items || []);
+    } catch (err: unknown) {
+      setSyncMsg(err instanceof Error ? err.message : 'Falha ao adicionar contatos');
+    }
+    setSyncing(false);
+  }
   const boxRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -197,15 +218,46 @@ export default function MentionInput({
           ) : (
             <p className="text-[10px] text-text-muted mt-1">Não achei esse @ na sua agenda.</p>
           )}
-          <button
-            type="button"
-            onMouseDown={(e) => { e.preventDefault(); runSync(); }}
-            disabled={syncing}
-            className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:underline disabled:opacity-50"
-          >
-            {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" strokeWidth={2.5} />}
-            {syncing ? 'Buscando...' : 'Buscar meus contatos do Instagram'}
-          </button>
+          <div className="flex flex-wrap items-center gap-3 mt-2">
+            <button
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); runSync(); }}
+              disabled={syncing}
+              className="flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:underline disabled:opacity-50"
+            >
+              {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" strokeWidth={2.5} />}
+              {syncing ? 'Buscando...' : 'Buscar do Instagram'}
+            </button>
+            <button
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); setBulkOpen((v) => !v); }}
+              className="flex items-center gap-1.5 text-[11px] font-semibold text-text-secondary hover:text-primary"
+            >
+              <ClipboardList className="w-3 h-3" strokeWidth={2.5} /> Colar minha lista
+            </button>
+          </div>
+
+          {bulkOpen && (
+            <div className="mt-2">
+              <textarea
+                value={bulkText}
+                onChange={(e) => setBulkText(e.target.value)}
+                onMouseDown={(e) => e.stopPropagation()}
+                rows={3}
+                placeholder="@fulano, @ciclana, @loja.oficial — separe como quiser"
+                className="input-field text-[11px] resize-none w-full"
+              />
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); runBulk(); }}
+                disabled={syncing || !bulkText.trim()}
+                className="btn-ghost mt-1.5 text-[11px] py-1 px-2 disabled:opacity-40"
+              >
+                Adicionar à agenda
+              </button>
+            </div>
+          )}
+
           {syncMsg && <p className="text-[10px] text-text-muted mt-1.5">{syncMsg}</p>}
         </div>
       )}

@@ -3,6 +3,39 @@ import assert from 'node:assert/strict';
 import { normalizeUsername, usernamesFromPost, extractMentions } from './ig-contacts.service';
 
 /**
+ * A lista colada vem de gente digitando, nao de sistema: virgula, espaco,
+ * quebra de linha, @ inconsistente. Se a limpeza falhar, entram contatos
+ * invalidos que nunca vao casar com nada.
+ */
+function parseBulk(text: string): string[] {
+  const brutos = text.split(/[\s,;\n]+/).filter(Boolean);
+  return Array.from(new Set(
+    brutos.map(normalizeUsername).filter((u) => u.length >= 2 && /^[a-z0-9._]+$/.test(u)),
+  ));
+}
+
+describe('lista colada (bulk)', () => {
+  test('aceita virgula, espaco e quebra de linha juntos', () => {
+    assert.deepEqual(
+      parseBulk('@ana, @bruno\n@carla  @davi'),
+      ['ana', 'bruno', 'carla', 'davi'],
+    );
+  });
+
+  test('nao duplica quem aparece duas vezes', () => {
+    assert.deepEqual(parseBulk('@ana, ana, @Ana'), ['ana']);
+  });
+
+  test('descarta lixo que nao e @ valido', () => {
+    assert.deepEqual(parseBulk('@ok, http://site.com, a, e-mail@x.com'), ['ok']);
+  });
+
+  test('texto vazio devolve lista vazia', () => {
+    assert.deepEqual(parseBulk('   '), []);
+  });
+});
+
+/**
  * O que esta sendo protegido: se a normalizacao vazar caixa alta ou o "@",
  * a agenda cria duplicatas (@Jus, @jus, jus) e o autocomplete fica sujo —
  * a chave unica e (userId, username).

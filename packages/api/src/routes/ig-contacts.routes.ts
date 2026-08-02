@@ -9,6 +9,7 @@ import {
   normalizeUsername,
   seedContactsFromHistory,
   syncContactsFromInstagram,
+  addContactsFromText,
 } from '../services/ig-contacts.service';
 
 const router = Router();
@@ -130,6 +131,21 @@ router.post('/sync', async (req: AuthRequest, res: Response) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Falha ao sincronizar contatos' });
+  }
+});
+
+/**
+ * POST /api/ig-contacts/bulk — cola uma lista de @ de uma vez.
+ * Aceita qualquer separador: virgula, espaco, quebra de linha.
+ */
+router.post('/bulk', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    const r = await addContactsFromText(ownerId, String(req.body?.text || ''));
+    const total = await prisma.igContact.count({ where: { userId: ownerId } });
+    res.json({ success: true, data: { ...r, total } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao adicionar contatos' });
   }
 });
 

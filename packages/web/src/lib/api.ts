@@ -234,6 +234,13 @@ export const api = {
       { method: 'POST' },
     ),
 
+  // Cola uma lista de @ de uma vez (virgula, espaco ou quebra de linha).
+  addIgContactsBulk: (text: string) =>
+    request<{ added: number; usernames: string[]; total: number }>('/api/ig-contacts/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ text }),
+    }),
+
   verifyIgContact: (username: string) =>
     request<{ status: 'verified' | 'not_found' | 'unavailable'; username: string; displayName?: string; followers?: number; reason?: string }>(
       `/api/ig-contacts/verify?username=${encodeURIComponent(username)}`,

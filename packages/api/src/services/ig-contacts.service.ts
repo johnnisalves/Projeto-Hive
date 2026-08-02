@@ -262,6 +262,23 @@ export async function rememberContacts(userId: string, usernames: string[]): Pro
   }
 }
 
+/**
+ * Adiciona varios @ de uma vez, a partir de texto colado pelo usuario.
+ *
+ * Aceita qualquer separador — virgula, quebra de linha, espaco — porque
+ * ninguem vai formatar a lista antes de colar. Devolve quantos entraram.
+ */
+export async function addContactsFromText(userId: string, text: string): Promise<{ added: number; usernames: string[] }> {
+  const brutos = text.split(/[\s,;\n]+/).filter(Boolean);
+  const usernames = Array.from(new Set(
+    brutos.map(normalizeUsername).filter((u) => u.length >= 2 && /^[a-z0-9._]+$/.test(u)),
+  ));
+  if (usernames.length === 0) return { added: 0, usernames: [] };
+
+  await rememberContacts(userId, usernames);
+  return { added: usernames.length, usernames };
+}
+
 /** Extrai todos os @ de um payload de post (marcacao, colaborador, patrocinador). */
 export function usernamesFromPost(body: {
   userTags?: Array<{ username: string }> | unknown;
