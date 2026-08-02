@@ -218,6 +218,25 @@ export const api = {
   getBestHours: () =>
     request<{ horas: number[]; disponivel: boolean; motivo?: string }>('/api/posts/best-hours'),
 
+  // Rascunho de resposta para um comentario, no tom da marca.
+  suggestReply: (body: { comentario: string; autor?: string; brandId?: string }) =>
+    request<{ texto: string; intencao: string; fallback: boolean }>('/api/inbox/suggest-reply', {
+      method: 'POST', body: JSON.stringify(body),
+    }),
+
+  hideComment: (commentId: string, hide: boolean) =>
+    request<{ hidden: boolean }>('/api/inbox/hide', { method: 'POST', body: JSON.stringify({ commentId, hide }) }),
+
+  deleteComment: (commentId: string) =>
+    request<{ deleted: boolean }>(`/api/inbox/comment/${encodeURIComponent(commentId)}`, { method: 'DELETE' }),
+
+  // Portal de aprovacao: gerar e revogar o link publico da marca.
+  createApprovalLink: (brandId: string) =>
+    request<{ token: string }>(`/api/approval-links/${brandId}`, { method: 'POST' }),
+
+  revokeApprovalLink: (brandId: string) =>
+    request<{ revoked: boolean }>(`/api/approval-links/${brandId}`, { method: 'DELETE' }),
+
   // Piloto automatico: planeja o mes e depois cria os rascunhos.
   autopilotPlan: (body: { ano: number; mes: number; postsPorSemana: number; brandId?: string }) =>
     request<{

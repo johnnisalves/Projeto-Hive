@@ -7,6 +7,7 @@ import {
   getInbox, replyToComment, getDMs, replyDM,
   setCommentHidden, deleteComment, setCommentsEnabled,
 } from '../services/inbox.service';
+import { sugerirResposta } from '../services/reply-suggester.service';
 
 const router = Router();
 
@@ -36,6 +37,28 @@ router.post('/reply', validate(replySchema), async (req: AuthRequest, res: Respo
 });
 
 // GET /api/inbox/dms — mensagens diretas (requer instagram_manage_messages)
+/**
+ * POST /api/inbox/suggest-reply — rascunho de resposta no tom da marca.
+ *
+ * Devolve texto para o usuario revisar. NAO envia nada: resposta automatica
+ * em rede social erra em publico, e o estrago e maior que o tempo poupado.
+ */
+const sugestaoSchema = z.object({
+  comentario: z.string().min(1).max(2000),
+  autor: z.string().max(80).optional(),
+  brandId: z.string().uuid().optional(),
+});
+
+router.post('/suggest-reply', validate(sugestaoSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const s = await sugerirResposta(userId, req.body);
+    res.json({ success: true, data: s });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao sugerir resposta' });
+  }
+});
+
 /**
  * POST /api/inbox/hide — oculta ou reexibe um comentario.
  * Ocultar e reversivel e discreto: so quem escreveu continua vendo.
