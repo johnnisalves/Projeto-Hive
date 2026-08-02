@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { Check, Loader2, RefreshCw, ClipboardList } from 'lucide-react';
+import { Check, Loader2, RefreshCw, Search } from 'lucide-react';
 import { api } from '../../../lib/api';
 
 /**
@@ -51,8 +51,10 @@ export default function MentionInput({
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState('');
   const [error, setError] = useState('');
-  const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkText, setBulkText] = useState('');
+  const [confirmMsg, setConfirmMsg] = useState('');
+  /** O que o usuario digitou, sem o @ — usado na busca do Instagram. */
+  const termoBusca = value.trim().replace(/^@+/, '');
 
   /** Cola uma lista inteira de @ na agenda de uma vez. */
   async function runBulk() {
@@ -64,7 +66,6 @@ export default function MentionInput({
         ? `${r.added} contatos adicionados. Agora sao ${r.total} na agenda.`
         : 'Nenhum @ valido encontrado no texto colado.');
       setBulkText('');
-      setBulkOpen(false);
       const res = await api.searchIgContacts(value.replace(/^@+/, ''));
       setItems(res.items || []);
     } catch (err: unknown) {
@@ -146,6 +147,23 @@ export default function MentionInput({
     onChange('');
     setOpen(false);
     setItems([]);
+
+    // Confirma o perfil em segundo plano. Serve para o usuario perceber na
+    // hora se digitou o @ errado — antes era so publicar e torcer.
+    // business_discovery so responde para conta Business/Creator publica,
+    // entao "nao confirmado" NAO significa que o @ esteja errado.
+    setConfirmMsg('');
+    api.verifyIgContact(username)
+      .then((v) => {
+        if (v.status === 'verified') {
+          const extras = [v.displayName, v.followers ? `${v.followers.toLocaleString('pt-BR')} seguidores` : '']
+            .filter(Boolean).join(' · ');
+          setConfirmMsg(`✓ @${v.username}${extras ? ` — ${extras}` : ''}`);
+        } else {
+          setConfirmMsg(`@${username} adicionado. Não deu para confirmar o perfil (conta pessoal ou privada não aparece na API).`);
+        }
+      })
+      .catch(() => setConfirmMsg(`@${username} adicionado.`));
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -208,12 +226,39 @@ export default function MentionInput({
         <Loader2 className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-text-muted" />
       )}
 
+      {/* Fica fora do balao: precisa continuar visivel depois que a lista
+          fecha, senao o usuario nunca ve a confirmacao. */}
+      {confirmMsg && !compact && (
+        <p className="text-[10px] text-text-muted mt-1.5">{confirmMsg}</p>
+      )}
+
       {open && items.length === 0 && !loading && (
         <div className="absolute z-30 left-0 right-0 mt-1 rounded-lg border border-border bg-bg-card shadow-lg p-3">
           <p className="text-xs text-text-primary font-semibold">
             Aperte Enter para usar @{value.replace(/^@+/, '')}
           </p>
           {error && <p className="text-[10px] text-status-failed mt-1">Erro ao buscar: {error}</p>}
+
+          {/* Ponte para o buscador do Instagram.
+              O Meta nao abre a busca de perfis para aplicativos de fora — o
+              unico lugar onde ela funciona e dentro do Instagram, logado.
+              Entao levamos o usuario ate la com o termo ja preenchido, em
+              vez de fingir que conseguimos buscar. */}
+          {termoBusca.length >= 2 && (
+            <a
+              href={`https://www.instagram.com/explore/search/keyword/?q=${encodeURIComponent(termoBusca)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onMouseDown={(e) => e.stopPropagation()}
+              className="mt-2 flex items-center gap-1.5 text-[11px] font-semibold text-primary hover:underline"
+            >
+              <Search className="w-3 h-3" strokeWidth={2.5} />
+              Procurar &quot;{termoBusca}&quot; no Instagram
+            </a>
+          )}
+          <p className="text-[10px] text-text-muted mt-1">
+            Abre a busca do Instagram numa aba nova. Copie o @ da pessoa e cole aqui — depois disso ele fica salvo.
+          </p>
 
           {/* Caixa de colar SEMPRE aberta no estado vazio. Escondida atras de
               um link, ninguem achava — e como o Instagram nao permite buscar
