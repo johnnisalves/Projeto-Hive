@@ -20,6 +20,7 @@ import { schedulePost } from '../services/scheduler.service';
 import { getPublishingLimit, getBestHours } from '../services/instagram.service';
 import { planejarMes, resumoDoPlano } from '../services/autopilot.service';
 import { coletarDados, montarHtml, gerarPdf } from '../services/report.service';
+import { coletarEngajamento, ranquear, pontuacao, reescreverLegenda } from '../services/recycle.service';
 import { rememberContacts, usernamesFromPost } from '../services/ig-contacts.service';
 
 const router = Router();
@@ -63,6 +64,96 @@ router.get('/best-hours', async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data: await getBestHours(userId) });
   } catch (err: any) {
     res.json({ success: true, data: { horas: [], disponivel: false, motivo: err?.message } });
+  }
+});
+
+/**
+ * GET /api/posts/recycle/suggestions — melhores posts para reciclar.
+ * Traz o engajamento real do Instagram e ordena pela nota.
+ */
+router.get('/recycle/suggestions', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const brandId = req.query.brandId ? String(req.query.brandId) : undefined;
+    const avaliados = await coletarEngajamento(userId, brandId);
+    const melhores = ranquear(avaliados);
+
+    res.json({
+      success: true,
+      data: {
+        items: melhores.map((p) => ({
+          id: p.id,
+          caption: p.caption,
+          imageUrl: p.imageUrl,
+          publishedAt: p.publishedAt,
+          likes: p.likes,
+          comments: p.comments,
+          nota: pontuacao(p.likes, p.comments),
+        })),
+        // Diferenciar "nenhum candidato" de "nada publicado ainda" evita a
+        // tela dizer que o usuario nao tem conteudo bom quando na verdade
+        // os posts sao recentes demais.
+        totalPublicados: avaliados.length,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao buscar sugestoes' });
+  }
+});
+
+/**
+ * POST /api/posts/recycle/:id — cria o post reciclado.
+ * Mesma arte, legenda reescrita pela IA, agendado para a data informada.
+ */
+const reciclarSchema = z.object({ scheduledAt: z.string().datetime().optional() });
+
+router.post('/recycle/:id', validate(reciclarSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const original = await prisma.post.findFirst({ where: { id: String(req.params.id), userId } });
+    if (!original) { res.status(404).json({ success: false, error: 'Post nao encontrado' }); return; }
+    if (!original.imageUrl) { res.status(400).json({ success: false, error: 'Post sem arte para republicar' }); return; }
+
+    let marca = '';
+    if (original.brandId) {
+      const b = await prisma.brand.findUnique({ where: { id: original.brandId } });
+      if (b) marca = [b.name, b.description, b.voiceTone].filter(Boolean).join(' · ');
+    }
+
+    const nova = original.caption ? await reescreverLegenda(original.caption, marca) : null;
+
+    // Sem legenda nova, nao reciclamos: republicar identico e exatamente o
+    // que esta feature existe para evitar.
+    if (original.caption && !nova) {
+      res.status(503).json({ success: false, error: 'A IA nao conseguiu reescrever a legenda agora. Tente de novo.' });
+      return;
+    }
+
+    const quando = req.body.scheduledAt ? new Date(req.body.scheduledAt) : null;
+    const novo = await prisma.post.create({
+      data: {
+        userId,
+        brandId: original.brandId,
+        imageUrl: original.imageUrl,
+        imageSource: original.imageSource,
+        aspectRatio: original.aspectRatio,
+        platforms: original.platforms,
+        caption: nova,
+        hashtags: original.hashtags,
+        recycledFromId: original.id,
+        status: quando ? 'SCHEDULED' : 'DRAFT',
+        scheduledAt: quando,
+        source: 'WEB',
+      },
+    });
+
+    if (quando) await schedulePost(novo.id, quando);
+    // Marca o ORIGINAL: e ele que precisa esperar antes de voltar.
+    await prisma.post.update({ where: { id: original.id }, data: { recycledAt: new Date() } });
+
+    res.status(201).json({ success: true, data: { id: novo.id, caption: nova } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao reciclar' });
   }
 });
 

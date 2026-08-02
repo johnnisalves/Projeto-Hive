@@ -269,6 +269,8 @@ async function ensureBrandColumns() {
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "audioVolume" INTEGER`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "mixedVideoUrl" TEXT`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "isTrialReel" BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "recycledFromId" TEXT`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "recycledAt" TIMESTAMP(3)`,
     // Radar de concorrentes
     `CREATE TABLE IF NOT EXISTS "Competitor" ("id" TEXT PRIMARY KEY, "username" TEXT NOT NULL, "displayName" TEXT, "followers" INTEGER, "mediaCount" INTEGER, "prevFollowers" INTEGER, "prevMediaCount" INTEGER, "postsLast30" INTEGER, "avgLikes" INTEGER, "lastCheckedAt" TIMESTAMP(3), "lastError" TEXT, "brandId" TEXT, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "Competitor_userId_username_key" ON "Competitor"("userId", "username")`,

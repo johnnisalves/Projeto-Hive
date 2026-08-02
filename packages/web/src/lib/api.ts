@@ -230,6 +230,18 @@ export const api = {
   deleteComment: (commentId: string) =>
     request<{ deleted: boolean }>(`/api/inbox/comment/${encodeURIComponent(commentId)}`, { method: 'DELETE' }),
 
+  // Reciclagem: melhores posts e criacao do rascunho com legenda nova.
+  recycleSuggestions: (brandId?: string) =>
+    request<{ items: any[]; totalPublicados: number }>(
+      `/api/posts/recycle/suggestions${brandId ? `?brandId=${brandId}` : ''}`,
+    ),
+
+  recyclePost: (id: string, scheduledAt?: string) =>
+    request<{ id: string; caption?: string }>(`/api/posts/recycle/${id}`, {
+      method: 'POST',
+      body: JSON.stringify(scheduledAt ? { scheduledAt } : {}),
+    }),
+
   // Radar de concorrentes.
   listCompetitors: () =>
     request<{ items: any[]; max: number }>('/api/competitors'),

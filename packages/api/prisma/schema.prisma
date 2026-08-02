@@ -166,6 +166,11 @@ model Post {
   mixedVideoUrl   String?
   // Reels de teste: sai so para nao-seguidores; se performar, vira publico
   isTrialReel     Boolean  @default(false)
+  // Reciclagem: aponta para o post original que deu origem a este.
+  // Guardado para nao reciclar o mesmo conteudo em ciclo e para o
+  // historico mostrar de onde a arte veio.
+  recycledFromId  String?
+  recycledAt      DateTime?
   brandId         String?
   brand           Brand?      @relation(fields: [brandId], references: [id])
   userId          String
