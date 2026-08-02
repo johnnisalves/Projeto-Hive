@@ -6,7 +6,7 @@ import { generateImageController, generateCaptionController, refineSlideControll
 import { renderTemplateToImage, renderHtmlToImage, renderComposedToImage } from '../services/template-renderer.service';
 import { TEMPLATES } from '../services/templates';
 import { generateImage } from '../services/nanobana.service';
-import { generateImagePromptForStudio, callText } from '../services/caption.service';
+import { generateImagePromptForStudio, callText, generateAltText } from '../services/caption.service';
 import { enrichImagePrompt } from '../services/artDirector.service';
 import { prisma } from '../config/database';
 import { resolveOwnerId } from '../helpers/resolveOwnerId';
@@ -347,6 +347,28 @@ router.post('/composed', validate(composedSchema), async (req: AuthRequest, res:
   } catch (err: any) {
     console.error('[composed] error:', err);
     res.status(500).json({ success: false, error: err?.message || 'Failed to render composed image' });
+  }
+});
+
+/**
+ * POST /api/generate/alt-text — descricao da imagem para leitor de tela.
+ *
+ * A IA ja enxerga a arte, entao acessibilidade sai praticamente de graca.
+ * O Instagram tambem usa o alt_text para entender o conteudo, o que ajuda
+ * o alcance — e o dobro motivo para preencher.
+ */
+const altTextSchema = z.object({ imageUrl: z.string().url() });
+
+router.post('/alt-text', validate(altTextSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const texto = await generateAltText(req.body.imageUrl);
+    if (!texto) {
+      res.status(503).json({ success: false, error: 'A IA nao conseguiu descrever a imagem agora.' });
+      return;
+    }
+    res.json({ success: true, data: { altText: texto } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao gerar o texto alternativo' });
   }
 });
 

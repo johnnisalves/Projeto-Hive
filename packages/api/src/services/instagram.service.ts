@@ -182,6 +182,61 @@ export function appendLocation(params: URLSearchParams, features: IgFeatures) {
   if (features.locationId) params.append('location_id', features.locationId);
 }
 
+/**
+ * Monta a legenda e decide o que vai para o primeiro comentario.
+ *
+ * Hashtag na legenda polui o texto que aparece no feed. Jogar as tags no
+ * primeiro comentario mantem o alcance e deixa a legenda limpa — pratica
+ * consagrada entre perfis grandes.
+ *
+ * Funcao pura para poder ser testada: errar aqui significa publicar sem as
+ * hashtags OU com elas duplicadas nos dois lugares.
+ */
+export function montarTextos(
+  caption: string | null | undefined,
+  hashtags: string[],
+  noPrimeiroComentario: boolean,
+): { legenda: string; primeiroComentario: string | null } {
+  const tags = (hashtags || []).filter(Boolean).map((h) => `#${String(h).replace(/^#/, '')}`);
+  const texto = (caption || '').trim();
+
+  if (!noPrimeiroComentario) {
+    return {
+      legenda: [texto, tags.join(' ')].filter(Boolean).join('\n\n'),
+      primeiroComentario: null,
+    };
+  }
+
+  return {
+    legenda: texto,
+    // Sem hashtag nao ha comentario a fazer: publicar um comentario vazio
+    // seria pior que nao publicar nada.
+    primeiroComentario: tags.length ? tags.join(' ') : null,
+  };
+}
+
+/**
+ * Publica o primeiro comentario com as hashtags.
+ *
+ * Nunca lanca: o post JA foi publicado com sucesso neste ponto. Falhar aqui
+ * e perder as hashtags, nao o post — transformar isso em erro faria o
+ * usuario achar que a publicacao inteira falhou.
+ */
+async function publicarPrimeiroComentario(mediaId: string, texto: string, token: string) {
+  try {
+    const base = getGraphBase(token);
+    const res = await fetch(`${base}/${mediaId}/comments`, {
+      method: 'POST',
+      body: new URLSearchParams({ message: texto, access_token: token }),
+    });
+    const data = (await res.json()) as any;
+    if (data?.error) throw new Error(data.error.message);
+    console.log(`[Instagram] Hashtags no primeiro comentario: ${data.id}`);
+  } catch (err) {
+    console.warn('[Instagram] Nao consegui comentar as hashtags:', (err as Error).message);
+  }
+}
+
 /** Colaboradores: ate 3 perfis, o post aparece no feed de todos. */
 export function appendCollaborators(params: URLSearchParams, features: IgFeatures) {
   const list = (features.collaborators || []).filter(Boolean).slice(0, 3);
@@ -799,9 +854,15 @@ export async function publishToInstagram(postId: string, accountId?: string) {
     throw new Error('Instagram credentials not configured. Add an account in Settings.');
   }
 
-  const caption = [post.caption, post.hashtags.map((h) => `#${h}`).join(' ')]
-    .filter(Boolean)
-    .join('\n\n');
+  const { legenda: caption, primeiroComentario } = montarTextos(
+    post.caption, post.hashtags, post.hashtagsFirstComment,
+  );
+
+  /** Publica e, se for o caso, comenta as hashtags logo depois. */
+  const finalizar = async (r: { id: string }) => {
+    if (primeiroComentario) await publicarPrimeiroComentario(r.id, primeiroComentario, token!);
+    return r;
+  };
 
   const features: IgFeatures = {
     userTags: Array.isArray(post.userTags) ? (post.userTags as IgFeatures['userTags']) : undefined,
@@ -828,7 +889,7 @@ export async function publishToInstagram(postId: string, accountId?: string) {
     if (!videoUrl) throw new Error('Video post has no videoUrl');
     // publishMode field defines where to post (defaults to REELS for videos)
     const mode = (post.publishMode === 'FEED' ? 'FEED' : post.publishMode === 'STORIES' ? 'STORIES' : 'REELS') as VideoPublishMode;
-    return await publishVideoMedia(videoUrl, caption, token, igUserId, mode, features);
+    return await finalizar(await publishVideoMedia(videoUrl, caption, token, igUserId, mode, features));
   }
 
   // Image Story (Stories nao aceitam carrossel nem caption — usa a imagem de capa)
@@ -840,9 +901,9 @@ export async function publishToInstagram(postId: string, accountId?: string) {
 
   // Carousel or single image (Feed)
   if (post.isCarousel && post.images && post.images.length >= 2) {
-    return await publishCarousel(post.images, caption, token, igUserId, features);
+    return await finalizar(await publishCarousel(post.images, caption, token, igUserId, features));
   } else {
     if (!post.imageUrl) throw new Error('Post has no image');
-    return await publishSingleImage(post.imageUrl, caption, token, igUserId, features);
+    return await finalizar(await publishSingleImage(post.imageUrl, caption, token, igUserId, features));
   }
 }

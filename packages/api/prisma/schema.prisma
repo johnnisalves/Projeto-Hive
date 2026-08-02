@@ -180,6 +180,9 @@ model Post {
   // Pilar do post: vender, educar ou engajar. Preenchido pelo piloto
   // automatico; nos demais e inferido da legenda na hora de analisar.
   pilar           String?
+  // Hashtags no primeiro comentario em vez da legenda: deixa o texto limpo
+  // no feed sem perder o alcance das tags.
+  hashtagsFirstComment Boolean @default(false)
   brandId         String?
   brand           Brand?      @relation(fields: [brandId], references: [id])
   userId          String

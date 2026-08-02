@@ -229,6 +229,41 @@ export async function callText(prompt: string, imageUrl?: string): Promise<strin
   return callGeminiText(provider.key, prompt);
 }
 
+/**
+ * Texto alternativo a partir da propria imagem.
+ *
+ * A IA ja "enxerga" a arte (callText aceita imageUrl), entao acessibilidade
+ * sai de graca — e o Instagram usa o alt_text tambem para entender o
+ * conteudo, o que ajuda o alcance.
+ *
+ * Descrever NAO e legendar: quem usa leitor de tela precisa saber o que
+ * esta na foto, nao o que a marca quer vender.
+ */
+export async function generateAltText(imageUrl: string): Promise<string | null> {
+  const prompt = [
+    'Descreva objetivamente o que aparece nesta imagem, para uma pessoa que usa leitor de tela.',
+    '',
+    'REGRAS:',
+    '- Uma frase, no máximo 2. Até 400 caracteres.',
+    '- Descreva o que SE VÊ: pessoas, objetos, cores, cenário, texto visível na arte.',
+    '- Não interprete nem venda: nada de "delicioso", "imperdível", "incrível".',
+    '- Não comece com "imagem de" nem "foto de" — vá direto ao conteúdo.',
+    '- Português do Brasil.',
+    '',
+    'Responda SOMENTE com a descrição.',
+  ].join('\n');
+
+  try {
+    const bruto = await callText(prompt, imageUrl);
+    const texto = (bruto || '').trim().replace(/^["'`]+|["'`]+$/g, '').trim();
+    if (texto.length < 5) return null;
+    // O limite do Meta e 1000; cortamos antes para nao mandar texto imenso.
+    return texto.slice(0, 400);
+  } catch {
+    return null;
+  }
+}
+
 export async function generateCaption(params: GenerateCaptionParams): Promise<GenerateCaptionResult> {
   const textProvider = await resolveTextProvider();
 

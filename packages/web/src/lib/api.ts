@@ -230,6 +230,12 @@ export const api = {
   deleteComment: (commentId: string) =>
     request<{ deleted: boolean }>(`/api/inbox/comment/${encodeURIComponent(commentId)}`, { method: 'DELETE' }),
 
+  // Descricao da imagem para leitor de tela, feita pela IA que ja a enxerga.
+  generateAltText: (imageUrl: string) =>
+    request<{ altText: string }>('/api/generate/alt-text', {
+      method: 'POST', body: JSON.stringify({ imageUrl }),
+    }),
+
   // Reciclagem: melhores posts e criacao do rascunho com legenda nova.
   recycleSuggestions: (brandId?: string) =>
     request<{ items: any[]; totalPublicados: number }>(

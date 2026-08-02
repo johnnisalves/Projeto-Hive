@@ -26,6 +26,8 @@ export interface IgOptions {
   isAiGenerated: boolean;
   isPaidPartnership: boolean;
   sponsorIds: string[];
+  /** Hashtags no 1o comentario em vez da legenda. */
+  hashtagsFirstComment: boolean;
 }
 
 export function defaultIgOptions(): IgOptions {
@@ -43,6 +45,7 @@ export function defaultIgOptions(): IgOptions {
     isAiGenerated: false,
     isPaidPartnership: false,
     sponsorIds: [],
+    hashtagsFirstComment: false,
   };
 }
 
@@ -67,5 +70,6 @@ export function igOptionsToPayload(o: IgOptions): Record<string, unknown> {
   if (o.isAiGenerated) p.isAiGenerated = true;
   if (o.isPaidPartnership) p.isPaidPartnership = true;
   if (o.sponsorIds.length) p.sponsorIds = o.sponsorIds;
+  if (o.hashtagsFirstComment) p.hashtagsFirstComment = true;
   return p;
 }

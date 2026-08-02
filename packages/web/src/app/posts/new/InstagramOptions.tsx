@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import Link from 'next/link';
-import { AtSign, Users, MapPin, Accessibility, Music, Sparkles, Handshake, X, Upload, Loader2, ChevronDown } from 'lucide-react';
+import { AtSign, Users, MapPin, Accessibility, Music, Sparkles, Handshake, X, Upload, Loader2, ChevronDown, Hash } from 'lucide-react';
 import { api } from '../../../lib/api';
 import MentionInput from './MentionInput';
 import PlaceInput from './PlaceInput';
@@ -113,6 +113,22 @@ export default function InstagramOptions({ value, onChange, images, activeImageI
   const [pendingName, setPendingName] = useState('');
   const [audioUploading, setAudioUploading] = useState(false);
   const [audioError, setAudioError] = useState('');
+  const [altLoading, setAltLoading] = useState(false);
+
+  /** Descreve a arte para leitor de tela usando a IA que ja ve a imagem. */
+  async function gerarAltText() {
+    const url = images[activeImageIndex]?.url;
+    if (!url) return;
+    setAltLoading(true);
+    try {
+      const r = await api.generateAltText(url);
+      set({ altText: r.altText });
+    } catch {
+      // Silencioso de proposito: o campo continua editavel a mao, e um
+      // alerta aqui interromperia o preenchimento do post por um extra.
+    }
+    setAltLoading(false);
+  }
   const audioInputRef = useRef<HTMLInputElement>(null);
 
   const set = (patch: Partial<IgOptions>) => onChange({ ...value, ...patch });
@@ -299,9 +315,25 @@ export default function InstagramOptions({ value, onChange, images, activeImageI
                 placeholder="Descreva a imagem para quem usa leitor de tela..."
                 className="input-field resize-none"
               />
-              <p className="text-[10px] text-text-muted mt-1.5">
-                {value.altText.length}/1000 · vale para a imagem única ou a primeira foto do carrossel.
-              </p>
+              <div className="flex items-center justify-between mt-1.5">
+                <p className="text-[10px] text-text-muted">
+                  {value.altText.length}/1000 · imagem única ou 1ª foto do carrossel.
+                </p>
+                {/* A IA ja enxerga a arte: acessibilidade praticamente de
+                    graca, e o Instagram usa o alt_text para entender o
+                    conteudo, o que ajuda o alcance. */}
+                {images[activeImageIndex]?.url && (
+                  <button
+                    type="button"
+                    onClick={gerarAltText}
+                    disabled={altLoading}
+                    className="flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline disabled:opacity-50"
+                  >
+                    {altLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" strokeWidth={2.5} />}
+                    {altLoading ? 'Descrevendo...' : 'Descrever com IA'}
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
@@ -407,6 +439,24 @@ export default function InstagramOptions({ value, onChange, images, activeImageI
             </>
             )}
           </div>
+
+          {/* ---------- Hashtags no 1o comentario ---------- */}
+          {!isStories && (
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={value.hashtagsFirstComment}
+                onChange={(e) => set({ hashtagsFirstComment: e.target.checked })}
+                className="w-4 h-4 mt-0.5 accent-primary"
+              />
+              <span className="text-xs text-text-secondary">
+                <span className="flex items-center gap-1.5 font-semibold text-text-primary">
+                  <Hash className="w-3.5 h-3.5" strokeWidth={2} /> Hashtags no 1º comentário
+                </span>
+                Deixa a legenda limpa no feed sem perder o alcance das tags.
+              </span>
+            </label>
+          )}
 
           {/* ---------- Conteudo gerado por IA ---------- */}
           <label className="flex items-start gap-2 cursor-pointer">

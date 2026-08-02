@@ -47,6 +47,7 @@ export const instagramFeatureShape = {
   audioUrl: z.string().url().optional(),
   audioVolume: z.number().int().min(0).max(100).optional(),
   isTrialReel: z.boolean().optional(),
+  hashtagsFirstComment: z.boolean().optional(),
 };
 
 export const createPostSchema = z.object({
