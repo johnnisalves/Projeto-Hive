@@ -56,6 +56,53 @@ app.post('/render', async (req, res) => {
   }
 });
 
+// POST /pdf - recebe HTML e devolve um PDF em base64.
+//
+// Usado pelo relatorio mensal por marca. Reaproveita o mesmo Chromium do
+// /render, entao nao ha dependencia nova nem container novo.
+app.post('/pdf', async (req, res) => {
+  try {
+    const { html, format = 'A4', landscape = false } = req.body;
+    if (!html) return res.status(400).json({ error: 'html is required' });
+
+    const b = await getBrowser();
+    const page = await b.newPage();
+
+    const fullHtml = html.includes('<html') ? html : `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+        <style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Inter', sans-serif; }</style>
+      </head>
+      <body>${html}</body>
+      </html>
+    `;
+
+    // domcontentloaded em vez de networkidle0: se a fonte do Google nao
+    // carregar, networkidle0 fica esperando ate o timeout e o relatorio
+    // inteiro falha por causa de uma fonte.
+    await page.setContent(fullHtml, { waitUntil: 'domcontentloaded', timeout: 20000 });
+    // Sem esta linha o Chromium ignora cor de fundo na impressao, e o
+    // relatorio sai branco — perdendo a identidade visual da marca.
+    await page.emulateMediaType('screen');
+
+    const pdf = await page.pdf({
+      format,
+      landscape,
+      printBackground: true,
+      margin: { top: '12mm', right: '10mm', bottom: '12mm', left: '10mm' },
+    });
+    await page.close();
+
+    res.json({ success: true, pdf: Buffer.from(pdf).toString('base64') });
+  } catch (err) {
+    console.error('PDF error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 3003;

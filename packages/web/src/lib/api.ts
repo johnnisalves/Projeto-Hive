@@ -230,6 +230,20 @@ export const api = {
   deleteComment: (commentId: string) =>
     request<{ deleted: boolean }>(`/api/inbox/comment/${encodeURIComponent(commentId)}`, { method: 'DELETE' }),
 
+  // Relatorio mensal em PDF. Devolve Blob, nao JSON — por isso nao usa
+  // o request() comum, que faz res.json() e engasgaria no binario.
+  downloadReport: async (brandId: string, ano: number, mes: number) => {
+    const t = getToken();
+    const res = await fetch(`${BASE_URL}/api/posts/report/${brandId}?ano=${ano}&mes=${mes}`, {
+      headers: t ? { Authorization: `Bearer ${t}` } : {},
+    });
+    if (!res.ok) {
+      const erro = await res.json().catch(() => ({}));
+      throw new Error(erro?.error || 'Falha ao gerar o relatório');
+    }
+    return res.blob();
+  },
+
   // Portal de aprovacao: gerar e revogar o link publico da marca.
   createApprovalLink: (brandId: string) =>
     request<{ token: string }>(`/api/approval-links/${brandId}`, { method: 'POST' }),

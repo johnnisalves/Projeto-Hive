@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
-import { Plus, Trash2, Pencil, Star, X, Loader2, Palette, Upload, Image as ImageIcon, Instagram, Facebook, Linkedin, Twitter, Sparkles, Link as LinkIcon } from 'lucide-react';
+import { Plus, Trash2, Pencil, Star, X, Loader2, Palette, Upload, Image as ImageIcon, Instagram, Facebook, Linkedin, Twitter, Sparkles, Link as LinkIcon, FileText } from 'lucide-react';
 import { useConfirm } from '@/components/ConfirmModal';
 
 interface Brand {
@@ -72,6 +72,30 @@ export default function BrandsPage() {
   const [links, setLinks] = useState<Record<string, string>>({});
   const [gerando, setGerando] = useState<string | null>(null);
   const [copiado, setCopiado] = useState<string | null>(null);
+  const [baixando, setBaixando] = useState<string | null>(null);
+
+  /**
+   * Baixa o PDF do mes ANTERIOR — o mes corrente ainda esta acontecendo e
+   * o relatorio sairia incompleto, o que e pior do que nao existir.
+   */
+  async function baixarRelatorio(brandId: string, nomeMarca: string) {
+    setBaixando(brandId);
+    try {
+      const agora = new Date();
+      const anterior = new Date(agora.getFullYear(), agora.getMonth() - 1, 1);
+      const blob = await api.downloadReport(brandId, anterior.getFullYear(), anterior.getMonth() + 1);
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `relatorio-${nomeMarca.replace(/\W+/g, '-').toLowerCase()}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err?.message || 'Falha ao gerar o relatório');
+    }
+    setBaixando(null);
+  }
 
   /**
    * Gera o link do portal de aprovacao e ja copia.
@@ -337,6 +361,15 @@ export default function BrandsPage() {
                     {links[brand.id]}
                   </p>
                 )}
+
+                <button
+                  onClick={() => baixarRelatorio(brand.id, brand.name)}
+                  disabled={baixando === brand.id}
+                  className="w-full mt-2 px-3 py-1.5 rounded-badge text-xs font-semibold bg-bg-main text-text-secondary hover:text-primary border border-border transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {baixando === brand.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileText className="w-3.5 h-3.5" strokeWidth={2} />}
+                  Relatório do mês passado
+                </button>
               </div>
 
               {/* Actions */}

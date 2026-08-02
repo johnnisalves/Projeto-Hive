@@ -19,6 +19,7 @@ import { createPostSchema, scheduleSchema, addImageSchema, campaignSchema, PLATF
 import { schedulePost } from '../services/scheduler.service';
 import { getPublishingLimit, getBestHours } from '../services/instagram.service';
 import { planejarMes, resumoDoPlano } from '../services/autopilot.service';
+import { coletarDados, montarHtml, gerarPdf } from '../services/report.service';
 import { rememberContacts, usernamesFromPost } from '../services/ig-contacts.service';
 
 const router = Router();
@@ -62,6 +63,36 @@ router.get('/best-hours', async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data: await getBestHours(userId) });
   } catch (err: any) {
     res.json({ success: true, data: { horas: [], disponivel: false, motivo: err?.message } });
+  }
+});
+
+/**
+ * GET /api/posts/report/:brandId?ano=2026&mes=3
+ * Relatorio mensal da marca em PDF, pronto para mandar ao cliente.
+ */
+router.get('/report/:brandId', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const agora = new Date();
+    const ano = Number(req.query.ano) || agora.getFullYear();
+    const mes = Number(req.query.mes) || agora.getMonth() + 1;
+
+    if (mes < 1 || mes > 12) {
+      res.status(400).json({ success: false, error: 'Mes invalido' });
+      return;
+    }
+
+    const dados = await coletarDados(userId, String(req.params.brandId), ano, mes);
+    const pdf = await gerarPdf(montarHtml(dados));
+
+    // Nome de arquivo sem acento nem espaco: cliente de e-mail e Windows
+    // costumam truncar ou trocar caractere fora do ASCII.
+    const nome = dados.marca.normalize('NFD').replace(/[^\w]+/g, '-').toLowerCase();
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="relatorio-${nome}-${ano}-${String(mes).padStart(2, '0')}.pdf"`);
+    res.send(pdf);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao gerar o relatorio' });
   }
 });
 
