@@ -75,6 +75,10 @@ model Brand {
   tonePrompt      String?
   stylePrompt     String?
   isDefault       Boolean  @default(false)
+  // Token do portal publico de aprovacao. Nulo = portal desligado.
+  // Quem tem o link ve os posts desta marca sem login, entao ele e tratado
+  // como segredo: sorteado com 32 bytes e revogavel a qualquer momento.
+  approvalToken   String?  @unique
   posts           Post[]
   userId          String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -166,6 +170,7 @@ model Post {
   userId          String
   user            User        @relation(fields: [userId], references: [id])
   images          PostImage[]
+  feedbacks       PostFeedback[]
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
@@ -184,6 +189,27 @@ enum PublishMode {
   FEED
   REELS
   STORIES
+}
+
+/**
+ * Comentario do cliente no portal de aprovacao.
+ *
+ * Fica em tabela propria, e nao num campo do Post, porque a conversa tem
+ * varias idas e voltas ("troca a foto" -> "assim ficou bom") e o historico
+ * e o que evita retrabalho depois.
+ */
+model PostFeedback {
+  id        String   @id @default(uuid())
+  message   String
+  /** Nome que a pessoa digitou no portal. Sem login, e o que temos. */
+  author    String?
+  /** true quando veio do dono da conta, nao do cliente. */
+  fromOwner Boolean  @default(false)
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([postId])
 }
 
 model PostImage {

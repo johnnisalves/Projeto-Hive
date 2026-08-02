@@ -8,6 +8,7 @@ import authRoutes from './routes/auth.routes';
 import postRoutes from './routes/post.routes';
 import igContactsRoutes from './routes/ig-contacts.routes';
 import webhooksRoutes from './routes/webhooks.routes';
+import approvalRoutes, { approvalLinksRouter } from './routes/approval.routes';
 import generateRoutes from './routes/generate.routes';
 import uploadRoutes from './routes/upload.routes';
 import taskRoutes from './routes/task.routes';
@@ -53,6 +54,9 @@ app.use('/api/posts', postRoutes);
 app.use('/api/ig-contacts', igContactsRoutes);
 // Publico: a Meta chama sem autenticacao nossa (assinatura validada dentro)
 app.use('/api/webhooks', webhooksRoutes);
+// Publico: o cliente da agencia acessa por token, sem login
+app.use('/api/approval', approvalRoutes);
+app.use('/api/approval-links', approvalLinksRouter);
 app.use('/api/generate', generateRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/tasks', taskRoutes);
@@ -263,6 +267,11 @@ async function ensureBrandColumns() {
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "audioVolume" INTEGER`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "mixedVideoUrl" TEXT`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "isTrialReel" BOOLEAN NOT NULL DEFAULT false`,
+    // Portal de aprovacao do cliente: token na marca + comentarios do post
+    `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "approvalToken" TEXT`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "Brand_approvalToken_key" ON "Brand"("approvalToken")`,
+    `CREATE TABLE IF NOT EXISTS "PostFeedback" ("id" TEXT PRIMARY KEY, "message" TEXT NOT NULL, "author" TEXT, "fromOwner" BOOLEAN NOT NULL DEFAULT false, "postId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE INDEX IF NOT EXISTS "PostFeedback_postId_idx" ON "PostFeedback"("postId")`,
     // Threads como plataforma de publicacao
     `ALTER TYPE "SocialPlatform" ADD VALUE IF NOT EXISTS 'THREADS'`,
     // Agenda de @ para o autocomplete de marcacao/colaborador/patrocinador
