@@ -21,6 +21,7 @@ import { getPublishingLimit, getBestHours } from '../services/instagram.service'
 import { planejarMes, resumoDoPlano } from '../services/autopilot.service';
 import { coletarDados, montarHtml, gerarPdf } from '../services/report.service';
 import { coletarEngajamento, ranquear, pontuacao, reescreverLegenda } from '../services/recycle.service';
+import { analisarEquilibrio } from '../services/pillars.service';
 import { rememberContacts, usernamesFromPost } from '../services/ig-contacts.service';
 
 const router = Router();
@@ -64,6 +65,35 @@ router.get('/best-hours', async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data: await getBestHours(userId) });
   } catch (err: any) {
     res.json({ success: true, data: { horas: [], disponivel: false, motivo: err?.message } });
+  }
+});
+
+/**
+ * GET /api/posts/pillars/:brandId — equilibrio dos pilares nos ultimos 90
+ * dias, comparado com o mix definido na marca.
+ */
+router.get('/pillars/:brandId', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const brand = await prisma.brand.findFirst({ where: { id: String(req.params.brandId), userId } });
+    if (!brand) { res.status(404).json({ success: false, error: 'Marca nao encontrada' }); return; }
+
+    const desde = new Date(Date.now() - 90 * 86_400_000);
+    const posts = await prisma.post.findMany({
+      where: {
+        userId,
+        brandId: brand.id,
+        status: { in: ['PUBLISHED', 'SCHEDULED'] },
+        OR: [{ publishedAt: { gte: desde } }, { scheduledAt: { gte: desde } }],
+      },
+      select: { pilar: true, caption: true },
+      take: 200,
+    });
+
+    const mix = { vender: brand.mixVender, educar: brand.mixEducar, engajar: brand.mixEngajar };
+    res.json({ success: true, data: { ...analisarEquilibrio(posts, mix), mix } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao analisar' });
   }
 });
 
@@ -208,12 +238,16 @@ router.post('/autopilot/plan', validate(autopilotSchema), async (req: AuthReques
     // O ramo sai do cadastro da marca e filtra as datas comemorativas:
     // "Dia da Pizza" nao faz sentido para um escritorio de advocacia.
     let ramo: string | undefined;
+    // O mix de pilares vem da marca: e ela que define se o perfil vende
+    // mais ou ensina mais. Sem marca, cai no padrao equilibrado.
+    let mix: { vender: number; educar: number; engajar: number } | undefined;
     if (brandId) {
       const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
       ramo = [brand?.description, brand?.products?.join(' ')].filter(Boolean).join(' ') || undefined;
+      if (brand) mix = { vender: brand.mixVender, educar: brand.mixEducar, engajar: brand.mixEngajar };
     }
 
-    const pautas = planejarMes({ ano, mes, postsPorSemana, ramo });
+    const pautas = planejarMes({ ano, mes, postsPorSemana, ramo, mix });
     res.json({
       success: true,
       data: {
@@ -271,6 +305,9 @@ router.post('/autopilot/create', validate(autopilotCreateSchema), async (req: Au
             nanoPrompt: pauta.dataComemorativa
               ? `[${pauta.dataComemorativa}] ${pauta.tema}`
               : pauta.tema,
+            // Guardar o pilar aqui evita ter que inferir da legenda depois,
+            // e a analise de equilibrio fica exata em vez de estimada.
+            pilar: pauta.pilar,
             caption: null,
             hashtags: [],
             scheduledAt: new Date(pauta.data),

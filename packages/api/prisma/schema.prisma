@@ -80,6 +80,12 @@ model Brand {
   // Quem tem o link ve os posts desta marca sem login, entao ele e tratado
   // como segredo: sorteado com 32 bytes e revogavel a qualquer momento.
   approvalToken   String?  @unique
+  // Mix de pilares desejado. Sao PESOS relativos, nao percentuais: 3/4/3
+  // e 30/40/30 dao o mesmo resultado, e assim o usuario nao precisa fechar
+  // a conta em 100.
+  mixVender       Int      @default(3)
+  mixEducar       Int      @default(4)
+  mixEngajar      Int      @default(3)
   posts           Post[]
   userId          String
   user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -171,6 +177,9 @@ model Post {
   // historico mostrar de onde a arte veio.
   recycledFromId  String?
   recycledAt      DateTime?
+  // Pilar do post: vender, educar ou engajar. Preenchido pelo piloto
+  // automatico; nos demais e inferido da legenda na hora de analisar.
+  pilar           String?
   brandId         String?
   brand           Brand?      @relation(fields: [brandId], references: [id])
   userId          String
