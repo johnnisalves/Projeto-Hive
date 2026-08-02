@@ -230,6 +230,19 @@ export const api = {
   deleteComment: (commentId: string) =>
     request<{ deleted: boolean }>(`/api/inbox/comment/${encodeURIComponent(commentId)}`, { method: 'DELETE' }),
 
+  // Radar de concorrentes.
+  listCompetitors: () =>
+    request<{ items: any[]; max: number }>('/api/competitors'),
+
+  addCompetitor: (username: string) =>
+    request<any>('/api/competitors', { method: 'POST', body: JSON.stringify({ username }) }),
+
+  refreshCompetitor: (id: string) =>
+    request<any>(`/api/competitors/${id}/refresh`, { method: 'POST' }),
+
+  removeCompetitor: (id: string) =>
+    request<{ deleted: boolean }>(`/api/competitors/${id}`, { method: 'DELETE' }),
+
   // Relatorio mensal em PDF. Devolve Blob, nao JSON — por isso nao usa
   // o request() comum, que faz res.json() e engasgaria no binario.
   downloadReport: async (brandId: string, ano: number, mes: number) => {

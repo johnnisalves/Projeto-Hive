@@ -9,6 +9,7 @@ import postRoutes from './routes/post.routes';
 import igContactsRoutes from './routes/ig-contacts.routes';
 import webhooksRoutes from './routes/webhooks.routes';
 import approvalRoutes, { approvalLinksRouter } from './routes/approval.routes';
+import competitorsRoutes from './routes/competitors.routes';
 import generateRoutes from './routes/generate.routes';
 import uploadRoutes from './routes/upload.routes';
 import taskRoutes from './routes/task.routes';
@@ -57,6 +58,7 @@ app.use('/api/webhooks', webhooksRoutes);
 // Publico: o cliente da agencia acessa por token, sem login
 app.use('/api/approval', approvalRoutes);
 app.use('/api/approval-links', approvalLinksRouter);
+app.use('/api/competitors', competitorsRoutes);
 app.use('/api/generate', generateRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/tasks', taskRoutes);
@@ -267,6 +269,10 @@ async function ensureBrandColumns() {
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "audioVolume" INTEGER`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "mixedVideoUrl" TEXT`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "isTrialReel" BOOLEAN NOT NULL DEFAULT false`,
+    // Radar de concorrentes
+    `CREATE TABLE IF NOT EXISTS "Competitor" ("id" TEXT PRIMARY KEY, "username" TEXT NOT NULL, "displayName" TEXT, "followers" INTEGER, "mediaCount" INTEGER, "prevFollowers" INTEGER, "prevMediaCount" INTEGER, "postsLast30" INTEGER, "avgLikes" INTEGER, "lastCheckedAt" TIMESTAMP(3), "lastError" TEXT, "brandId" TEXT, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "Competitor_userId_username_key" ON "Competitor"("userId", "username")`,
+    `CREATE INDEX IF NOT EXISTS "Competitor_userId_idx" ON "Competitor"("userId")`,
     // Portal de aprovacao do cliente: token na marca + comentarios do post
     `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "approvalToken" TEXT`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "Brand_approvalToken_key" ON "Brand"("approvalToken")`,

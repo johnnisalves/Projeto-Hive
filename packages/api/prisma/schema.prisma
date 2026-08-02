@@ -43,6 +43,7 @@ model User {
   invitations    Invitation[]
   brands         Brand[]
   igContacts     IgContact[]
+  competitors    Competitor[]
   allowedPages   String[]        @default([])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -245,6 +246,37 @@ model IgContact {
   userId      String
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt   DateTime @default(now())
+
+  @@unique([userId, username])
+  @@index([userId])
+}
+
+/**
+ * Perfil acompanhado no radar de concorrentes.
+ *
+ * Os numeros sao uma FOTO do ultimo check, nao historico: guardamos o
+ * anterior lado a lado para mostrar a variacao sem precisar de uma tabela
+ * de series temporais, que seria exagero para 5 perfis.
+ */
+model Competitor {
+  id             String    @id @default(uuid())
+  username       String
+  displayName    String?
+  followers      Int?
+  mediaCount     Int?
+  /** Valores do check anterior, para calcular a variacao. */
+  prevFollowers  Int?
+  prevMediaCount Int?
+  /** Posts nos ultimos 30 dias, calculado no check. */
+  postsLast30    Int?
+  /** Media de curtidas dos posts recentes. */
+  avgLikes       Int?
+  lastCheckedAt  DateTime?
+  lastError      String?
+  brandId        String?
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime  @default(now())
 
   @@unique([userId, username])
   @@index([userId])
