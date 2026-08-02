@@ -18,6 +18,7 @@ import {
 import { createPostSchema, scheduleSchema, addImageSchema, campaignSchema } from './post.schemas';
 import { schedulePost } from '../services/scheduler.service';
 import { getPublishingLimit, getBestHours } from '../services/instagram.service';
+import { planejarMes, resumoDoPlano } from '../services/autopilot.service';
 import { rememberContacts, usernamesFromPost } from '../services/ig-contacts.service';
 
 const router = Router();
@@ -61,6 +62,51 @@ router.get('/best-hours', async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data: await getBestHours(userId) });
   } catch (err: any) {
     res.json({ success: true, data: { horas: [], disponivel: false, motivo: err?.message } });
+  }
+});
+
+/**
+ * POST /api/posts/autopilot/plan — o mes inteiro, sem criar nada ainda.
+ *
+ * Devolve as pautas (data, tema, pilar) para o usuario revisar antes de
+ * gastar geracao de imagem. Criar 30 posts direto seria caro e assustador.
+ */
+const autopilotSchema = z.object({
+  ano: z.number().int().min(2024).max(2100),
+  mes: z.number().int().min(1).max(12),
+  postsPorSemana: z.number().int().min(1).max(14),
+  brandId: z.string().uuid().optional(),
+});
+
+router.post('/autopilot/plan', validate(autopilotSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const { ano, mes, postsPorSemana, brandId } = req.body;
+
+    // O ramo sai do cadastro da marca e filtra as datas comemorativas:
+    // "Dia da Pizza" nao faz sentido para um escritorio de advocacia.
+    let ramo: string | undefined;
+    if (brandId) {
+      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+      ramo = [brand?.description, brand?.products?.join(' ')].filter(Boolean).join(' ') || undefined;
+    }
+
+    const pautas = planejarMes({ ano, mes, postsPorSemana, ramo });
+    res.json({
+      success: true,
+      data: {
+        pautas: pautas.map((p) => ({
+          data: p.data.toISOString(),
+          tema: p.tema,
+          pilar: p.pilar,
+          dataComemorativa: p.dataComemorativa,
+          prioridade: p.prioridade,
+        })),
+        resumo: resumoDoPlano(pautas),
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao planejar o mes' });
   }
 });
 
