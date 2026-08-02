@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, PlusSquare, FileText, Calendar, CalendarRange, CheckSquare, FolderKanban, Settings, LogOut, Hexagon, Users, GitBranch, Video, Palette, Wand2, LayoutTemplate, BarChart3, MessageCircle, Wallet, Moon, Sun } from 'lucide-react';
+import { Home, PlusSquare, FileText, Calendar, CalendarRange, CheckSquare, FolderKanban, Settings, LogOut, Hexagon, Users, GitBranch, Video, Palette, Wand2, LayoutTemplate, BarChart3, MessageCircle, Wallet, Moon, Sun, Rocket, Radar, RefreshCw, TrendingUp } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { useTheme } from './ThemeProvider';
 
@@ -16,6 +16,14 @@ const links = [
   { href: '/analytics', label: 'Analytics', icon: BarChart3, page: 'analytics' },
   { href: '/inbox', label: 'Inbox', icon: MessageCircle, page: 'inbox' },
   { href: '/planner', label: 'Planejador IA', icon: CalendarRange, page: 'planner' },
+  // As telas novas reaproveitam os `page` que ja existem (planner, posts,
+  // analytics). Se cada uma tivesse a sua chave, o dono nao teria onde
+  // marcar a permissao em Equipe e elas sumiriam para todo membro que ja
+  // tem lista de paginas configurada.
+  { href: '/autopilot', label: 'Piloto Automatico', icon: Rocket, page: 'planner' },
+  { href: '/reciclar', label: 'Reciclar Posts', icon: RefreshCw, page: 'posts' },
+  { href: '/radar', label: 'Radar de Concorrentes', icon: Radar, page: 'analytics' },
+  { href: '/tendencias', label: 'Tendencias', icon: TrendingUp, page: 'analytics' },
   { href: '/ai-studio', label: 'Estudio IA', icon: Wand2, page: 'ai-studio' },
   { href: '/templates', label: 'Templates', icon: LayoutTemplate, page: 'templates' },
   { href: '/tasks', label: 'Tarefas', icon: CheckSquare, page: 'tasks' },

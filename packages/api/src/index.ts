@@ -280,6 +280,9 @@ async function ensureBrandColumns() {
     `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "mixEngajar" INTEGER NOT NULL DEFAULT 3`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "recycledFromId" TEXT`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "recycledAt" TIMESTAMP(3)`,
+    // Radar de tendencias: controle da cota de 30 hashtags por semana
+    `CREATE TABLE IF NOT EXISTS "HashtagQuery" ("id" TEXT PRIMARY KEY, "tag" TEXT NOT NULL, "queriedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "userId" TEXT NOT NULL)`,
+    `CREATE INDEX IF NOT EXISTS "HashtagQuery_userId_queriedAt_idx" ON "HashtagQuery"("userId", "queriedAt")`,
     // Link-in-bio por marca
     `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "bioSlug" TEXT`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "Brand_bioSlug_key" ON "Brand"("bioSlug")`,

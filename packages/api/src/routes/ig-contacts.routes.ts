@@ -12,6 +12,9 @@ import {
   addContactsFromText,
 } from '../services/ig-contacts.service';
 import { searchHashtag } from '../services/instagram.service';
+import { consultarTendencias } from '../services/trends.service';
+import { z } from 'zod';
+import { validate } from '../middleware/validate';
 
 const router = Router();
 router.use(authMiddleware);
@@ -221,6 +224,24 @@ router.get('/hashtag', async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data: await searchHashtag(ownerId, String(req.query.q || '')) });
   } catch (err: any) {
     res.json({ success: true, data: { items: [], disponivel: false, motivo: err?.message } });
+  }
+});
+
+/**
+ * POST /api/ig-contacts/trends — radar de tendencias por hashtag.
+ *
+ * A cota do Meta (30 hashtags distintas por 7 dias) e verificada ANTES de
+ * qualquer chamada: estourar bloqueia a consulta de hashtag da conta
+ * inteira ate a janela girar.
+ */
+const trendsSchema = z.object({ tags: z.array(z.string().max(60)).min(1).max(10) });
+
+router.post('/trends', validate(trendsSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    res.json({ success: true, data: await consultarTendencias(ownerId, req.body.tags) });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao consultar tendencias' });
   }
 });
 

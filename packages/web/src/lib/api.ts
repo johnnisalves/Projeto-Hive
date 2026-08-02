@@ -338,6 +338,22 @@ export const api = {
       `/api/ig-contacts/places?q=${encodeURIComponent(q)}`,
     ),
 
+  // Radar de tendencias. O Meta so deixa consultar 30 hashtags DISTINTAS a
+  // cada 7 dias por conta — por isso a resposta traz a cota junto, e as
+  // tags que ficaram de fora vem em `bloqueadas` em vez de sumirem.
+  searchTrends: (tags: string[]) =>
+    request<{
+      resultados: Array<{
+        tag: string;
+        posts: number;
+        mediaCurtidas: number;
+        topPost?: { permalink?: string; caption?: string; likes?: number };
+        erro?: string;
+      }>;
+      bloqueadas: string[];
+      cota: { usadas: number; restantes: number; jaConsultadas: string[] };
+    }>('/api/ig-contacts/trends', { method: 'POST', body: JSON.stringify({ tags }) }),
+
   verifyIgContact: (username: string) =>
     request<{ status: 'verified' | 'not_found' | 'unavailable'; username: string; displayName?: string; followers?: number; reason?: string }>(
       `/api/ig-contacts/verify?username=${encodeURIComponent(username)}`,

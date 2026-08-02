@@ -44,6 +44,7 @@ model User {
   brands         Brand[]
   igContacts     IgContact[]
   competitors    Competitor[]
+  hashtagQueries HashtagQuery[]
   allowedPages   String[]        @default([])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -321,6 +322,23 @@ model Competitor {
 
   @@unique([userId, username])
   @@index([userId])
+}
+
+/**
+ * Registro de hashtag consultada, para controlar a cota do Meta.
+ *
+ * O limite e de 30 hashtags DISTINTAS por janela de 7 dias, por conta.
+ * Consultar a mesma tag de novo dentro da janela nao gasta cota nova — por
+ * isso guardamos cada consulta com a data e contamos os distintos.
+ */
+model HashtagQuery {
+  id        String   @id @default(uuid())
+  tag       String
+  queriedAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, queriedAt])
 }
 
 model InstagramToken {
