@@ -15,7 +15,7 @@ import {
   addImageToPost,
   removeImageFromPost,
 } from '../controllers/post.controller';
-import { createPostSchema, scheduleSchema, addImageSchema, campaignSchema } from './post.schemas';
+import { createPostSchema, scheduleSchema, addImageSchema, campaignSchema, PLATFORMS } from './post.schemas';
 import { schedulePost } from '../services/scheduler.service';
 import { getPublishingLimit, getBestHours } from '../services/instagram.service';
 import { planejarMes, resumoDoPlano } from '../services/autopilot.service';
@@ -107,6 +107,68 @@ router.post('/autopilot/plan', validate(autopilotSchema), async (req: AuthReques
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Falha ao planejar o mes' });
+  }
+});
+
+/**
+ * POST /api/posts/autopilot/create — transforma as pautas em rascunhos.
+ *
+ * Cria os posts como DRAFT com o tema no nanoPrompt e a data no
+ * scheduledAt. NAO gera arte aqui: 30 imagens numa requisicao levaria
+ * minutos, estouraria timeout e gastaria credito de IA antes de o usuario
+ * ver o que vai sair. A arte e gerada depois, post a post, no editor.
+ */
+const autopilotCreateSchema = z.object({
+  pautas: z.array(z.object({
+    data: z.string().datetime(),
+    tema: z.string().min(3).max(500),
+    pilar: z.enum(['vender', 'educar', 'engajar']),
+    dataComemorativa: z.string().optional(),
+  })).min(1).max(60),
+  brandId: z.string().uuid().optional(),
+  platforms: z.array(z.enum(PLATFORMS)).optional(),
+});
+
+router.post('/autopilot/create', validate(autopilotCreateSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const { pautas, brandId, platforms } = req.body;
+
+    const criados: string[] = [];
+    const falhas: Array<{ tema: string; erro: string }> = [];
+
+    for (const pauta of pautas) {
+      try {
+        const post = await prisma.post.create({
+          data: {
+            userId,
+            brandId: brandId || null,
+            platforms: platforms || undefined,
+            // O tema vira o prompt: quando o usuario abrir o post, a IA ja
+            // sabe sobre o que escrever e desenhar.
+            nanoPrompt: pauta.dataComemorativa
+              ? `[${pauta.dataComemorativa}] ${pauta.tema}`
+              : pauta.tema,
+            caption: null,
+            hashtags: [],
+            scheduledAt: new Date(pauta.data),
+            status: 'DRAFT',
+            source: 'WEB',
+            aspectRatio: '4:5',
+          },
+        });
+        criados.push(post.id);
+      } catch (err: any) {
+        falhas.push({ tema: pauta.tema, erro: err?.message || 'Falha ao criar rascunho' });
+      }
+    }
+
+    res.status(criados.length ? 201 : 500).json({
+      success: criados.length > 0,
+      data: { criados: criados.length, falhas: falhas.length, ids: criados, erros: falhas },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao criar os rascunhos' });
   }
 });
 

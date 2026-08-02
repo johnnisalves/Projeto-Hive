@@ -218,6 +218,23 @@ export const api = {
   getBestHours: () =>
     request<{ horas: number[]; disponivel: boolean; motivo?: string }>('/api/posts/best-hours'),
 
+  // Piloto automatico: planeja o mes e depois cria os rascunhos.
+  autopilotPlan: (body: { ano: number; mes: number; postsPorSemana: number; brandId?: string }) =>
+    request<{
+      pautas: Array<{ data: string; tema: string; pilar: 'vender' | 'educar' | 'engajar'; dataComemorativa?: string; prioridade: number }>;
+      resumo: { total: number; comemorativas: number; porPilar: Record<'vender' | 'educar' | 'engajar', number> };
+    }>('/api/posts/autopilot/plan', { method: 'POST', body: JSON.stringify(body) }),
+
+  autopilotCreate: (body: {
+    pautas: Array<{ data: string; tema: string; pilar: string; dataComemorativa?: string }>;
+    brandId?: string;
+    platforms?: string[];
+  }) =>
+    request<{ criados: number; falhas: number; ids: string[] }>(
+      '/api/posts/autopilot/create',
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+
   // Plano de divulgacao: N imagens viram N posts agendados de uma vez.
   createCampaign: (body: {
     items: Array<{ imageUrl: string; caption?: string; hashtags?: string[]; scheduledAt: string }>;
