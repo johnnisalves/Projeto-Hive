@@ -10,6 +10,7 @@ import igContactsRoutes from './routes/ig-contacts.routes';
 import webhooksRoutes from './routes/webhooks.routes';
 import approvalRoutes, { approvalLinksRouter } from './routes/approval.routes';
 import competitorsRoutes from './routes/competitors.routes';
+import bioRoutes, { bioAdminRouter } from './routes/bio.routes';
 import generateRoutes from './routes/generate.routes';
 import uploadRoutes from './routes/upload.routes';
 import taskRoutes from './routes/task.routes';
@@ -59,6 +60,9 @@ app.use('/api/webhooks', webhooksRoutes);
 app.use('/api/approval', approvalRoutes);
 app.use('/api/approval-links', approvalLinksRouter);
 app.use('/api/competitors', competitorsRoutes);
+// Publico: pagina de link-in-bio que o seguidor abre
+app.use('/api/bio', bioRoutes);
+app.use('/api/bio-admin', bioAdminRouter);
 app.use('/api/generate', generateRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/tasks', taskRoutes);
@@ -276,6 +280,11 @@ async function ensureBrandColumns() {
     `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "mixEngajar" INTEGER NOT NULL DEFAULT 3`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "recycledFromId" TEXT`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "recycledAt" TIMESTAMP(3)`,
+    // Link-in-bio por marca
+    `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "bioSlug" TEXT`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "Brand_bioSlug_key" ON "Brand"("bioSlug")`,
+    `CREATE TABLE IF NOT EXISTS "BioLink" ("id" TEXT PRIMARY KEY, "label" TEXT NOT NULL, "url" TEXT NOT NULL, "order" INTEGER NOT NULL DEFAULT 0, "active" BOOLEAN NOT NULL DEFAULT true, "clicks" INTEGER NOT NULL DEFAULT 0, "brandId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE INDEX IF NOT EXISTS "BioLink_brandId_idx" ON "BioLink"("brandId")`,
     // Radar de concorrentes
     `CREATE TABLE IF NOT EXISTS "Competitor" ("id" TEXT PRIMARY KEY, "username" TEXT NOT NULL, "displayName" TEXT, "followers" INTEGER, "mediaCount" INTEGER, "prevFollowers" INTEGER, "prevMediaCount" INTEGER, "postsLast30" INTEGER, "avgLikes" INTEGER, "lastCheckedAt" TIMESTAMP(3), "lastError" TEXT, "brandId" TEXT, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "Competitor_userId_username_key" ON "Competitor"("userId", "username")`,

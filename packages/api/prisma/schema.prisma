@@ -83,6 +83,9 @@ model Brand {
   // Mix de pilares desejado. Sao PESOS relativos, nao percentuais: 3/4/3
   // e 30/40/30 dao o mesmo resultado, e assim o usuario nao precisa fechar
   // a conta em 100.
+  // Endereco publico do link-in-bio. Nulo = pagina desligada.
+  bioSlug         String?  @unique
+  bioLinks        BioLink[]
   mixVender       Int      @default(3)
   mixEducar       Int      @default(4)
   mixEngajar      Int      @default(3)
@@ -216,6 +219,27 @@ enum PublishMode {
  * varias idas e voltas ("troca a foto" -> "assim ficou bom") e o historico
  * e o que evita retrabalho depois.
  */
+/**
+ * Botao da pagina de link-in-bio.
+ *
+ * clicks e um contador simples, nao tabela de eventos: para saber qual
+ * botao funciona, o total basta, e guardar cada clique geraria volume sem
+ * responder pergunta nova.
+ */
+model BioLink {
+  id        String   @id @default(uuid())
+  label     String
+  url       String
+  order     Int      @default(0)
+  active    Boolean  @default(true)
+  clicks    Int      @default(0)
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([brandId])
+}
+
 model PostFeedback {
   id        String   @id @default(uuid())
   message   String
