@@ -118,6 +118,8 @@ export interface IgFeatures {
   isAiGenerated?: boolean;
   isPaidPartnership?: boolean;
   sponsorIds?: string[];
+  /** Reels de teste: sai so para nao-seguidores antes de virar publico. */
+  isTrialReel?: boolean;
 }
 
 /** Marcacoes de uma foto especifica do carrossel (ou do post simples). */
@@ -536,6 +538,12 @@ async function publishVideoMedia(
       // O nome do audio original so pode ser definido UMA vez, aqui ou depois
       // pela pagina do audio; nao da para renomear numa segunda tentativa.
       if (features.audioName) params.append('audio_name', features.audioName.slice(0, 100));
+      // Reels de teste: o Instagram mostra so para quem NAO segue voce.
+      // Se performar, vira publico. graduation_strategy=MANUAL deixa a
+      // decisao com voce — SS_PERFORMANCE promove sozinho.
+      if (features.isTrialReel) {
+        params.append('trial_params', JSON.stringify({ graduation_strategy: 'MANUAL' }));
+      }
       appendCollaborators(params, features);
       appendLocation(params, features);
       appendBrandedContent(params, features, token);
@@ -684,6 +692,64 @@ export async function getBestHours(userId: string): Promise<{
   }
 }
 
+/**
+ * Posts em alta de uma hashtag — para pesquisa de conteudo.
+ *
+ * Sao duas chamadas: ig_hashtag_search traduz o nome no ID, e top_media
+ * devolve as midias. So funciona com token do Login do Facebook.
+ *
+ * LIMITE DO META: 30 hashtags distintas por semana, por conta. Buscar a
+ * mesma varias vezes nao conta de novo, entao vale evitar exploracao solta.
+ */
+export async function searchHashtag(userId: string, nome: string): Promise<{
+  items: Array<{ id: string; caption?: string; permalink?: string; mediaUrl?: string; likes?: number; comments?: number }>;
+  disponivel: boolean;
+  motivo?: string;
+}> {
+  const semDado = (motivo: string) => ({ items: [], disponivel: false, motivo });
+  const termo = nome.trim().replace(/^#/, '');
+  if (termo.length < 2) return semDado('Informe a hashtag.');
+
+  try {
+    const account = await prisma.instagramToken.findFirst({
+      where: { userId },
+      orderBy: { isDefault: 'desc' },
+    });
+    if (!account) return semDado('Nenhuma conta do Instagram conectada.');
+    if (!account.accessToken.startsWith('EAA')) {
+      return semDado('A busca por hashtag exige conta conectada via Login do Facebook.');
+    }
+
+    const token = account.accessToken;
+    const uid = account.instagramUserId;
+    const base = 'https://graph.facebook.com/v21.0';
+
+    const idRes = await fetch(`${base}/ig_hashtag_search?user_id=${uid}&q=${encodeURIComponent(termo)}&access_token=${token}`);
+    const idJson = (await idRes.json()) as any;
+    if (idJson?.error) return semDado(idJson.error.message);
+
+    const hashtagId = idJson?.data?.[0]?.id;
+    if (!hashtagId) return semDado(`Hashtag #${termo} nao encontrada.`);
+
+    const campos = 'id,caption,permalink,media_url,like_count,comments_count';
+    const mRes = await fetch(`${base}/${hashtagId}/top_media?user_id=${uid}&fields=${campos}&limit=25&access_token=${token}`);
+    const mJson = (await mRes.json()) as any;
+    if (mJson?.error) return semDado(mJson.error.message);
+
+    const items = (mJson?.data || []).map((m: any) => ({
+      id: m.id,
+      caption: m.caption,
+      permalink: m.permalink,
+      mediaUrl: m.media_url,
+      likes: m.like_count,
+      comments: m.comments_count,
+    }));
+    return { items, disponivel: true };
+  } catch (err) {
+    return semDado((err as Error).message);
+  }
+}
+
 export async function publishToInstagram(postId: string, accountId?: string) {
   const post = await prisma.post.findUniqueOrThrow({
     where: { id: postId },
@@ -749,6 +815,7 @@ export async function publishToInstagram(postId: string, accountId?: string) {
     isAiGenerated: post.isAiGenerated,
     isPaidPartnership: post.isPaidPartnership,
     sponsorIds: post.sponsorIds,
+    isTrialReel: post.isTrialReel,
   };
 
   // Video (Reels / Stories / Feed).

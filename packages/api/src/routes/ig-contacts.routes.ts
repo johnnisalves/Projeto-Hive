@@ -11,6 +11,7 @@ import {
   syncContactsFromInstagram,
   addContactsFromText,
 } from '../services/ig-contacts.service';
+import { searchHashtag } from '../services/instagram.service';
 
 const router = Router();
 router.use(authMiddleware);
@@ -206,6 +207,20 @@ router.get('/places', async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data: { items } });
   } catch (err: any) {
     res.json({ success: true, data: { items: [], reason: err?.message || 'Falha ao buscar locais' } });
+  }
+});
+
+/**
+ * GET /api/ig-contacts/hashtag?q=marketing
+ * Posts em alta de uma hashtag, para pesquisa de conteudo.
+ * Limite do Meta: 30 hashtags distintas por semana.
+ */
+router.get('/hashtag', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    res.json({ success: true, data: await searchHashtag(ownerId, String(req.query.q || '')) });
+  } catch (err: any) {
+    res.json({ success: true, data: { items: [], disponivel: false, motivo: err?.message } });
   }
 });
 

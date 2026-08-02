@@ -159,6 +159,8 @@ model Post {
   audioVolume     Int?
   // URL do video ja mixado, para nao remixar a cada tentativa de publicacao
   mixedVideoUrl   String?
+  // Reels de teste: sai so para nao-seguidores; se performar, vira publico
+  isTrialReel     Boolean  @default(false)
   brandId         String?
   brand           Brand?      @relation(fields: [brandId], references: [id])
   userId          String

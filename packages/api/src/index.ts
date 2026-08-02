@@ -7,6 +7,7 @@ import { apiLimiter } from './middleware/rateLimiter';
 import authRoutes from './routes/auth.routes';
 import postRoutes from './routes/post.routes';
 import igContactsRoutes from './routes/ig-contacts.routes';
+import webhooksRoutes from './routes/webhooks.routes';
 import generateRoutes from './routes/generate.routes';
 import uploadRoutes from './routes/upload.routes';
 import taskRoutes from './routes/task.routes';
@@ -38,13 +39,20 @@ const app = express();
 app.set('trust proxy', 1);
 
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json());
+// rawBody guardado para validar a assinatura dos webhooks da Meta: o HMAC
+// e calculado sobre os bytes exatos que chegaram, e depois do JSON.parse
+// nao da mais para reconstruir (ordem de chaves e espacos mudam).
+app.use(express.json({
+  verify: (req, _res, buf) => { (req as any).rawBody = buf; },
+}));
 app.use(apiLimiter);
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/ig-contacts', igContactsRoutes);
+// Publico: a Meta chama sem autenticacao nossa (assinatura validada dentro)
+app.use('/api/webhooks', webhooksRoutes);
 app.use('/api/generate', generateRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/tasks', taskRoutes);
@@ -254,6 +262,7 @@ async function ensureBrandColumns() {
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "audioUrl" TEXT`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "audioVolume" INTEGER`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "mixedVideoUrl" TEXT`,
+    `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "isTrialReel" BOOLEAN NOT NULL DEFAULT false`,
     // Threads como plataforma de publicacao
     `ALTER TYPE "SocialPlatform" ADD VALUE IF NOT EXISTS 'THREADS'`,
     // Agenda de @ para o autocomplete de marcacao/colaborador/patrocinador

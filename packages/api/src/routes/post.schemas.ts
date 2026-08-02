@@ -46,6 +46,7 @@ export const instagramFeatureShape = {
   sponsorIds: z.array(z.string()).max(2).optional(),
   audioUrl: z.string().url().optional(),
   audioVolume: z.number().int().min(0).max(100).optional(),
+  isTrialReel: z.boolean().optional(),
 };
 
 export const createPostSchema = z.object({
