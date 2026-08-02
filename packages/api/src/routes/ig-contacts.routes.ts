@@ -49,7 +49,12 @@ router.get('/', async (req: AuthRequest, res: Response) => {
     }).catch(() => null);
 
     const lastAt = last?.value ? Number(last.value) : 0;
-    const intervalo = total === 0 ? 60 * 60 * 1000 : 6 * 60 * 60 * 1000;
+    // Agenda vazia: tenta de novo em 5 minutos. A trava de 1 hora que havia
+    // aqui tinha um efeito ruim — quando uma fonte nova entrava no codigo
+    // (as conversas do Direct, por exemplo), ela ficava barrada pelo
+    // carimbo da sincronizacao anterior e nunca chegava a rodar.
+    // Agenda cheia: 6 horas basta, so para pegar gente nova.
+    const intervalo = total === 0 ? 5 * 60 * 1000 : 6 * 60 * 60 * 1000;
 
     if (Date.now() - lastAt > intervalo) {
       await prisma.setting.upsert({

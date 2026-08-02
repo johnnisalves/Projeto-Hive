@@ -213,11 +213,38 @@ export default function MentionInput({
           <p className="text-xs text-text-primary font-semibold">
             Aperte Enter para usar @{value.replace(/^@+/, '')}
           </p>
-          {error ? (
-            <p className="text-[10px] text-status-failed mt-1">Erro ao buscar: {error}</p>
-          ) : (
-            <p className="text-[10px] text-text-muted mt-1">Não achei esse @ na sua agenda.</p>
-          )}
+          {error && <p className="text-[10px] text-status-failed mt-1">Erro ao buscar: {error}</p>}
+
+          {/* Caixa de colar SEMPRE aberta no estado vazio. Escondida atras de
+              um link, ninguem achava — e como o Instagram nao permite buscar
+              perfis, esta e a unica forma de encher a agenda quando a conta
+              nao tem historico de mencoes. */}
+          <div className="mt-2.5 pt-2.5 border-t border-border">
+            <p className="text-[11px] font-semibold text-text-primary">
+              Cole os @ das pessoas que você marca
+            </p>
+            <p className="text-[10px] text-text-muted mb-1.5">
+              Uma vez só. Depois elas aparecem sozinhas ao digitar, em qualquer post.
+            </p>
+            <textarea
+              value={bulkText}
+              onChange={(e) => setBulkText(e.target.value)}
+              onMouseDown={(e) => e.stopPropagation()}
+              rows={2}
+              placeholder="@jusciaracassia, @jussaracfg, @loja.oficial"
+              className="input-field text-[11px] resize-none w-full"
+            />
+            <button
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); runBulk(); }}
+              disabled={syncing || !bulkText.trim()}
+              className="btn-cta text-[11px] py-1 px-3 mt-1.5 disabled:opacity-40"
+            >
+              {syncing && <Loader2 className="w-3 h-3 animate-spin" />}
+              Salvar na agenda
+            </button>
+          </div>
+
           <div className="flex flex-wrap items-center gap-3 mt-2">
             <button
               type="button"
@@ -228,35 +255,7 @@ export default function MentionInput({
               {syncing ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" strokeWidth={2.5} />}
               {syncing ? 'Buscando...' : 'Buscar do Instagram'}
             </button>
-            <button
-              type="button"
-              onMouseDown={(e) => { e.preventDefault(); setBulkOpen((v) => !v); }}
-              className="flex items-center gap-1.5 text-[11px] font-semibold text-text-secondary hover:text-primary"
-            >
-              <ClipboardList className="w-3 h-3" strokeWidth={2.5} /> Colar minha lista
-            </button>
           </div>
-
-          {bulkOpen && (
-            <div className="mt-2">
-              <textarea
-                value={bulkText}
-                onChange={(e) => setBulkText(e.target.value)}
-                onMouseDown={(e) => e.stopPropagation()}
-                rows={3}
-                placeholder="@fulano, @ciclana, @loja.oficial — separe como quiser"
-                className="input-field text-[11px] resize-none w-full"
-              />
-              <button
-                type="button"
-                onMouseDown={(e) => { e.preventDefault(); runBulk(); }}
-                disabled={syncing || !bulkText.trim()}
-                className="btn-ghost mt-1.5 text-[11px] py-1 px-2 disabled:opacity-40"
-              >
-                Adicionar à agenda
-              </button>
-            </div>
-          )}
 
           {syncMsg && <p className="text-[10px] text-text-muted mt-1.5">{syncMsg}</p>}
         </div>
