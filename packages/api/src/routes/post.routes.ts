@@ -15,7 +15,9 @@ import {
   addImageToPost,
   removeImageFromPost,
 } from '../controllers/post.controller';
-import { createPostSchema, scheduleSchema, addImageSchema } from './post.schemas';
+import { createPostSchema, scheduleSchema, addImageSchema, campaignSchema } from './post.schemas';
+import { schedulePost } from '../services/scheduler.service';
+import { rememberContacts, usernamesFromPost } from '../services/ig-contacts.service';
 
 const router = Router();
 
@@ -30,6 +32,60 @@ router.post('/:id/publish', publishPost);
 router.post('/:id/schedule', validate(scheduleSchema), schedulePostController);
 router.post('/:id/images', validate(addImageSchema), addImageToPost);
 router.delete('/:id/images/:imageId', removeImageFromPost);
+
+/**
+ * POST /api/posts/campaign — plano de divulgacao.
+ *
+ * Recebe N imagens ja com legenda e horario e cria N posts agendados.
+ * A tela calcula as datas (ver campaign.ts) e gera as legendas com IA;
+ * aqui so persistimos e enfileiramos.
+ *
+ * Cada post e criado e agendado individualmente: se um item falhar, os
+ * outros seguem, e a resposta diz quais deram certo. Abortar a campanha
+ * inteira por causa de uma imagem seria pior para quem esta publicando.
+ */
+router.post('/campaign', validate(campaignSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const { items, ...shared } = req.body;
+
+    const created: Array<{ id: string; scheduledAt: string }> = [];
+    const failed: Array<{ imageUrl: string; error: string }> = [];
+
+    for (const item of items) {
+      try {
+        const when = new Date(item.scheduledAt);
+        const post = await prisma.post.create({
+          data: {
+            ...shared,
+            userId,
+            imageUrl: item.imageUrl,
+            caption: item.caption || null,
+            hashtags: item.hashtags || [],
+            imageSource: 'UPLOAD',
+            source: 'WEB',
+            scheduledAt: when,
+            status: 'SCHEDULED',
+          },
+        });
+        await schedulePost(post.id, when);
+        created.push({ id: post.id, scheduledAt: when.toISOString() });
+      } catch (err: any) {
+        failed.push({ imageUrl: item.imageUrl, error: err?.message || 'Falha ao criar post' });
+      }
+    }
+
+    // Alimenta a agenda de @ com quem foi marcado na campanha inteira.
+    void rememberContacts(userId, usernamesFromPost(shared)).catch(() => {});
+
+    res.status(created.length ? 201 : 500).json({
+      success: created.length > 0,
+      data: { created: created.length, failed: failed.length, posts: created, errors: failed },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao criar a campanha' });
+  }
+});
 
 // #2 Fila de aprovacao: define o estado de aprovacao do post (workflow de equipe)
 const approvalSchema = z.object({ approvalState: z.enum(['none', 'pending', 'approved', 'rejected']) });

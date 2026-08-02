@@ -208,6 +208,18 @@ export const api = {
     return data.data as { fileUrl: string; fileName: string; mimeType: string };
   },
 
+  // Plano de divulgacao: N imagens viram N posts agendados de uma vez.
+  createCampaign: (body: {
+    items: Array<{ imageUrl: string; caption?: string; hashtags?: string[]; scheduledAt: string }>;
+    brandId?: string;
+    platforms?: string[];
+    aspectRatio?: string;
+  }) =>
+    request<{ created: number; failed: number; posts: Array<{ id: string; scheduledAt: string }>; errors: Array<{ imageUrl: string; error: string }> }>(
+      '/api/posts/campaign',
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+
   // Agenda de @ do Instagram. O autocomplete vem daqui, nao do Meta: a API
   // do Instagram nao tem busca de usuario por prefixo.
   searchIgContacts: (q: string) =>

@@ -78,6 +78,24 @@ export const scheduleSchema = z.object({
   scheduledAt: z.string().datetime(),
 });
 
+/**
+ * Campanha: varias imagens viram varios posts agendados de uma vez.
+ * Cada item ja chega com legenda e horario definidos pela tela.
+ */
+export const campaignSchema = z.object({
+  items: z.array(z.object({
+    imageUrl: z.string().url(),
+    caption: z.string().max(2200).optional(),
+    hashtags: z.array(z.string()).optional(),
+    scheduledAt: z.string().datetime(),
+  })).min(2).max(60),
+  brandId: z.string().uuid().optional(),
+  platforms: z.array(z.enum(PLATFORMS)).optional(),
+  aspectRatio: z.string().optional(),
+  sendWhatsappStatus: z.boolean().optional(),
+  ...instagramFeatureShape,
+});
+
 export const addImageSchema = z.object({
   imageUrl: z.string().url(),
   minioKey: z.string().optional(),

@@ -1,0 +1,266 @@
+'use client';
+
+import { useState } from 'react';
+import { Layers, CalendarRange, Sparkles, Loader2, Send, X } from 'lucide-react';
+import { api } from '../../../lib/api';
+import {
+  Cadence, CADENCE_LABEL, buildCampaignSchedule, campaignSpanDays, formatSlot, toDatetimeLocal,
+} from './campaign';
+
+/**
+ * Plano de divulgacao: varias imagens viram varios posts agendados.
+ *
+ * Aparece quando ha 2+ imagens. O usuario escolhe entre publicar tudo
+ * junto (carrossel, 1 post) ou espalhar no tempo (campanha, N posts).
+ *
+ * A geracao de legenda roda AQUI, no navegador, uma imagem por vez: a IA
+ * enxerga cada arte e o usuario acompanha o progresso. Fazer isso no
+ * servidor deixaria uma requisicao pendurada por minutos.
+ */
+
+interface Item {
+  imageUrl: string;
+  caption: string;
+  hashtags: string;
+  scheduledAt: string; // datetime-local
+}
+
+interface Props {
+  images: { url: string }[];
+  brandId?: string;
+  platforms: string[];
+  aspectRatio: string;
+  /** Fecha o planejador e volta para o modo carrossel. */
+  onCancel: () => void;
+  onDone: (created: number) => void;
+}
+
+export default function CampaignPlanner({ images, brandId, platforms, aspectRatio, onCancel, onDone }: Props) {
+  const [cadence, setCadence] = useState<Cadence>(2);
+  const [items, setItems] = useState<Item[] | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [progress, setProgress] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const previewDates = buildCampaignSchedule(images.length, cadence);
+  const spanDays = campaignSpanDays(previewDates);
+
+  /** Gera legenda para cada imagem e monta a grade de revisao. */
+  async function planCampaign() {
+    setGenerating(true);
+    setError('');
+    const dates = buildCampaignSchedule(images.length, cadence);
+    const next: Item[] = [];
+
+    for (let i = 0; i < images.length; i++) {
+      setProgress(`Escrevendo a legenda ${i + 1} de ${images.length}...`);
+      let caption = '';
+      let hashtags = '';
+      try {
+        const cap = await api.generateCaption('', undefined, brandId, 'engajar', platforms[0], images[i].url);
+        caption = cap.caption || '';
+        hashtags = (cap.hashtags || []).join(', ');
+      } catch {
+        // Uma legenda que falha nao pode derrubar o plano inteiro: o campo
+        // fica vazio e o usuario escreve na grade.
+      }
+      next.push({
+        imageUrl: images[i].url,
+        caption,
+        hashtags,
+        scheduledAt: toDatetimeLocal(dates[i]),
+      });
+    }
+
+    setItems(next);
+    setGenerating(false);
+    setProgress('');
+  }
+
+  function patch(i: number, data: Partial<Item>) {
+    setItems((prev) => prev && prev.map((it, idx) => (idx === i ? { ...it, ...data } : it)));
+  }
+
+  async function confirm() {
+    if (!items) return;
+    setSaving(true);
+    setError('');
+    try {
+      const res = await api.createCampaign({
+        items: items.map((it) => ({
+          imageUrl: it.imageUrl,
+          caption: it.caption || undefined,
+          hashtags: it.hashtags.split(',').map((h) => h.trim()).filter(Boolean),
+          scheduledAt: new Date(it.scheduledAt).toISOString(),
+        })),
+        brandId,
+        platforms,
+        aspectRatio,
+      });
+      onDone(res.created);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Falha ao agendar a campanha');
+    }
+    setSaving(false);
+  }
+
+  // ---------- Passo 1: escolher o ritmo ----------
+  if (!items) {
+    return (
+      <div className="card p-5 border-primary/40">
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-text-primary">
+            <CalendarRange className="w-4 h-4 text-primary" strokeWidth={2} />
+            Plano de divulgação
+          </h3>
+          <button type="button" onClick={onCancel} className="p-1 rounded hover:bg-bg-main">
+            <X className="w-4 h-4 text-text-muted" />
+          </button>
+        </div>
+        <p className="text-xs text-text-secondary mb-4">
+          {images.length} imagens viram {images.length} publicações separadas, agendadas ao longo dos dias.
+        </p>
+
+        <label className="block text-xs font-semibold text-text-secondary mb-2 uppercase tracking-wider">Ritmo</label>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {([1, 2, 3, 6] as Cadence[]).map((c) => {
+            const dias = campaignSpanDays(buildCampaignSchedule(images.length, c));
+            return (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCadence(c)}
+                className={`py-2.5 px-2 rounded-btn border text-center transition-all ${
+                  cadence === c ? 'border-primary bg-primary/10' : 'border-border bg-bg-card hover:border-primary/40'
+                }`}
+              >
+                <span className={`block text-xs font-bold ${cadence === c ? 'text-primary' : 'text-text-primary'}`}>
+                  {CADENCE_LABEL[c]}
+                </span>
+                <span className="block text-[10px] text-text-muted mt-0.5">{dias} dia{dias > 1 ? 's' : ''}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-4 p-3 rounded-lg bg-bg-main border border-border">
+          <p className="text-[11px] text-text-secondary">
+            <strong>{images.length} posts</strong> em <strong>{spanDays} dia{spanDays > 1 ? 's' : ''}</strong>
+            {previewDates.length > 0 && (
+              <> · do dia {formatSlot(previewDates[0])} até {formatSlot(previewDates[previewDates.length - 1])}</>
+            )}
+          </p>
+          <p className="text-[10px] text-text-muted mt-1">
+            Horários de maior movimento. Você pode mudar qualquer um antes de confirmar.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={planCampaign}
+          disabled={generating}
+          className="btn-cta w-full justify-center mt-4 text-xs py-2.5"
+        >
+          {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" strokeWidth={2} />}
+          {generating ? progress : 'Gerar legendas e montar o calendário'}
+        </button>
+        {error && <p className="text-[11px] text-status-failed mt-2">{error}</p>}
+      </div>
+    );
+  }
+
+  // ---------- Passo 2: revisar a grade ----------
+  return (
+    <div className="card p-5 border-primary/40">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="flex items-center gap-2 text-sm font-bold text-text-primary">
+          <CalendarRange className="w-4 h-4 text-primary" strokeWidth={2} />
+          Revisar campanha · {items.length} posts
+        </h3>
+        <button type="button" onClick={() => setItems(null)} className="text-[11px] text-text-muted hover:text-primary">
+          Mudar ritmo
+        </button>
+      </div>
+
+      <div className="space-y-3 max-h-[28rem] overflow-auto pr-1">
+        {items.map((it, i) => (
+          <div key={i} className="flex gap-3 p-2.5 rounded-lg bg-bg-main border border-border">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={it.imageUrl} alt={`Post ${i + 1}`} className="w-16 h-16 rounded object-cover flex-shrink-0" />
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <textarea
+                value={it.caption}
+                onChange={(e) => patch(i, { caption: e.target.value })}
+                rows={2}
+                maxLength={2200}
+                placeholder={`Legenda do post ${i + 1}`}
+                className="input-field text-xs resize-none py-1.5"
+              />
+              <div className="flex gap-1.5">
+                <input
+                  value={it.hashtags}
+                  onChange={(e) => patch(i, { hashtags: e.target.value })}
+                  placeholder="hashtags"
+                  className="input-field text-[11px] py-1 flex-1"
+                />
+                <input
+                  type="datetime-local"
+                  value={it.scheduledAt}
+                  onChange={(e) => patch(i, { scheduledAt: e.target.value })}
+                  className="input-field text-[11px] py-1 w-44"
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {error && <p className="text-[11px] text-status-failed mt-2">{error}</p>}
+
+      <button
+        type="button"
+        onClick={confirm}
+        disabled={saving}
+        className="btn-cta w-full justify-center mt-4 text-xs py-2.5"
+      >
+        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" strokeWidth={2} />}
+        {saving ? 'Agendando...' : `Agendar ${items.length} posts`}
+      </button>
+    </div>
+  );
+}
+
+/** Pergunta que aparece assim que ha 2+ imagens. */
+export function CarouselOrCampaign({ count, onPick }: { count: number; onPick: (mode: 'carousel' | 'campaign') => void }) {
+  return (
+    <div className="card p-5 border-primary/40">
+      <h3 className="text-sm font-bold text-text-primary mb-1">Você subiu {count} imagens</h3>
+      <p className="text-xs text-text-secondary mb-4">O que quer fazer com elas?</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => onPick('carousel')}
+          className="p-4 rounded-btn border border-border bg-bg-card hover:border-primary/60 text-left transition-all"
+        >
+          <Layers className="w-5 h-5 text-primary mb-2" strokeWidth={2} />
+          <span className="block text-xs font-bold text-text-primary">Carrossel</span>
+          <span className="block text-[10px] text-text-muted mt-1">
+            Um post só, com as {count} imagens para deslizar.
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onPick('campaign')}
+          className="p-4 rounded-btn border border-border bg-bg-card hover:border-primary/60 text-left transition-all"
+        >
+          <CalendarRange className="w-5 h-5 text-primary mb-2" strokeWidth={2} />
+          <span className="block text-xs font-bold text-text-primary">Plano de divulgação</span>
+          <span className="block text-[10px] text-text-muted mt-1">
+            {count} posts separados, com legenda própria, agendados ao longo dos dias.
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}

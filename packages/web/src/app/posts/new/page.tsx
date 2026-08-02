@@ -17,6 +17,7 @@ const PLATFORM_OPTIONS: { value: Platform; label: string; icon: typeof Instagram
 ];
 import { emptySlide, SlideState, AspectRatio, defaultGlobalStyle } from '../visual-editor/types';
 import InstagramOptions, { IgOptions, defaultIgOptions, igOptionsToPayload } from './InstagramOptions';
+import CampaignPlanner, { CarouselOrCampaign } from './CampaignPlanner';
 import { useEffect } from 'react';
 
 const ASPECT_RATIOS = [
@@ -83,6 +84,8 @@ export default function NewPost() {
   const [publishMode, setPublishMode] = useState<'FEED' | 'STORIES'>('FEED');
   // Marcacao, colaboradores, trilha, publi — ver InstagramOptions.tsx
   const [igOptions, setIgOptions] = useState<IgOptions>(defaultIgOptions());
+  // null = ainda nao perguntamos o que fazer com as varias imagens
+  const [multiMode, setMultiMode] = useState<'carousel' | 'campaign' | null>(null);
 
   function togglePlatform(p: Platform) {
     setPlatforms((prev) =>
@@ -730,6 +733,27 @@ export default function NewPost() {
 
             <p className="text-[10px] text-text-muted mt-2">Selecione ao menos 1 destino. Ao publicar/agendar, o post vai pra todos os selecionados (Instagram, Facebook e/ou Status do WhatsApp).</p>
           </div>
+
+          {/* Com 2+ imagens, perguntamos o que fazer antes de qualquer outra
+              coisa: carrossel (1 post) ou campanha (N posts agendados). */}
+          {images.length >= 2 && publishMode !== 'STORIES' && multiMode === null && (
+            <CarouselOrCampaign count={images.length} onPick={setMultiMode} />
+          )}
+
+          {images.length >= 2 && multiMode === 'campaign' && (
+            <CampaignPlanner
+              images={images}
+              brandId={selectedBrandId || undefined}
+              platforms={platforms}
+              aspectRatio={aspectRatio}
+              onCancel={() => setMultiMode('carousel')}
+              onDone={(created) => {
+                setMessage(`${created} posts agendados! 🎉`);
+                setMessageType('success');
+                setTimeout(() => router.push('/posts'), 1800);
+              }}
+            />
+          )}
 
           {/* Marcar pessoas, colaboradores, local, publi, musica.
               Fica logo apos os destinos e ANTES da legenda: e onde o usuario
