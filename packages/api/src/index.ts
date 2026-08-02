@@ -254,6 +254,8 @@ async function ensureBrandColumns() {
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "audioUrl" TEXT`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "audioVolume" INTEGER`,
     `ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "mixedVideoUrl" TEXT`,
+    // Threads como plataforma de publicacao
+    `ALTER TYPE "SocialPlatform" ADD VALUE IF NOT EXISTS 'THREADS'`,
     // Agenda de @ para o autocomplete de marcacao/colaborador/patrocinador
     `CREATE TABLE IF NOT EXISTS "IgContact" ("id" TEXT PRIMARY KEY, "username" TEXT NOT NULL, "displayName" TEXT, "verifiedAt" TIMESTAMP(3), "followers" INTEGER, "useCount" INTEGER NOT NULL DEFAULT 1, "lastUsedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "IgContact_userId_username_key" ON "IgContact"("userId", "username")`,

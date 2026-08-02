@@ -20,6 +20,7 @@ enum SocialPlatform {
   LINKEDIN
   X
   TIKTOK
+  THREADS
 }
 
 model User {

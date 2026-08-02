@@ -208,6 +208,12 @@ export const api = {
     return data.data as { fileUrl: string; fileName: string; mimeType: string };
   },
 
+  // Quanto ainda cabe publicar nas proximas 24h (o Instagram corta em 50).
+  getPublishingLimit: () =>
+    request<{ usados: number; total: number; restantes: number; disponivel: boolean; motivo?: string }>(
+      '/api/posts/publishing-limit',
+    ),
+
   // Plano de divulgacao: N imagens viram N posts agendados de uma vez.
   createCampaign: (body: {
     items: Array<{ imageUrl: string; caption?: string; hashtags?: string[]; scheduledAt: string }>;

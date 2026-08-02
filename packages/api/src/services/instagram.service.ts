@@ -585,6 +585,47 @@ async function publishReel(videoUrl: string, caption: string, token: string, igU
   return publishVideoMedia(videoUrl, caption, token, igUserId, 'REELS');
 }
 
+/**
+ * Quanto ainda cabe publicar nas proximas 24h.
+ *
+ * O Instagram corta em 50 posts por janela de 24 horas. Sem consultar isso,
+ * uma campanha grande falha no meio e o usuario so descobre olhando os
+ * posts que nao sairam. O endpoint devolve o gasto e o teto reais.
+ *
+ * Nunca lanca: se a consulta falhar, seguimos sem o aviso em vez de
+ * bloquear o planejamento.
+ */
+export async function getPublishingLimit(userId: string): Promise<{
+  usados: number; total: number; restantes: number; disponivel: boolean; motivo?: string;
+}> {
+  const indisponivel = (motivo: string) => ({ usados: 0, total: 50, restantes: 50, disponivel: false, motivo });
+
+  try {
+    const account = await prisma.instagramToken.findFirst({
+      where: { userId },
+      orderBy: { isDefault: 'desc' },
+    });
+    if (!account) return indisponivel('Nenhuma conta do Instagram conectada.');
+
+    const token = account.accessToken;
+    const base = getGraphBase(token);
+    const userPath = resolveUserIdForToken(token, account.instagramUserId);
+
+    const res = await fetch(
+      `${base}/${userPath}/content_publishing_limit?fields=config,quota_usage&access_token=${token}`,
+    );
+    const data = (await res.json()) as any;
+    if (data?.error) return indisponivel(data.error.message);
+
+    const linha = data?.data?.[0];
+    const usados = linha?.quota_usage ?? 0;
+    const total = linha?.config?.quota_total ?? 50;
+    return { usados, total, restantes: Math.max(0, total - usados), disponivel: true };
+  } catch (err) {
+    return indisponivel((err as Error).message);
+  }
+}
+
 export async function publishToInstagram(postId: string, accountId?: string) {
   const post = await prisma.post.findUniqueOrThrow({
     where: { id: postId },

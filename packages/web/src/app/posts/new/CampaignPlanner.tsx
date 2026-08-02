@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Layers, CalendarRange, Sparkles, Loader2, Send, X, Lightbulb } from 'lucide-react';
 import { api } from '../../../lib/api';
 import {
@@ -49,6 +49,22 @@ export default function CampaignPlanner({ images, brandId, platforms, aspectRati
 
   const previewDates = buildCampaignSchedule(images.length, cadence);
   const spanDays = campaignSpanDays(previewDates);
+
+  // Teto de publicacao do Instagram: 50 posts por 24h. Sem este aviso, uma
+  // campanha grande falharia no meio sem o usuario entender por que.
+  const [limite, setLimite] = useState<{ restantes: number; total: number; disponivel: boolean } | null>(null);
+  useEffect(() => {
+    api.getPublishingLimit()
+      .then((l) => setLimite(l.disponivel ? l : null))
+      .catch(() => setLimite(null));
+  }, []);
+
+  // So alerta quando a campanha estoura hoje E o ritmo concentra posts no
+  // primeiro dia — espalhada por dias, ela cabe naturalmente.
+  const noPrimeiroDia = previewDates.filter(
+    (d) => d.toDateString() === previewDates[0]?.toDateString(),
+  ).length;
+  const estoura = limite !== null && noPrimeiroDia > limite.restantes;
 
   /** Gera legenda para cada imagem e monta a grade de revisao. */
   async function planCampaign() {
@@ -183,6 +199,24 @@ export default function CampaignPlanner({ images, brandId, platforms, aspectRati
             Horários: {slotsFor(cadence).map((h) => `${h}h`).join(' · ')}. Você pode mudar qualquer um antes de confirmar.
           </p>
         </div>
+
+        {limite && (
+          <div className={`mt-3 p-3 rounded-lg border ${
+            estoura ? 'border-amber-500/50 bg-amber-500/[0.08]' : 'border-border bg-bg-main'
+          }`}>
+            <p className="text-[11px] text-text-secondary">
+              {estoura ? (
+                <>
+                  <strong className="text-text-primary">Cabem só {limite.restantes} posts hoje.</strong>{' '}
+                  Você quer {noPrimeiroDia} no primeiro dia. O Instagram corta em {limite.total} por 24h —
+                  baixe o ritmo ou os últimos vão falhar.
+                </>
+              ) : (
+                <>Restam <strong className="text-text-primary">{limite.restantes} de {limite.total}</strong> publicações no Instagram nas próximas 24h.</>
+              )}
+            </p>
+          </div>
+        )}
 
         <button
           type="button"

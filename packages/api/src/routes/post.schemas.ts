@@ -29,7 +29,7 @@ export const userTagSchema = z.object({
  * publisher e a interface ja suportam, e a ausencia dele aqui fazia a
  * criacao de post com TikTok voltar 400.
  */
-export const PLATFORMS = ['INSTAGRAM', 'FACEBOOK', 'LINKEDIN', 'X', 'TIKTOK'] as const;
+export const PLATFORMS = ['INSTAGRAM', 'FACEBOOK', 'LINKEDIN', 'X', 'TIKTOK', 'THREADS'] as const;
 
 // Campos que alimentam os parametros extras da API do Instagram.
 export const instagramFeatureShape = {

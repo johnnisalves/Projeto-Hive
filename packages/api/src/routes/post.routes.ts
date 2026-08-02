@@ -17,6 +17,7 @@ import {
 } from '../controllers/post.controller';
 import { createPostSchema, scheduleSchema, addImageSchema, campaignSchema } from './post.schemas';
 import { schedulePost } from '../services/scheduler.service';
+import { getPublishingLimit } from '../services/instagram.service';
 import { rememberContacts, usernamesFromPost } from '../services/ig-contacts.service';
 
 const router = Router();
@@ -32,6 +33,22 @@ router.post('/:id/publish', publishPost);
 router.post('/:id/schedule', validate(scheduleSchema), schedulePostController);
 router.post('/:id/images', validate(addImageSchema), addImageToPost);
 router.delete('/:id/images/:imageId', removeImageFromPost);
+
+/**
+ * GET /api/posts/publishing-limit
+ * Quanto ainda cabe publicar nas proximas 24h no Instagram (teto de 50).
+ * O planejador de campanha usa isso para avisar antes, em vez de deixar a
+ * campanha falhar no meio.
+ */
+router.get('/publishing-limit', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const limite = await getPublishingLimit(userId);
+    res.json({ success: true, data: limite });
+  } catch (err: any) {
+    res.json({ success: true, data: { usados: 0, total: 50, restantes: 50, disponivel: false, motivo: err?.message } });
+  }
+});
 
 /**
  * POST /api/posts/campaign — plano de divulgacao.

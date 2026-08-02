@@ -9,6 +9,7 @@ import { env } from '../config/env';
 import { getLinkedInAuthUrl, exchangeLinkedInCode } from '../services/linkedin.service';
 import { getXAuthUrl, exchangeXCode } from '../services/x.service';
 import { getTikTokAuthUrl, exchangeTikTokCode, getTikTokUserInfo } from '../services/tiktok.service';
+import { getThreadsAuthUrl, exchangeThreadsCode, getThreadsUserInfo } from '../services/threads.service';
 import crypto from 'crypto';
 
 const API_BASE = process.env.API_BASE_URL || `http://localhost:${env.PORT}`;
@@ -647,6 +648,75 @@ router.get('/facebook/auth-url', async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data: { authUrl, redirectUri } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Threads (Meta) — API oficial e gratuita, host proprio (graph.threads.net)
+// ---------------------------------------------------------------------------
+const THREADS_REDIRECT = ((process.env.API_BASE_URL || process.env.FRONTEND_URL || `http://localhost:${env.PORT}`).replace(/\/$/, '')) + '/api/social-accounts/threads/callback';
+
+// GET /api/social-accounts/threads/auth-url — inicia o login do Threads
+router.get('/threads/auth-url', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const s = await prisma.setting.findUnique({ where: { userId_key: { userId, key: 'THREADS_APP_ID' } } });
+    const clientId = s?.value || process.env.THREADS_APP_ID;
+    if (!clientId) {
+      res.status(400).json({ success: false, error: 'App do Threads nao configurado. Informe o App ID/Secret nas Configuracoes.' });
+      return;
+    }
+    const state = `${userId}:${crypto.randomBytes(16).toString('hex')}`;
+    res.json({
+      success: true,
+      data: { authUrl: getThreadsAuthUrl(clientId, THREADS_REDIRECT, state), redirectUri: THREADS_REDIRECT },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// GET /api/social-accounts/threads/callback — retorno do OAuth (PUBLICO)
+router.get('/threads/callback', async (req, res: Response) => {
+  try {
+    const code = String(req.query.code || '');
+    const state = String(req.query.state || '');
+    const ownerId = state.split(':')[0];
+    if (!code || !ownerId) { res.status(400).send(ERROR_HTML('Retorno do Threads sem code ou state')); return; }
+
+    const idS = await prisma.setting.findUnique({ where: { userId_key: { userId: ownerId, key: 'THREADS_APP_ID' } } });
+    const secretS = await prisma.setting.findUnique({ where: { userId_key: { userId: ownerId, key: 'THREADS_APP_SECRET' } } });
+    const clientId = idS?.value || process.env.THREADS_APP_ID;
+    const clientSecret = secretS?.value || process.env.THREADS_APP_SECRET;
+    if (!clientId || !clientSecret) { res.status(400).send(ERROR_HTML('App do Threads nao configurado (App ID/Secret)')); return; }
+
+    const tokens = await exchangeThreadsCode(code, clientId, clientSecret, THREADS_REDIRECT);
+    const info = await getThreadsUserInfo(tokens.access_token);
+    const platformUserId = info.id || tokens.user_id || '';
+
+    const dados = {
+      accessToken: tokens.access_token,
+      username: info.username || 'Threads',
+      displayName: info.username || 'Threads',
+    };
+
+    const existente = await prisma.socialAccount.findFirst({
+      where: { userId: ownerId, platform: 'THREADS', platformUserId },
+    });
+    if (existente) {
+      await prisma.socialAccount.update({ where: { id: existente.id }, data: dados });
+    } else {
+      const n = await prisma.socialAccount.count({ where: { userId: ownerId, platform: 'THREADS' } });
+      await prisma.socialAccount.create({
+        data: { platform: 'THREADS', platformUserId, isDefault: n === 0, userId: ownerId, ...dados },
+      });
+    }
+
+    console.log(`[Threads] Conta conectada: ${dados.username} (${platformUserId}) para user ${ownerId}`);
+    res.send(SUCCESS_HTML);
+  } catch (err: any) {
+    console.error('[Threads] Callback error:', err.message);
+    res.status(500).send(ERROR_HTML(err.message || 'Falha ao conectar o Threads'));
   }
 });
 

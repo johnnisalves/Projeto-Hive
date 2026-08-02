@@ -3,6 +3,7 @@ import { publishToFacebook } from './facebook.service';
 import { publishToLinkedIn } from './linkedin.service';
 import { publishToX } from './x.service';
 import { publishToTikTok } from './tiktok.service';
+import { publishToThreads } from './threads.service';
 import { adaptCaptionForPlatforms } from './caption-adapter';
 import { mixAudioIntoVideo, imageWithAudioToVideo } from './audio-mixer.service';
 import { prisma } from '../config/database';
@@ -17,6 +18,7 @@ const PUBLISHERS: Record<SocialPlatform, PublisherFn> = {
   LINKEDIN: publishToLinkedIn,
   X: publishToX,
   TIKTOK: publishToTikTok,
+  THREADS: publishToThreads,
 };
 
 export async function publishToPlatforms(
