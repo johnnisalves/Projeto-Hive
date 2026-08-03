@@ -434,6 +434,22 @@ export const api = {
       aviso?: string;
     }>(`/api/feed/grid${brandId ? `?brandId=${brandId}` : ''}`),
 
+  // Producao: transforma rascunho vazio em post pronto (legenda + arte).
+  // `produziveis` conta so os que TEM tema — post sem contexto nenhum nao
+  // entra, e mostrar ele como pendente faria o numero nunca zerar.
+  producao: (brandId?: string) =>
+    request<{
+      total: number; prontos: number; faltando: number; porcentagem: number;
+      produziveis: number; naFila: number; teto: number;
+      items: Array<{ id: string; falta: string | null; scheduledAt: string | null }>;
+    }>(`/api/producao${brandId ? `?brandId=${brandId}` : ''}`),
+
+  produzir: (brandId?: string, postIds?: string[]) =>
+    request<{ enfileirados: number; sobraram: number; motivo?: string }>('/api/producao/enfileirar', {
+      method: 'POST',
+      body: JSON.stringify({ brandId, postIds }),
+    }),
+
   // Calendario de conteudo: briefing -> grade com datas REAIS.
   // As datas saem do servidor, nunca da IA — ela so preenche o conteudo.
   gerarCalendario: (body: {

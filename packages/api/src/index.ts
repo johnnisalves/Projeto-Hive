@@ -36,6 +36,7 @@ import cockpitRoutes from './routes/cockpit.routes';
 import xrayRoutes from './routes/xray.routes';
 import crmRoutes from './routes/crm.routes';
 import calendarioRoutes from './routes/calendario.routes';
+import producaoRoutes from './routes/producao.routes';
 import { authMiddleware } from './middleware/auth.middleware';
 import { resolveOwnerId } from './helpers/resolveOwnerId';
 import { publishWorker } from './jobs/publish.worker';
@@ -43,6 +44,7 @@ import { tokenRefreshWorker, initTokenRefreshJob } from './jobs/token-refresh.wo
 import { taskReminderWorker } from './jobs/task-reminder.worker';
 import { evergreenWorker, initEvergreenJob } from './jobs/evergreen.worker';
 import { sentinelWorker, initSentinelJob } from './jobs/sentinel.worker';
+import { productionWorker } from './jobs/production.worker';
 
 const app = express();
 
@@ -102,6 +104,7 @@ app.use('/api/cockpit', cockpitRoutes);
 app.use('/api/raio-x', xrayRoutes);
 app.use('/api/crm', crmRoutes);
 app.use('/api/calendario', calendarioRoutes);
+app.use('/api/producao', producaoRoutes);
 
 // Health check with env diagnostics
 app.get('/api/health', (_req, res) => {
@@ -428,6 +431,13 @@ function start() {
 
   sentinelWorker.on('failed', (job, err) => {
     console.error(`Sentinel job ${job?.id} failed:`, err.message);
+  });
+
+  productionWorker.on('failed', (job, err) => {
+    console.error(`Producao do post ${job?.data?.postId} falhou:`, err.message);
+  });
+  productionWorker.on('completed', (job, r) => {
+    console.log(`[Producao] post ${job.data.postId}:`, JSON.stringify(r));
   });
 
   // Inits de background — NAO bloqueiam o listen; erros/hangs aqui nao derrubam a API.
