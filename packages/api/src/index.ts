@@ -34,6 +34,7 @@ import gatilhosRoutes from './routes/gatilhos.routes';
 import feedRoutes from './routes/feed.routes';
 import cockpitRoutes from './routes/cockpit.routes';
 import xrayRoutes from './routes/xray.routes';
+import crmRoutes from './routes/crm.routes';
 import { publishWorker } from './jobs/publish.worker';
 import { tokenRefreshWorker, initTokenRefreshJob } from './jobs/token-refresh.worker';
 import { taskReminderWorker } from './jobs/task-reminder.worker';
@@ -95,6 +96,7 @@ app.use('/api/cockpit', cockpitRoutes);
 // Publico e sem login: tem limite por IP e cache proprio, porque cada
 // consulta gasta cota da Graph API (ver xray.routes.ts).
 app.use('/api/raio-x', xrayRoutes);
+app.use('/api/crm', crmRoutes);
 
 // Health check with env diagnostics
 app.get('/api/health', (_req, res) => {
@@ -321,6 +323,10 @@ async function ensureBrandColumns() {
     `CREATE INDEX IF NOT EXISTS "CommentTrigger_userId_idx" ON "CommentTrigger"("userId")`,
     `CREATE TABLE IF NOT EXISTS "TriggerLog" ("id" TEXT PRIMARY KEY, "commentId" TEXT NOT NULL, "triggerId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "TriggerLog_commentId_key" ON "TriggerLog"("commentId")`,
+    // Micro-CRM do inbox: a DM com intencao de compra vira lead com valor
+    `CREATE TABLE IF NOT EXISTS "Lead" ("id" TEXT PRIMARY KEY, "etapa" TEXT NOT NULL DEFAULT 'novo', "contato" TEXT, "origem" TEXT NOT NULL DEFAULT 'DIRECT', "mensagem" TEXT, "valorCentavos" INTEGER, "observacao" TEXT, "postId" TEXT, "fechadoEm" TIMESTAMP(3), "brandId" TEXT, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE INDEX IF NOT EXISTS "Lead_userId_etapa_idx" ON "Lead"("userId", "etapa")`,
+    `CREATE INDEX IF NOT EXISTS "Lead_postId_idx" ON "Lead"("postId")`,
     // Cerebro da marca e diario de bordo
     `CREATE TABLE IF NOT EXISTS "BrandRule" ("id" TEXT PRIMARY KEY, "regra" TEXT NOT NULL, "origem" TEXT NOT NULL DEFAULT 'edicao', "peso" INTEGER NOT NULL DEFAULT 1, "ativa" BOOLEAN NOT NULL DEFAULT true, "brandId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE INDEX IF NOT EXISTS "BrandRule_brandId_idx" ON "BrandRule"("brandId")`,

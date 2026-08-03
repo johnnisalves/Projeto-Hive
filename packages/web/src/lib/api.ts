@@ -416,6 +416,38 @@ export const api = {
       aviso?: string;
     }>(`/api/feed/grid${brandId ? `?brandId=${brandId}` : ''}`),
 
+  // Micro-CRM do inbox: a DM com intencao de compra vira lead com valor.
+  // `taxaConversao` vem null quando nada foi decidido ainda — zero seria
+  // lido como "nunca fecho venda".
+  funil: (brandId?: string) =>
+    request<{
+      items: Array<{
+        id: string; etapa: string; contato: string | null; origem: string;
+        mensagem: string | null; valorCentavos: number | null; observacao: string | null;
+        postId: string | null; atualizadoEm: string;
+      }>;
+      resumo: {
+        porEtapa: Record<string, { leads: number; valorCentavos: number }>;
+        abertos: number; fechados: number; perdidos: number;
+        receitaCentavos: number; taxaConversao: number | null; ticketMedioCentavos: number | null;
+      };
+      porPost: Array<{ postId: string; leads: number; receitaCentavos: number }>;
+      esquecidos: number;
+      etapas: Array<{ chave: string; rotulo: string }>;
+    }>(`/api/crm${brandId ? `?brandId=${brandId}` : ''}`),
+
+  criarLead: (body: { contato?: string; mensagem?: string; origem?: string; postId?: string; brandId?: string }) =>
+    request<{ id: string }>('/api/crm', { method: 'POST', body: JSON.stringify(body) }),
+
+  moverLead: (id: string, etapa: string, valorCentavos?: number, observacao?: string) =>
+    request<{ id: string; etapa: string }>(`/api/crm/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ etapa, valorCentavos, observacao }),
+    }),
+
+  removerLead: (id: string) =>
+    request<{ deleted: boolean }>(`/api/crm/${id}`, { method: 'DELETE' }),
+
   // Cockpit: a carteira inteira numa tela, pior primeiro.
   cockpit: () =>
     request<{

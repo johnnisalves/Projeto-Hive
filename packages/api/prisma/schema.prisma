@@ -50,6 +50,7 @@ model User {
   saleOrigins    SaleOrigin[]
   commentTriggers CommentTrigger[]
   agentLogs      AgentLog[]
+  leads          Lead[]
   allowedPages   String[]        @default([])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -519,6 +520,35 @@ model AgentLog {
   createdAt   DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+/**
+ * Lead vindo do inbox: a DM ou comentario com intencao de compra.
+ *
+ * Materializa o que a IA ja classifica, para a agencia parar de reportar
+ * "respondemos 80 DMs" e passar a reportar "as DMs viraram R$ 3.200".
+ */
+model Lead {
+  id            String   @id @default(uuid())
+  /** novo | respondido | orcamento | fechado | perdido */
+  etapa         String   @default("novo")
+  contato       String?
+  origem        String   @default("DIRECT")
+  mensagem      String?
+  /** Valor em CENTAVOS. Obrigatorio para marcar como fechado. */
+  valorCentavos Int?
+  observacao    String?
+  /** Post que gerou a conversa — a ponte com a atribuicao. */
+  postId        String?
+  fechadoEm     DateTime?
+  brandId       String?
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([userId, etapa])
+  @@index([postId])
 }
 
 model InstagramToken {
