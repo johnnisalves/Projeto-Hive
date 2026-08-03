@@ -5,6 +5,8 @@ import { resolveOwnerId } from '../helpers/resolveOwnerId';
 import { previsaoDeHoje, avaliarPrevisao, pautaPara, podeDisparar } from '../services/weather.service';
 import { preverNota } from '../services/engagement.service';
 import { melhoresDepoimentos, prepararDepoimento } from '../services/sentinel.service';
+import { podeGerar, montar, montarHtml, renderizar } from '../services/wrapped.service';
+import { coletarDados } from '../services/report.service';
 
 /**
  * Preview do feed e gatilhos de contexto local.
@@ -275,6 +277,68 @@ router.get('/depoimentos', async (req: AuthRequest, res: Response) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Falha ao buscar depoimentos' });
+  }
+});
+
+/**
+ * GET /api/feed/retrospectiva?brandId=&mes=&ano= — o mes vira post.
+ *
+ * Diferente do relatorio em PDF, que e para a agencia provar servico:
+ * isto e CONTEUDO, feito para ir ao feed do cliente.
+ */
+router.get('/retrospectiva', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    const brand = await prisma.brand.findFirst({
+      where: { id: String(req.query.brandId || ''), userId: ownerId },
+    });
+    if (!brand) { res.status(404).json({ success: false, error: 'Marca não encontrada' }); return; }
+
+    const agora = new Date();
+    const mes = Number(req.query.mes) || agora.getMonth() + 1;
+    const ano = Number(req.query.ano) || agora.getFullYear();
+
+    const dados = await coletarDados(ownerId, brand.id, ano, mes);
+    const anteriorMes = mes === 1 ? 12 : mes - 1;
+    const anteriorAno = mes === 1 ? ano - 1 : ano;
+    const anterior = await coletarDados(ownerId, brand.id, anteriorAno, anteriorMes).catch(() => null);
+
+    const doMes = {
+      posts: dados.publicados,
+      curtidas: dados.curtidas,
+      comentarios: dados.comentarios,
+      postsMesAnterior: anterior?.publicados,
+    };
+
+    const check = podeGerar(doMes);
+    if (!check.pode) {
+      res.json({ success: true, data: { pode: false, motivo: check.motivo } });
+      return;
+    }
+
+    const retro = montar(doMes, brand.name, mes, ano);
+    res.json({ success: true, data: { pode: true, ...retro } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao montar a retrospectiva' });
+  }
+});
+
+/** POST /api/feed/retrospectiva/arte — renderiza a imagem 1080x1350. */
+router.post('/retrospectiva/arte', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    const brand = await prisma.brand.findFirst({
+      where: { id: String(req.body?.brandId || ''), userId: ownerId },
+    });
+    if (!brand) { res.status(404).json({ success: false, error: 'Marca não encontrada' }); return; }
+
+    const retro = req.body?.retrospectiva;
+    if (!retro?.cartoes?.length) { res.status(400).json({ success: false, error: 'Retrospectiva vazia' }); return; }
+
+    const html = montarHtml(retro, brand.primaryColor || '#7c3aed', brand.logoUrl);
+    res.json({ success: true, data: { image: await renderizar(html) } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao gerar a arte' });
   }
 });
 

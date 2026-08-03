@@ -487,6 +487,21 @@ export const api = {
       { method: 'POST', body: JSON.stringify(body) },
     ),
 
+  // Retrospectiva mensal. `pode` false quando o mes foi fraco demais para
+  // virar peca — publicar "3 posts no mes" seria autossabotagem.
+  retrospectiva: (brandId: string, mes?: number, ano?: number) =>
+    request<{
+      pode: boolean; motivo?: string;
+      titulo?: string; subtitulo?: string; legendaSugerida?: string;
+      cartoes?: Array<{ numero: string; rotulo: string; destaque?: boolean }>;
+    }>(`/api/feed/retrospectiva?brandId=${brandId}${mes ? `&mes=${mes}` : ''}${ano ? `&ano=${ano}` : ''}`),
+
+  arteDaRetrospectiva: (brandId: string, retrospectiva: unknown) =>
+    request<{ image: string }>('/api/feed/retrospectiva/arte', {
+      method: 'POST',
+      body: JSON.stringify({ brandId, retrospectiva }),
+    }),
+
   // Elogios que merecem virar arte de depoimento.
   depoimentos: () =>
     request<{ items: Array<{ id: string; texto: string; original: string }>; analisados: number }>(
