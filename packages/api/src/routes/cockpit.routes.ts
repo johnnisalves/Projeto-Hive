@@ -6,6 +6,7 @@ import { montarCockpit, resumoDaCarteira, DadosDaMarca } from '../services/cockp
 import { calcular, feeSugerido, ranquear, LinhaRentabilidade } from '../services/profitability.service';
 import { conferir, preencher, escalonar, MARCACOES_DISPONIVEIS } from '../services/multibrand.service';
 import { schedulePost } from '../services/scheduler.service';
+import { exportar, aplicar, validar, resumir } from '../services/playbook.service';
 
 const router = Router();
 router.use(authMiddleware);
@@ -269,6 +270,125 @@ router.post('/multimarca', async (req: AuthRequest, res: Response) => {
     res.json({ success: true, data: { criados, falhas, pendencias } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Falha ao publicar em massa' });
+  }
+});
+
+/**
+ * Playbooks de nicho.
+ *
+ * Guardados em Setting com prefixo, em vez de tabela nova: sao poucos por
+ * conta e o formato e um JSON solto que pode evoluir sem migracao.
+ */
+const PREFIXO_PLAYBOOK = 'PLAYBOOK_';
+
+router.get('/playbooks', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    const linhas = await prisma.setting.findMany({
+      where: { userId: ownerId, key: { startsWith: PREFIXO_PLAYBOOK } },
+    });
+
+    const items = linhas.map((l) => {
+      try {
+        const p = JSON.parse(l.value);
+        return {
+          chave: l.key.slice(PREFIXO_PLAYBOOK.length),
+          nome: p.nome,
+          nicho: p.nicho,
+          aplica: resumir({ ...(p.config || {}), ...(p.visual || {}) }),
+          temVisual: Boolean(p.visual),
+        };
+      } catch {
+        return null;
+      }
+    }).filter(Boolean);
+
+    res.json({ success: true, data: { items } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao listar playbooks' });
+  }
+});
+
+/** POST /api/cockpit/playbooks — salva a configuracao de uma marca como modelo. */
+router.post('/playbooks', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    const marca = await prisma.brand.findFirst({ where: { id: String(req.body?.brandId || ''), userId: ownerId } });
+    if (!marca) { res.status(404).json({ success: false, error: 'Marca não encontrada' }); return; }
+
+    const nome = String(req.body?.nome || '').trim().slice(0, 60);
+    if (nome.length < 2) { res.status(400).json({ success: false, error: 'Dê um nome ao playbook' }); return; }
+
+    const playbook = exportar(marca as any, {
+      nome,
+      nicho: req.body?.nicho ? String(req.body.nicho).slice(0, 40) : undefined,
+      incluirVisual: Boolean(req.body?.incluirVisual),
+    });
+
+    if (Object.keys(playbook.config).length === 0) {
+      res.status(400).json({
+        success: false,
+        error: 'Essa marca ainda não tem configuração para virar playbook. Preencha tom de voz, hashtags ou direção de arte primeiro.',
+      });
+      return;
+    }
+
+    const chave = nome.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-');
+    await prisma.setting.upsert({
+      where: { userId_key: { userId: ownerId, key: PREFIXO_PLAYBOOK + chave } },
+      create: { userId: ownerId, key: PREFIXO_PLAYBOOK + chave, value: JSON.stringify(playbook) },
+      update: { value: JSON.stringify(playbook) },
+    });
+
+    res.json({ success: true, data: { chave, aplica: resumir({ ...playbook.config, ...(playbook.visual || {}) }) } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao salvar playbook' });
+  }
+});
+
+/**
+ * POST /api/cockpit/playbooks/aplicar — configura uma marca nova de uma vez.
+ *
+ * O `aplicar` do servico passa pela allowlist DE NOVO aqui, e nao so na
+ * exportacao: o JSON guardado pode ter sido editado a mao, e confiar nele
+ * seria confiar em entrada externa.
+ */
+router.post('/playbooks/aplicar', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    const marca = await prisma.brand.findFirst({ where: { id: String(req.body?.brandId || ''), userId: ownerId } });
+    if (!marca) { res.status(404).json({ success: false, error: 'Marca não encontrada' }); return; }
+
+    const guardado = await prisma.setting.findUnique({
+      where: { userId_key: { userId: ownerId, key: PREFIXO_PLAYBOOK + String(req.body?.chave || '') } },
+    });
+    if (!guardado) { res.status(404).json({ success: false, error: 'Playbook não encontrado' }); return; }
+
+    const check = validar(JSON.parse(guardado.value));
+    if (!check.ok) { res.status(400).json({ success: false, error: check.erro }); return; }
+
+    const dados = aplicar(check.playbook!, { aplicarVisual: Boolean(req.body?.aplicarVisual) });
+    if (Object.keys(dados).length === 0) {
+      res.status(400).json({ success: false, error: 'Esse playbook está vazio.' });
+      return;
+    }
+
+    await prisma.brand.update({ where: { id: marca.id }, data: dados });
+    res.json({ success: true, data: { aplicado: resumir(dados) } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao aplicar playbook' });
+  }
+});
+
+router.delete('/playbooks/:chave', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    await prisma.setting.deleteMany({
+      where: { userId: ownerId, key: PREFIXO_PLAYBOOK + String(req.params.chave) },
+    });
+    res.json({ success: true, data: { deleted: true } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao remover' });
   }
 });
 

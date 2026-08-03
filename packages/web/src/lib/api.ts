@@ -420,6 +420,22 @@ export const api = {
       resumo: { total: number; criticas: number; atencao: number; ok: number };
     }>('/api/cockpit'),
 
+  // Playbooks de nicho. Nunca carregam chave PIX, WhatsApp, fee nem token
+  // de aprovacao — so estilo e configuracao (ver playbook.service.ts).
+  listarPlaybooks: () =>
+    request<{ items: Array<{ chave: string; nome: string; nicho?: string; aplica: string[]; temVisual: boolean }> }>(
+      '/api/cockpit/playbooks',
+    ),
+
+  salvarPlaybook: (body: { brandId: string; nome: string; nicho?: string; incluirVisual?: boolean }) =>
+    request<{ chave: string; aplica: string[] }>('/api/cockpit/playbooks', { method: 'POST', body: JSON.stringify(body) }),
+
+  aplicarPlaybook: (body: { brandId: string; chave: string; aplicarVisual?: boolean }) =>
+    request<{ aplicado: string[] }>('/api/cockpit/playbooks/aplicar', { method: 'POST', body: JSON.stringify(body) }),
+
+  removerPlaybook: (chave: string) =>
+    request<{ deleted: boolean }>(`/api/cockpit/playbooks/${chave}`, { method: 'DELETE' }),
+
   // Publicacao em massa: uma arte-mae vira N posts personalizados.
   // `pendencias` sao as marcas que ficariam com "{{nome}}" a mostra no
   // post — conferir antes de publicar e obrigatorio.
