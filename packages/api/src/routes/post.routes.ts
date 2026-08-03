@@ -107,11 +107,18 @@ router.get('/recycle/suggestions', async (req: AuthRequest, res: Response) => {
     const userId = await resolveOwnerId(req.userId!);
     const brandId = req.query.brandId ? String(req.query.brandId) : undefined;
     const avaliados = await coletarEngajamento(userId, brandId);
-    const melhores = ranquear(avaliados);
+    // "receita" muda a pergunta de "o que a audiencia curtiu?" para "o que
+    // encheu o caixa?" — e sao respostas diferentes com frequencia.
+    const criterio = req.query.criterio === 'receita' ? 'receita' : 'engajamento';
+    const melhores = ranquear(avaliados, new Date(), 10, criterio);
 
     res.json({
       success: true,
       data: {
+        criterio,
+        // Sem nenhuma receita medida, a tela nao deve oferecer o filtro:
+        // ele produziria a mesma lista e pareceria quebrado.
+        temReceita: avaliados.some((p) => (p.receitaCentavos || 0) > 0),
         items: melhores.map((p) => ({
           id: p.id,
           caption: p.caption,
@@ -119,6 +126,7 @@ router.get('/recycle/suggestions', async (req: AuthRequest, res: Response) => {
           publishedAt: p.publishedAt,
           likes: p.likes,
           comments: p.comments,
+          receitaCentavos: p.receitaCentavos || 0,
           nota: pontuacao(p.likes, p.comments),
         })),
         // Diferenciar "nenhum candidato" de "nada publicado ainda" evita a

@@ -25,6 +25,11 @@ export interface PostAvaliado {
   recycledAt?: Date | null;
   likes: number;
   comments: number;
+  /**
+   * Receita atribuida a este post, em centavos (cupons resgatados, vendas
+   * marcadas como vindas dele). Ausente = nao medimos, nao "nao vendeu".
+   */
+  receitaCentavos?: number;
 }
 
 /**
@@ -57,10 +62,39 @@ export function elegivel(post: PostAvaliado, hoje = new Date()): boolean {
   return true;
 }
 
-/** Os melhores candidatos, do mais forte para o mais fraco. */
-export function ranquear(posts: PostAvaliado[], hoje = new Date(), limite = 10): PostAvaliado[] {
-  return posts
-    .filter((p) => elegivel(p, hoje))
+/** Como ordenar: pelo que engajou ou pelo que vendeu. */
+export type Criterio = 'engajamento' | 'receita';
+
+/**
+ * Os melhores candidatos, do mais forte para o mais fraco.
+ *
+ * O criterio "receita" muda a pergunta de "o que a audiencia curtiu?" para
+ * "o que encheu o caixa?" — e sao respostas diferentes com frequencia. Um
+ * post engracado ganha em curtida; o post de promocao ganha em pedido.
+ *
+ * Post sem receita medida NAO e tratado como receita zero na ordenacao por
+ * receita: ele cai para o fim, mas atras dos que venderam, nao misturado
+ * com eles. Assim quem ainda nao usa cupom nem modo balcao continua vendo
+ * uma lista util em vez de uma lista aleatoria.
+ */
+export function ranquear(
+  posts: PostAvaliado[],
+  hoje = new Date(),
+  limite = 10,
+  criterio: Criterio = 'engajamento',
+): PostAvaliado[] {
+  const elegiveis = posts.filter((p) => elegivel(p, hoje));
+
+  if (criterio === 'receita') {
+    const comReceita = elegiveis.filter((p) => (p.receitaCentavos || 0) > 0);
+    const semReceita = elegiveis.filter((p) => !(p.receitaCentavos || 0));
+    return [
+      ...comReceita.sort((a, b) => (b.receitaCentavos || 0) - (a.receitaCentavos || 0)),
+      ...semReceita.sort((a, b) => pontuacao(b.likes, b.comments) - pontuacao(a.likes, a.comments)),
+    ].slice(0, limite);
+  }
+
+  return elegiveis
     .sort((a, b) => pontuacao(b.likes, b.comments) - pontuacao(a.likes, a.comments))
     .slice(0, limite);
 }
@@ -90,6 +124,21 @@ export async function coletarEngajamento(userId: string, brandId?: string): Prom
     ? 'https://graph.facebook.com/v21.0'
     : 'https://graph.instagram.com/v21.0';
 
+  // Receita atribuida por post: cupons daquele post que foram resgatados.
+  // Uma consulta so, agrupada — nao uma por post, que multiplicaria por 100.
+  const receitaPorPost = new Map<string, number>();
+  try {
+    const resgates = await prisma.couponRedemption.findMany({
+      where: { coupon: { userId, ...(brandId ? { brandId } : {}) } },
+      select: { valorCentavos: true, coupon: { select: { postId: true } } },
+    });
+    for (const r of resgates) {
+      const pid = r.coupon?.postId;
+      if (!pid) continue;
+      receitaPorPost.set(pid, (receitaPorPost.get(pid) || 0) + r.valorCentavos);
+    }
+  } catch { /* tabela ainda nao criada ou sem cupons: segue sem receita */ }
+
   return await Promise.all(posts.map(async (p) => {
     let likes = 0;
     let comments = 0;
@@ -111,6 +160,7 @@ export async function coletarEngajamento(userId: string, brandId?: string): Prom
       recycledAt: p.recycledAt,
       likes,
       comments,
+      receitaCentavos: receitaPorPost.get(p.id) || 0,
     };
   }));
 }

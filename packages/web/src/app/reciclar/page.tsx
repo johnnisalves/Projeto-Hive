@@ -20,22 +20,28 @@ interface Sugestao {
   likes: number;
   comments: number;
   nota: number;
+  receitaCentavos: number;
 }
+
+const reais = (c: number) => (c / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export default function ReciclarPage() {
   const [itens, setItens] = useState<Sugestao[]>([]);
   const [totalPublicados, setTotalPublicados] = useState(0);
+  const [criterio, setCriterio] = useState<'engajamento' | 'receita'>('engajamento');
+  const [temReceita, setTemReceita] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [reciclando, setReciclando] = useState<string | null>(null);
   const [prontos, setProntos] = useState<Record<string, string>>({});
   const [erro, setErro] = useState('');
 
   useEffect(() => {
-    api.recycleSuggestions()
-      .then((r) => { setItens(r.items); setTotalPublicados(r.totalPublicados); })
+    setCarregando(true);
+    api.recycleSuggestions(undefined, criterio)
+      .then((r) => { setItens(r.items); setTotalPublicados(r.totalPublicados); setTemReceita(r.temReceita); })
       .catch((e) => setErro(e?.message || 'Falha ao carregar'))
       .finally(() => setCarregando(false));
-  }, []);
+  }, [criterio]);
 
   async function reciclar(id: string) {
     setReciclando(id);
@@ -57,9 +63,31 @@ export default function ReciclarPage() {
           Reciclar conteúdo
         </h1>
         <p className="text-sm text-text-secondary mt-1">
-          Seus posts que mais engajaram, com a legenda reescrita pela IA para não parecer repetição.
+          {criterio === 'receita'
+            ? 'Seus posts que mais venderam, com a legenda reescrita pela IA para não parecer repetição.'
+            : 'Seus posts que mais engajaram, com a legenda reescrita pela IA para não parecer repetição.'}
         </p>
       </div>
+
+      {/* O filtro só aparece quando há venda atribuída. Sem isso ele
+          produziria exatamente a mesma lista e pareceria quebrado. */}
+      {temReceita && (
+        <div className="flex gap-1.5 mb-4">
+          {(['engajamento', 'receita'] as const).map((c) => (
+            <button
+              key={c}
+              onClick={() => setCriterio(c)}
+              className={`px-3 py-1.5 rounded-lg border text-[11px] font-semibold transition-colors ${
+                criterio === c
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border bg-bg-main text-text-secondary'
+              }`}
+            >
+              {c === 'receita' ? 'O que mais vendeu' : 'O que mais engajou'}
+            </button>
+          ))}
+        </div>
+      )}
 
       {carregando ? (
         <div className="flex justify-center py-10"><Loader2 className="w-5 h-5 animate-spin text-primary" /></div>
@@ -85,6 +113,9 @@ export default function ReciclarPage() {
                 <div className="flex items-center gap-3 text-[11px] text-text-muted">
                   <span className="flex items-center gap-1"><Heart className="w-3 h-3" /> {p.likes}</span>
                   <span className="flex items-center gap-1"><MessageCircle className="w-3 h-3" /> {p.comments}</span>
+                  {p.receitaCentavos > 0 && (
+                    <span className="font-semibold text-status-published">{reais(p.receitaCentavos)}</span>
+                  )}
                   {p.publishedAt && <span>{new Date(p.publishedAt).toLocaleDateString('pt-BR')}</span>}
                 </div>
                 <p className="text-xs text-text-secondary mt-1 line-clamp-2">{p.caption || '(sem legenda)'}</p>

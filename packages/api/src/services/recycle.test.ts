@@ -106,4 +106,49 @@ describe('ranquear', () => {
   test('lista vazia não quebra', () => {
     assert.deepEqual(ranquear([], hoje), []);
   });
+
+  // O critério "receita" muda a pergunta de "o que a audiência curtiu?"
+  // para "o que encheu o caixa?" — e são respostas diferentes com
+  // frequência: o post engraçado ganha em curtida, o de promoção ganha em
+  // pedido.
+  test('por receita, o que vendeu ganha do que só engajou', () => {
+    const r = ranquear([
+      post({ id: 'viral', likes: 5000, comments: 400, receitaCentavos: 0 }),
+      post({ id: 'vendeu', likes: 12, comments: 1, receitaCentavos: 89000 }),
+    ], hoje, 10, 'receita');
+    assert.deepEqual(r.map((p) => p.id), ['vendeu', 'viral']);
+  });
+
+  test('por engajamento, o ranking antigo continua igual', () => {
+    const entrada = [
+      post({ id: 'viral', likes: 5000, comments: 400, receitaCentavos: 0 }),
+      post({ id: 'vendeu', likes: 12, comments: 1, receitaCentavos: 89000 }),
+    ];
+    assert.deepEqual(ranquear(entrada, hoje).map((p) => p.id), ['viral', 'vendeu']);
+  });
+
+  // Quem ainda não usa cupom nem modo balcão não pode receber uma lista
+  // aleatória: os sem receita caem para o fim, mas ordenados entre si por
+  // engajamento.
+  test('posts sem receita medida ficam atrás, mas em ordem útil', () => {
+    const r = ranquear([
+      post({ id: 'semA', likes: 10, comments: 0 }),
+      post({ id: 'semB', likes: 900, comments: 0 }),
+      post({ id: 'com', likes: 1, comments: 0, receitaCentavos: 500 }),
+    ], hoje, 10, 'receita');
+    assert.deepEqual(r.map((p) => p.id), ['com', 'semB', 'semA']);
+  });
+
+  test('ninguém com receita medida cai no ranking de engajamento', () => {
+    const r = ranquear([
+      post({ id: 'a', likes: 10 }),
+      post({ id: 'b', likes: 900 }),
+    ], hoje, 10, 'receita');
+    assert.deepEqual(r.map((p) => p.id), ['b', 'a']);
+  });
+
+  test('o limite vale igual nos dois critérios', () => {
+    const muitos = Array.from({ length: 30 }, (_, i) => post({ id: `p${i}`, likes: i, receitaCentavos: i * 100 }));
+    assert.equal(ranquear(muitos, hoje, 5, 'receita').length, 5);
+  });
 });

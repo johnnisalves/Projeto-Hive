@@ -237,10 +237,18 @@ export const api = {
     }),
 
   // Reciclagem: melhores posts e criacao do rascunho com legenda nova.
-  recycleSuggestions: (brandId?: string) =>
-    request<{ items: any[]; totalPublicados: number }>(
-      `/api/posts/recycle/suggestions${brandId ? `?brandId=${brandId}` : ''}`,
-    ),
+  // `criterio: 'receita'` muda a pergunta de "o que a audiencia curtiu?"
+  // para "o que encheu o caixa?". `temReceita` false = ainda nao ha venda
+  // atribuida, e a tela nao deve oferecer o filtro.
+  recycleSuggestions: (brandId?: string, criterio?: 'engajamento' | 'receita') => {
+    const q = new URLSearchParams();
+    if (brandId) q.set('brandId', brandId);
+    if (criterio) q.set('criterio', criterio);
+    const s = q.toString();
+    return request<{ items: any[]; totalPublicados: number; criterio: string; temReceita: boolean }>(
+      `/api/posts/recycle/suggestions${s ? `?${s}` : ''}`,
+    );
+  },
 
   recyclePost: (id: string, scheduledAt?: string) =>
     request<{ id: string; caption?: string }>(`/api/posts/recycle/${id}`, {
