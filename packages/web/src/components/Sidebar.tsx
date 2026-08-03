@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, PlusSquare, FileText, Calendar, CalendarRange, CheckSquare, FolderKanban, Settings, LogOut, Hexagon, Users, GitBranch, Video, Palette, Wand2, LayoutTemplate, BarChart3, MessageCircle, Wallet, Moon, Sun, Rocket, Radar, RefreshCw, TrendingUp, Zap, Brain, HandCoins, LayoutGrid, FileSpreadsheet, Quote, Gauge, TrendingDown, Copy, BookMarked, Sparkles, Target } from 'lucide-react';
+import { Home, PlusSquare, FileText, Calendar, CalendarRange, CheckSquare, FolderKanban, Settings, LogOut, Hexagon, Users, GitBranch, Video, Palette, Wand2, LayoutTemplate, BarChart3, MessageCircle, Wallet, Moon, Sun, Rocket, Radar, RefreshCw, TrendingUp, Zap, Brain, HandCoins, LayoutGrid, FileSpreadsheet, Quote, Gauge, TrendingDown, Copy, BookMarked, Sparkles, Target, CalendarDays } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { useTheme } from './ThemeProvider';
 
@@ -29,6 +29,7 @@ const links = [
   { href: '/retrospectiva', label: 'Retrospectiva', icon: Sparkles, page: 'analytics' },
   { href: '/cerebro', label: 'O que eu aprendi', icon: Brain, page: 'ai-studio' },
   { href: '/planner', label: 'Planejador IA', icon: CalendarRange, page: 'planner' },
+  { href: '/calendario', label: 'Calendário do Mês', icon: CalendarDays, page: 'planner' },
   // As telas novas reaproveitam os `page` que ja existem (planner, posts,
   // analytics). Se cada uma tivesse a sua chave, o dono nao teria onde
   // marcar a permissao em Equipe e elas sumiriam para todo membro que ja

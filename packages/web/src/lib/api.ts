@@ -416,6 +416,29 @@ export const api = {
       aviso?: string;
     }>(`/api/feed/grid${brandId ? `?brandId=${brandId}` : ''}`),
 
+  // Calendario de conteudo: briefing -> grade com datas REAIS.
+  // As datas saem do servidor, nunca da IA — ela so preenche o conteudo.
+  gerarCalendario: (body: {
+    nicho: string; publico?: string; plataformas: string[]; objetivo: string; tom: string;
+    frequencia: '3x' | '5x' | 'diario' | 'personalizado'; diasDaSemana?: number[];
+    ano: number; mes: number; pilares?: string[]; brandId?: string;
+  }) =>
+    request<{
+      mes: number; ano: number; periodo: string; datasPrevistas: number;
+      pilares: Array<{ nome: string; descricao: string }>;
+      posts: Array<{
+        data: string; plataforma: string; formato: string; pilar: string;
+        titulo: string; gancho: string; descricao: string; cta: string;
+        hashtags: string[]; horario: string;
+      }>;
+    }>('/api/calendario/gerar', { method: 'POST', body: JSON.stringify(body) }),
+
+  agendarCalendario: (posts: unknown[], brandId?: string) =>
+    request<{ criados: number; falhas: Array<{ data: string; erro: string }> }>('/api/calendario/agendar', {
+      method: 'POST',
+      body: JSON.stringify({ posts, brandId }),
+    }),
+
   // Micro-CRM do inbox: a DM com intencao de compra vira lead com valor.
   // `taxaConversao` vem null quando nada foi decidido ainda — zero seria
   // lido como "nunca fecho venda".

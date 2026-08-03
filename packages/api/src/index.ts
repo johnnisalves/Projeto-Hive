@@ -35,6 +35,7 @@ import feedRoutes from './routes/feed.routes';
 import cockpitRoutes from './routes/cockpit.routes';
 import xrayRoutes from './routes/xray.routes';
 import crmRoutes from './routes/crm.routes';
+import calendarioRoutes from './routes/calendario.routes';
 import { authMiddleware } from './middleware/auth.middleware';
 import { resolveOwnerId } from './helpers/resolveOwnerId';
 import { publishWorker } from './jobs/publish.worker';
@@ -99,6 +100,7 @@ app.use('/api/cockpit', cockpitRoutes);
 // consulta gasta cota da Graph API (ver xray.routes.ts).
 app.use('/api/raio-x', xrayRoutes);
 app.use('/api/crm', crmRoutes);
+app.use('/api/calendario', calendarioRoutes);
 
 // Health check with env diagnostics
 app.get('/api/health', (_req, res) => {

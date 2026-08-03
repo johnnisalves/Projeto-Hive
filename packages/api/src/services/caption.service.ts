@@ -164,17 +164,26 @@ async function callGeminiText(apiKey: string, prompt: string): Promise<string> {
   return text.trim();
 }
 
-async function resolveTextProvider(): Promise<{ kind: 'openrouter' | 'google'; key: string; model: string } | null> {
+/**
+ * Provedor de texto DO DONO.
+ *
+ * O `ownerId` deixou de ser opcional na pratica: getSetting sem dono nao le
+ * mais do banco (era de onde vinha o vazamento em que a chave da primeira
+ * agencia cadastrada atendia todas). Sem ownerId, so a variavel de ambiente
+ * da instalacao responde — e a chave que o usuario salvou pela tela fica
+ * invisivel.
+ */
+async function resolveTextProvider(ownerId?: string): Promise<{ kind: 'openrouter' | 'google'; key: string; model: string } | null> {
   const { getSetting } = await import('../helpers/getSetting');
-  const provider = ((await getSetting('NANO_BANANA_PROVIDER')) || 'google').toLowerCase();
+  const provider = ((await getSetting('NANO_BANANA_PROVIDER', ownerId)) || 'google').toLowerCase();
   if (provider === 'openrouter') {
-    const key = await getSetting('OPENROUTER_API_KEY');
+    const key = await getSetting('OPENROUTER_API_KEY', ownerId);
     if (key) {
-      const model = (await getSetting('OPENROUTER_TEXT_MODEL')) || 'google/gemini-2.5-flash';
+      const model = (await getSetting('OPENROUTER_TEXT_MODEL', ownerId)) || 'google/gemini-2.5-flash';
       return { kind: 'openrouter', key, model };
     }
   }
-  const googleKey = await getSetting('NANO_BANANA_API_KEY');
+  const googleKey = await getSetting('NANO_BANANA_API_KEY', ownerId);
   if (googleKey) return { kind: 'google', key: googleKey, model: 'gemini-2.0-flash' };
   return null;
 }
@@ -219,9 +228,11 @@ async function callOpenRouterText(apiKey: string, model: string, prompt: string,
  * Unified text generation: routes to OpenRouter when NANO_BANANA_PROVIDER=openrouter
  * (single key for text + image), otherwise falls back to native Google Gemini.
  */
-export async function callText(prompt: string, imageUrl?: string): Promise<string> {
-  const provider = await resolveTextProvider();
-  if (!provider) throw new Error('No text provider configured');
+export async function callText(prompt: string, imageUrl?: string, ownerId?: string): Promise<string> {
+  const provider = await resolveTextProvider(ownerId);
+  if (!provider) {
+    throw new Error('Nenhuma chave de IA configurada. Salve a chave em Configurações.');
+  }
   if (provider.kind === 'openrouter') {
     return callOpenRouterText(provider.key, provider.model, prompt, imageUrl);
   }
