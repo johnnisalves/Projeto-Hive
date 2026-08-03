@@ -1,4 +1,5 @@
 import { prisma } from '../config/database';
+import { contaDaMarca, enderecoDaConta } from './account-resolver.service';
 import { env } from '../config/env';
 import sharp from 'sharp';
 import { isCloudinaryConfigured, uploadBufferToCloudinary } from '../config/cloudinary';
@@ -805,7 +806,7 @@ export async function searchHashtag(userId: string, nome: string): Promise<{
   }
 }
 
-export async function publishToInstagram(postId: string, accountId?: string) {
+export async function publishToInstagram(postId: string, accountId?: string, _brandId?: string | null) {
   const post = await prisma.post.findUniqueOrThrow({
     where: { id: postId },
     include: { images: { orderBy: { order: 'asc' } } },
@@ -816,38 +817,37 @@ export async function publishToInstagram(postId: string, accountId?: string) {
   const userId = post.userId;
 
   if (accountId) {
-    const account = await prisma.instagramToken.findUnique({ where: { id: accountId } });
-    if (account) { token = account.accessToken; igUserId = account.instagramUserId; }
+    // findFirst com userId, nao findUnique por id: sem o dono na condicao,
+    // um accountId de outra empresa publicaria na conta dela.
+    const account = await prisma.instagramToken.findFirst({ where: { id: accountId, userId } });
+    if (account) { token = account.accessToken; igUserId = enderecoDaConta(account).uid; }
   }
 
-  if (!token && post.brandId) {
-    const brandAccount = await prisma.socialAccount.findFirst({
-      where: { userId, platform: 'INSTAGRAM', brandId: post.brandId },
-    });
-    if (brandAccount?.pageId) {
-      const matched = await prisma.instagramToken.findFirst({
-        where: { userId, pageId: brandAccount.pageId },
-      });
-      if (matched) { token = matched.accessToken; igUserId = matched.instagramUserId; }
+  if (!token) {
+    /**
+     * PUBLICAR NUNCA PODE ADIVINHAR A CONTA.
+     *
+     * Aqui havia uma escada de fallbacks: marca -> padrao -> QUALQUER conta
+     * -> token do .env. Quando a marca nao tinha conta vinculada, o post
+     * saia no perfil de outro cliente, era marcado como PUBLISHED e nao
+     * gerava erro nenhum. Numa agencia, isso e o pior estrago possivel:
+     * conteudo de um cliente no perfil de outro, descoberto pelo cliente.
+     *
+     * Agora e o resolvedor quem decide, e quando ha ambiguidade a
+     * publicacao FALHA com mensagem clara — post que nao sai se conserta,
+     * post que sai no lugar errado nao.
+     */
+    const { conta, motivo, mensagem } = await contaDaMarca(userId, post.brandId);
+    if (!conta) {
+      throw new Error(
+        motivo === 'ambiguo'
+          ? 'Não publiquei: esta empresa não tem conta do Instagram vinculada e você tem mais de uma conectada. '
+            + 'Vincule a conta desta empresa em Configurações para o post não sair no perfil errado.'
+          : mensagem || 'Nenhuma conta do Instagram conectada. Conecte em Configurações.',
+      );
     }
-  }
-
-  if (!token) {
-    const defaultAccount = await prisma.instagramToken.findFirst({
-      where: { userId, isDefault: true },
-    });
-    if (defaultAccount) { token = defaultAccount.accessToken; igUserId = defaultAccount.instagramUserId; }
-  }
-
-  if (!token) {
-    const anyAccount = await prisma.instagramToken.findFirst({ where: { userId } });
-    if (anyAccount) { token = anyAccount.accessToken; igUserId = anyAccount.instagramUserId; }
-  }
-
-  if (!token) {
-    // Fallback to env vars
-    token = env.INSTAGRAM_ACCESS_TOKEN;
-    igUserId = env.INSTAGRAM_USER_ID;
+    token = conta.accessToken;
+    igUserId = enderecoDaConta(conta).uid;
   }
 
   if (!token || !igUserId) {

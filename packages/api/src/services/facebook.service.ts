@@ -1,27 +1,21 @@
 import { prisma } from '../config/database';
 import { ensureMetaCompatibleUrl, verifyPublicUrl } from './instagram.service';
+import { contaSocialDaMarca } from './account-resolver.service';
 
 const GRAPH_BASE = 'https://graph.facebook.com/v21.0';
 
-async function getAccount(userId: string, accountId?: string, brandId?: string) {
-  if (accountId) {
-    const account = await prisma.socialAccount.findUnique({ where: { id: accountId } });
-    if (account && account.platform === 'FACEBOOK') return account;
-  }
-
-  if (brandId) {
-    const brandAccount = await prisma.socialAccount.findFirst({
-      where: { userId, platform: 'FACEBOOK', brandId },
-    });
-    if (brandAccount) return brandAccount;
-  }
-
-  const defaultAccount = await prisma.socialAccount.findFirst({
-    where: { userId, platform: 'FACEBOOK', isDefault: true },
-  });
-  if (defaultAccount) return defaultAccount;
-
-  return prisma.socialAccount.findFirst({ where: { userId, platform: 'FACEBOOK' } });
+/**
+ * A conta DESTA MARCA.
+ *
+ * Este ja conhecia brandId, mas ainda caia em isDefault e depois em
+ * "qualquer conta" quando a marca nao tinha vinculo — publicando na Pagina
+ * de outro cliente sem erro nenhum. E o accountId era buscado sem checar
+ * dono.
+ */
+async function getAccount(userId: string, accountId?: string, brandId?: string | null) {
+  const { conta, mensagem } = await contaSocialDaMarca(userId, 'FACEBOOK', brandId, accountId);
+  if (!conta) throw new Error(mensagem || 'Nenhuma Página do Facebook conectada.');
+  return conta as any;
 }
 
 async function publishSingleImage(pageId: string, imageUrl: string, caption: string, token: string) {
@@ -124,13 +118,13 @@ async function publishVideo(pageId: string, videoUrl: string, caption: string, t
   return { id: data.id };
 }
 
-export async function publishToFacebook(postId: string, accountId?: string) {
+export async function publishToFacebook(postId: string, accountId?: string, brandId?: string | null) {
   const post = await prisma.post.findUniqueOrThrow({
     where: { id: postId },
     include: { images: { orderBy: { order: 'asc' } } },
   });
 
-  const account = await getAccount(post.userId, accountId, post.brandId ?? undefined);
+  const account = await getAccount(post.userId, accountId, brandId ?? post.brandId);
   if (!account) throw new Error('Facebook account not configured. Add one in Settings.');
 
   const { accessToken, platformUserId: pageId } = account;

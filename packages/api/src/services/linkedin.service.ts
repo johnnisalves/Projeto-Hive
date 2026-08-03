@@ -1,4 +1,5 @@
 import { prisma } from '../config/database';
+import { contaSocialDaMarca } from './account-resolver.service';
 import { ensureMetaCompatibleUrl } from './instagram.service';
 
 const LINKEDIN_API = 'https://api.linkedin.com/v2';
@@ -9,18 +10,11 @@ const LINKEDIN_HEADERS = {
   'X-Restli-Protocol-Version': '2.0.0',
 };
 
-async function getAccount(userId: string, accountId?: string) {
-  if (accountId) {
-    const account = await prisma.socialAccount.findUnique({ where: { id: accountId } });
-    if (account && account.platform === 'LINKEDIN') return account;
-  }
-
-  const defaultAccount = await prisma.socialAccount.findFirst({
-    where: { userId, platform: 'LINKEDIN', isDefault: true },
-  });
-  if (defaultAccount) return defaultAccount;
-
-  return prisma.socialAccount.findFirst({ where: { userId, platform: 'LINKEDIN' } });
+/** A conta DESTA MARCA (ver account-resolver.service.ts). */
+async function getAccount(userId: string, accountId?: string, brandId?: string | null) {
+  const { conta, mensagem } = await contaSocialDaMarca(userId, 'LINKEDIN', brandId, accountId);
+  if (!conta) throw new Error(mensagem || 'Nenhuma conta do LinkedIn conectada.');
+  return conta as any;
 }
 
 export function getLinkedInAuthUrl(clientId: string, redirectUri: string, state: string): string {
@@ -229,13 +223,13 @@ async function publishImagePost(token: string, personUrn: string, caption: strin
   return { id: data.id };
 }
 
-export async function publishToLinkedIn(postId: string, accountId?: string) {
+export async function publishToLinkedIn(postId: string, accountId?: string, brandId?: string | null) {
   const post = await prisma.post.findUniqueOrThrow({
     where: { id: postId },
     include: { images: { orderBy: { order: 'asc' } } },
   });
 
-  const account = await getAccount(post.userId, accountId);
+  const account = await getAccount(post.userId, accountId, brandId ?? post.brandId);
   if (!account) throw new Error('LinkedIn account not configured. Add one in Settings.');
 
   const { accessToken, platformUserId } = account;

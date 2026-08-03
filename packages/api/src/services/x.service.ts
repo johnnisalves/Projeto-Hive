@@ -1,20 +1,20 @@
 import { prisma } from '../config/database';
+import { contaSocialDaMarca } from './account-resolver.service';
 
 const X_API = 'https://api.x.com/2';
 const X_AUTH = 'https://api.x.com/2/oauth2';
 
-async function getAccount(userId: string, accountId?: string) {
-  if (accountId) {
-    const account = await prisma.socialAccount.findUnique({ where: { id: accountId } });
-    if (account && account.platform === 'X') return account;
-  }
-
-  const defaultAccount = await prisma.socialAccount.findFirst({
-    where: { userId, platform: 'X', isDefault: true },
-  });
-  if (defaultAccount) return defaultAccount;
-
-  return prisma.socialAccount.findFirst({ where: { userId, platform: 'X' } });
+/**
+ * A conta DESTA MARCA.
+ *
+ * Antes: findUnique por id sem checar dono (um accountId de outra empresa
+ * publicava na conta dela), e depois isDefault -> qualquer conta, sem
+ * saber de qual cliente era o post.
+ */
+async function getAccount(userId: string, accountId?: string, brandId?: string | null) {
+  const { conta, mensagem } = await contaSocialDaMarca(userId, 'X', brandId, accountId);
+  if (!conta) throw new Error(mensagem || 'Nenhuma conta do X conectada.');
+  return conta as any;
 }
 
 export function getXAuthUrl(clientId: string, redirectUri: string, state: string, codeChallenge: string): string {
@@ -88,10 +88,10 @@ export async function refreshXToken(
   return data as { access_token: string; refresh_token: string; expires_in: number };
 }
 
-export async function publishToX(postId: string, accountId?: string) {
+export async function publishToX(postId: string, accountId?: string, brandId?: string | null) {
   const post = await prisma.post.findUniqueOrThrow({ where: { id: postId } });
 
-  const account = await getAccount(post.userId, accountId);
+  const account = await getAccount(post.userId, accountId, brandId ?? post.brandId);
   if (!account) throw new Error('X/Twitter account not configured. Add one in Settings.');
 
   const { accessToken } = account;

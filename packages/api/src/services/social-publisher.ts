@@ -10,7 +10,17 @@ import { prisma } from '../config/database';
 import type { SocialPlatform } from '@prisma/client';
 
 type PublishResult = { id: string };
-type PublisherFn = (postId: string, accountId?: string) => Promise<PublishResult>;
+
+/**
+ * O publicador recebe a MARCA do post.
+ *
+ * Antes recebia so (postId, accountId), e o MESMO accountId era passado
+ * para as seis plataformas — um id de conta do Instagram viajava para o
+ * publicador do LinkedIn, e cada servico acabava caindo na "conta padrao
+ * do dono". Numa agencia, o post de um cliente ia parar no perfil de
+ * outro, marcado como PUBLISHED e sem nenhum erro.
+ */
+type PublisherFn = (postId: string, accountId?: string, brandId?: string | null) => Promise<PublishResult>;
 
 const PUBLISHERS: Record<SocialPlatform, PublisherFn> = {
   INSTAGRAM: publishToInstagram,
@@ -108,7 +118,8 @@ export async function publishToPlatforms(
       }
 
       console.log(`[SocialPublisher] Publishing to ${platform}...`);
-      const result = await publisher(postId, accountId);
+      // A marca do post decide a conta de CADA plataforma.
+      const result = await publisher(postId, accountId, post.brandId);
       results[platform] = { id: result.id };
       console.log(`[SocialPublisher] ${platform} published: ${result.id}`);
     } catch (err: unknown) {

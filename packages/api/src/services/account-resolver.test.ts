@@ -1,6 +1,8 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import { escolherConta, enderecoDaConta, ContaCandidata } from './account-resolver.service';
+import {
+  escolherConta, escolherContaSocial, enderecoDaConta, ContaCandidata, ContaSocial,
+} from './account-resolver.service';
 
 /**
  * A REGRA CENTRAL: quando ha ambiguidade, RECUSAR e melhor que adivinhar.
@@ -102,6 +104,56 @@ describe('escolherConta', () => {
     const contas = [conta('a', { brandId: 'm1' }), conta('b', { brandId: 'm2' })];
     assert.equal(escolherConta(contas, 'm1').conta!.id, 'a');
     assert.equal(escolherConta(contas, 'm2').conta!.id, 'b');
+  });
+});
+
+describe('escolherContaSocial', () => {
+  const social = (id: string, over: Partial<ContaSocial> = {}): ContaSocial => ({
+    id,
+    accessToken: `tok-${id}`,
+    platformUserId: `p-${id}`,
+    username: id,
+    pageId: null,
+    isDefault: false,
+    brandId: null,
+    ...over,
+  });
+
+  // Quatro das cinco plataformas (X, TikTok, Threads, LinkedIn) nem sabiam
+  // o que era marca: iam direto para isDefault e depois para "qualquer
+  // conta". O post de um cliente saia no LinkedIn de outro, sem erro.
+  test('varias contas e marca sem vinculo: RECUSA', () => {
+    const r = escolherContaSocial([social('a', { isDefault: true }), social('b')], 'marca-1');
+    assert.equal(r.conta, null);
+    assert.equal(r.motivo, 'ambiguo');
+  });
+
+  test('conta vinculada a marca ganha da padrao', () => {
+    const r = escolherContaSocial(
+      [social('padrao', { isDefault: true }), social('da-marca', { brandId: 'm1' })],
+      'm1',
+    );
+    assert.equal(r.conta!.id, 'da-marca');
+  });
+
+  test('conta unica passa mesmo sem vinculo', () => {
+    assert.equal(escolherContaSocial([social('unica')], 'qualquer').conta!.id, 'unica');
+  });
+
+  test('sem marca informada, usa a padrao', () => {
+    assert.equal(escolherContaSocial([social('a'), social('p', { isDefault: true })]).conta!.id, 'p');
+  });
+
+  test('sem conta nenhuma, explica', () => {
+    const r = escolherContaSocial([], 'm1');
+    assert.equal(r.conta, null);
+    assert.equal(r.motivo, 'nenhuma_conta');
+  });
+
+  test('cada marca recebe a sua conta', () => {
+    const contas = [social('a', { brandId: 'm1' }), social('b', { brandId: 'm2' })];
+    assert.equal(escolherContaSocial(contas, 'm1').conta!.id, 'a');
+    assert.equal(escolherContaSocial(contas, 'm2').conta!.id, 'b');
   });
 });
 

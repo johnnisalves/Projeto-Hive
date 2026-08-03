@@ -1,4 +1,5 @@
 import { prisma } from '../config/database';
+import { contaSocialDaMarca } from './account-resolver.service';
 
 /**
  * Threads (Meta) — API oficial, gratuita.
@@ -22,16 +23,11 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function getAccount(userId: string, accountId?: string) {
-  if (accountId) {
-    const a = await prisma.socialAccount.findUnique({ where: { id: accountId } });
-    if (a && a.platform === 'THREADS') return a;
-  }
-  const padrao = await prisma.socialAccount.findFirst({
-    where: { userId, platform: 'THREADS', isDefault: true },
-  });
-  if (padrao) return padrao;
-  return prisma.socialAccount.findFirst({ where: { userId, platform: 'THREADS' } });
+/** A conta DESTA MARCA (ver account-resolver.service.ts). */
+async function getAccount(userId: string, accountId?: string, brandId?: string | null) {
+  const { conta, mensagem } = await contaSocialDaMarca(userId, 'THREADS', brandId, accountId);
+  if (!conta) throw new Error(mensagem || 'Nenhuma conta do Threads conectada.');
+  return conta as any;
 }
 
 export function getThreadsAuthUrl(clientId: string, redirectUri: string, state: string): string {
@@ -118,13 +114,13 @@ async function aguardarContainer(containerId: string, token: string, tentativas 
  * containers filhos; ficou de fora por enquanto — o DisparaAI manda a
  * primeira imagem e a legenda, que cobre o caso comum.
  */
-export async function publishToThreads(postId: string, accountId?: string): Promise<{ id: string }> {
+export async function publishToThreads(postId: string, accountId?: string, brandId?: string | null): Promise<{ id: string }> {
   const post = await prisma.post.findUniqueOrThrow({
     where: { id: postId },
     include: { images: { orderBy: { order: 'asc' } } },
   });
 
-  const account = await getAccount(post.userId, accountId);
+  const account = await getAccount(post.userId, accountId, brandId ?? post.brandId);
   if (!account) throw new Error('Nenhuma conta do Threads conectada. Conecte em Configuracoes.');
 
   const token = account.accessToken;

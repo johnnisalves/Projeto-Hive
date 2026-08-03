@@ -1,4 +1,5 @@
 import { prisma } from '../config/database';
+import { contaSocialDaMarca } from './account-resolver.service';
 
 /**
  * TikTok Content Posting API (v2).
@@ -16,16 +17,11 @@ const TIKTOK_API = 'https://open.tiktokapis.com/v2';
 // Escopos: basic (perfil) + publish (post direto) + upload (rascunho/inbox)
 const TIKTOK_SCOPES = 'user.info.basic,video.publish,video.upload';
 
-async function getAccount(userId: string, accountId?: string) {
-  if (accountId) {
-    const account = await prisma.socialAccount.findUnique({ where: { id: accountId } });
-    if (account && account.platform === 'TIKTOK') return account;
-  }
-  const defaultAccount = await prisma.socialAccount.findFirst({
-    where: { userId, platform: 'TIKTOK', isDefault: true },
-  });
-  if (defaultAccount) return defaultAccount;
-  return prisma.socialAccount.findFirst({ where: { userId, platform: 'TIKTOK' } });
+/** A conta DESTA MARCA (ver account-resolver.service.ts). */
+async function getAccount(userId: string, accountId?: string, brandId?: string | null) {
+  const { conta, mensagem } = await contaSocialDaMarca(userId, 'TIKTOK', brandId, accountId);
+  if (!conta) throw new Error(mensagem || 'Nenhuma conta do TikTok conectada.');
+  return conta as any;
 }
 
 export function getTikTokAuthUrl(clientKey: string, redirectUri: string, state: string): string {
@@ -144,13 +140,13 @@ async function ensureFreshToken(account: any, ownerId: string): Promise<string> 
  * - Post de VIDEO  -> /post/publish/video/init/   (PULL_FROM_URL)
  * - Post de IMAGEM -> /post/publish/content/init/ (photo mode)
  */
-export async function publishToTikTok(postId: string, accountId?: string): Promise<{ id: string }> {
+export async function publishToTikTok(postId: string, accountId?: string, brandId?: string | null): Promise<{ id: string }> {
   const post = await prisma.post.findUniqueOrThrow({
     where: { id: postId },
     include: { images: { orderBy: { order: 'asc' } } },
   });
 
-  const account = await getAccount(post.userId, accountId);
+  const account = await getAccount(post.userId, accountId, brandId ?? post.brandId);
   if (!account) throw new Error('Nenhuma conta TikTok conectada. Conecte em Configuracoes.');
 
   const accessToken = await ensureFreshToken(account, post.userId);

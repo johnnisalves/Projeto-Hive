@@ -109,6 +109,70 @@ export async function contaDaMarca(userId: string, brandId?: string | null): Pro
 }
 
 /**
+ * A mesma regra, para as outras redes (SocialAccount).
+ *
+ * Facebook, LinkedIn, X, TikTok e Threads tinham cada um o seu getAccount,
+ * e quatro deles nem sabiam o que era marca: iam direto para isDefault e
+ * depois para "qualquer conta". O post de um cliente saia no LinkedIn de
+ * outro sem nenhum erro.
+ */
+export interface ContaSocial {
+  id: string;
+  accessToken: string;
+  platformUserId: string;
+  username?: string | null;
+  pageId?: string | null;
+  isDefault: boolean;
+  brandId?: string | null;
+}
+
+export function escolherContaSocial(contas: ContaSocial[], brandId?: string | null): {
+  conta: ContaSocial | null;
+  motivo?: MotivoSemConta;
+  mensagem?: string;
+} {
+  const lista = contas || [];
+  if (lista.length === 0) {
+    return { conta: null, motivo: 'nenhuma_conta', mensagem: MENSAGENS.nenhuma_conta };
+  }
+
+  if (!brandId) {
+    return { conta: lista.find((c) => c.isDefault) || lista[0] };
+  }
+
+  const daMarca = lista.find((c) => c.brandId === brandId);
+  if (daMarca) return { conta: daMarca };
+
+  // Conta unica: nao ha como pegar a errada.
+  if (lista.length === 1) return { conta: lista[0] };
+
+  return { conta: null, motivo: 'ambiguo', mensagem: MENSAGENS.ambiguo };
+}
+
+/** Resolve a conta de uma plataforma consultando o banco. */
+export async function contaSocialDaMarca(
+  userId: string,
+  platform: string,
+  brandId?: string | null,
+  accountId?: string,
+) {
+  // accountId explicito ainda passa pelo dono: sem userId na condicao, um
+  // id de outra empresa publicaria na conta dela.
+  if (accountId) {
+    const escolhida = await prisma.socialAccount.findFirst({
+      where: { id: accountId, userId, platform: platform as any },
+    });
+    if (escolhida) return { conta: escolhida as unknown as ContaSocial };
+  }
+
+  const contas = await prisma.socialAccount.findMany({
+    where: { userId, platform: platform as any },
+  }).catch(() => []);
+
+  return escolherContaSocial(contas as unknown as ContaSocial[], brandId);
+}
+
+/**
  * Base da Graph API e caminho da conta, pelo tipo do token.
  *
  * Prefixo EAA = Login do Facebook (graph.facebook.com, usa o id da conta).
