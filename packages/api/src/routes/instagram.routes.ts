@@ -51,11 +51,21 @@ router.get('/accounts', async (req: AuthRequest, res: Response) => {
         isDefault: true,
         expiresAt: true,
         refreshedAt: true,
+        brandId: true,
       },
       orderBy: { refreshedAt: 'desc' },
     });
 
-    res.json({ success: true, data: accounts });
+    // As empresas vao junto: a tela precisa oferecer o vinculo, e sem ele
+    // uma agencia com varias contas nao consegue separar os dados dos
+    // clientes.
+    const brands = await prisma.brand.findMany({
+      where: { userId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    }).catch(() => []);
+
+    res.json({ success: true, data: accounts, brands });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message });
   }
@@ -150,6 +160,48 @@ router.post('/accounts', validate(addAccountSchema), async (req: AuthRequest, re
       return;
     }
     res.status(500).json({ success: false, error: msg });
+  }
+});
+
+/**
+ * PUT /api/instagram/accounts/:id/brand — vincula a conta a uma empresa.
+ *
+ * E ISTO que torna o sistema multicliente. Sem o vinculo, todo servico
+ * caia na "conta padrao do dono" e o relatorio de um cliente saia com os
+ * numeros de outro.
+ */
+router.put('/accounts/:id/brand', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const id = String(req.params.id);
+    const brandId = req.body?.brandId ? String(req.body.brandId) : null;
+
+    const conta = await prisma.instagramToken.findFirst({ where: { id, userId } });
+    if (!conta) { res.status(404).json({ success: false, error: 'Conta nao encontrada' }); return; }
+
+    if (brandId) {
+      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+      if (!brand) { res.status(404).json({ success: false, error: 'Empresa nao encontrada' }); return; }
+
+      // Uma empresa so pode ter uma conta de Instagram. Duas contas
+      // apontando para a mesma marca voltaria a ambiguidade que o
+      // resolvedor existe para evitar — e o desempate seria arbitrario.
+      const jaVinculada = await prisma.instagramToken.findFirst({
+        where: { userId, brandId, NOT: { id } },
+      });
+      if (jaVinculada) {
+        res.status(400).json({
+          success: false,
+          error: `A conta @${jaVinculada.username || jaVinculada.instagramUserId} ja esta vinculada a esta empresa. Desvincule ela primeiro.`,
+        });
+        return;
+      }
+    }
+
+    await prisma.instagramToken.update({ where: { id }, data: { brandId } });
+    res.json({ success: true, data: { id, brandId } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao vincular' });
   }
 });
 

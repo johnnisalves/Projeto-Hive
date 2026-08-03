@@ -1,4 +1,5 @@
 import { prisma } from '../config/database';
+import { contaDaMarca, enderecoDaConta } from './account-resolver.service';
 import { callText } from './caption.service';
 
 /**
@@ -113,16 +114,9 @@ export async function coletarEngajamento(userId: string, brandId?: string): Prom
   });
   if (posts.length === 0) return [];
 
-  const account = await prisma.instagramToken.findFirst({
-    where: { userId },
-    orderBy: { isDefault: 'desc' },
-  });
-
-  // Sem conta conectada seguimos com engajamento zero: o ranking fica pela
-  // ordem de publicacao, o que ainda e util, em vez de nao entregar nada.
-  const base = account?.accessToken?.startsWith('EAA')
-    ? 'https://graph.facebook.com/v21.0'
-    : 'https://graph.instagram.com/v21.0';
+  // A conta E DA MARCA pedida. Antes caia na conta padrao do dono, entao a
+  // reciclagem de um cliente ranqueava pelo engajamento de outro.
+  const { conta: account } = await contaDaMarca(userId, brandId);
 
   /**
    * Uma consulta so para TODAS as midias, em vez de uma por post.
@@ -134,9 +128,9 @@ export async function coletarEngajamento(userId: string, brandId?: string): Prom
    */
   const metricas = new Map<string, { likes: number; comments: number }>();
   if (account) {
-    // No Login do Instagram o id da conta nao serve como caminho; "me" e o
-    // alias que funciona nos dois modos.
-    const uid = account.accessToken.startsWith('EAA') ? account.instagramUserId : 'me';
+    // Sem conta seguimos com engajamento zero: o ranking fica pela ordem de
+    // publicacao, o que ainda e util, em vez de nao entregar nada.
+    const { base, uid } = enderecoDaConta(account);
     try {
       const r = await fetch(
         `${base}/${uid}/media?fields=id,like_count,comments_count&limit=100&access_token=${account.accessToken}`,

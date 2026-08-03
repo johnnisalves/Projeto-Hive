@@ -12,7 +12,9 @@ router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const ownerId = await resolveOwnerId(req.userId!);
     const period = String(req.query.period || '30d');
-    const data = await getInstagramAnalytics(ownerId, period);
+    // A marca decide QUAL conta de Instagram consultar. Sem ela, numa
+    // agencia com varios clientes, todo mundo veria os numeros do mesmo.
+    const data = await getInstagramAnalytics(ownerId, period, req.query.brandId ? String(req.query.brandId) : null);
     res.json({ success: true, data });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Falha ao carregar analytics' });

@@ -8,23 +8,38 @@ import { env } from '../config/env';
 //  - instagram_manage_insights (+ conta Business/Creator): alcance/impressoes por post.
 //    Se faltar, degrada com um aviso claro do que habilitar — nao quebra o resto.
 
+import { contaDaMarca, enderecoDaConta } from './account-resolver.service';
+
 function graphBase(token: string): string {
   return token.startsWith('EAA')
     ? 'https://graph.facebook.com/v21.0'
     : 'https://graph.instagram.com/v21.0';
 }
 
-async function resolveIgAccount(userId: string) {
-  let acc = await prisma.instagramToken.findFirst({ where: { userId, isDefault: true } });
-  if (!acc) acc = await prisma.instagramToken.findFirst({ where: { userId } });
-  if (acc) return { token: acc.accessToken, igUserId: acc.instagramUserId, username: acc.username };
-  if (env.INSTAGRAM_ACCESS_TOKEN && env.INSTAGRAM_USER_ID) {
-    return { token: env.INSTAGRAM_ACCESS_TOKEN, igUserId: env.INSTAGRAM_USER_ID, username: null as string | null };
+/**
+ * A conta DESTA MARCA. Sem brandId, cai na padrao (tela geral).
+ *
+ * Devolve tambem o motivo, para a tela dizer "vincule o Instagram desta
+ * empresa" em vez de mostrar os numeros de outro cliente.
+ */
+async function resolveIgAccount(userId: string, brandId?: string | null) {
+  const { conta, mensagem } = await contaDaMarca(userId, brandId);
+  if (conta) {
+    const { uid } = enderecoDaConta(conta);
+    return { token: conta.accessToken, igUserId: uid, username: conta.username, aviso: null as string | null };
   }
-  return null;
+  if (!brandId && env.INSTAGRAM_ACCESS_TOKEN && env.INSTAGRAM_USER_ID) {
+    return {
+      token: env.INSTAGRAM_ACCESS_TOKEN,
+      igUserId: env.INSTAGRAM_USER_ID,
+      username: null as string | null,
+      aviso: null as string | null,
+    };
+  }
+  return { token: null, igUserId: null, username: null, aviso: mensagem || null };
 }
 
-export async function getInstagramAnalytics(userId: string, period: string = '30d') {
+export async function getInstagramAnalytics(userId: string, period: string = '30d', brandId?: string | null) {
   const warnings: string[] = [];
   const days = period === '7d' ? 7 : period === '90d' ? 90 : 30;
 
@@ -47,9 +62,9 @@ export async function getInstagramAnalytics(userId: string, period: string = '30
     warnings,
   };
 
-  const account = await resolveIgAccount(userId);
-  if (!account) {
-    warnings.push('Nenhuma conta do Instagram conectada. Conecte em Configuracoes para ver metricas reais.');
+  const account = await resolveIgAccount(userId, brandId);
+  if (!account.token || !account.igUserId) {
+    warnings.push(account.aviso || 'Nenhuma conta do Instagram conectada. Conecte em Configuracoes para ver metricas reais.');
     return result;
   }
   result.connected = true;

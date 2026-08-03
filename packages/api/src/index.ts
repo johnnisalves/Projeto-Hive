@@ -334,6 +334,11 @@ async function ensureBrandColumns() {
     `CREATE INDEX IF NOT EXISTS "CommentTrigger_userId_idx" ON "CommentTrigger"("userId")`,
     `CREATE TABLE IF NOT EXISTS "TriggerLog" ("id" TEXT PRIMARY KEY, "commentId" TEXT NOT NULL, "triggerId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "TriggerLog_commentId_key" ON "TriggerLog"("commentId")`,
+    // Conta de Instagram por EMPRESA. Sem esta coluna o sistema nao e
+    // multicliente: todo servico caia na "conta padrao do dono" e o
+    // relatorio de um cliente saia com os numeros de outro.
+    `ALTER TABLE "InstagramToken" ADD COLUMN IF NOT EXISTS "brandId" TEXT`,
+    `CREATE INDEX IF NOT EXISTS "InstagramToken_brandId_idx" ON "InstagramToken"("brandId")`,
     // Micro-CRM do inbox: a DM com intencao de compra vira lead com valor
     `CREATE TABLE IF NOT EXISTS "Lead" ("id" TEXT PRIMARY KEY, "etapa" TEXT NOT NULL DEFAULT 'novo', "contato" TEXT, "origem" TEXT NOT NULL DEFAULT 'DIRECT', "mensagem" TEXT, "valorCentavos" INTEGER, "observacao" TEXT, "postId" TEXT, "fechadoEm" TIMESTAMP(3), "brandId" TEXT, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE INDEX IF NOT EXISTS "Lead_userId_etapa_idx" ON "Lead"("userId", "etapa")`,

@@ -165,6 +165,8 @@ export default function SettingsPage() {
 
   // Instagram accounts
   const [igAccounts, setIgAccounts] = useState<any[]>([]);
+  // Empresas do dono, para o seletor de vinculo conta <-> empresa.
+  const [igBrands, setIgBrands] = useState<Array<{ id: string; name: string }>>([]);
   const [showAddIg, setShowAddIg] = useState(false);
   const [igToken, setIgToken] = useState('');
   const [igUserId, setIgUserId] = useState('');
@@ -439,7 +441,25 @@ export default function SettingsPage() {
     try {
       const res: any = await api.listInstagramAccounts();
       setIgAccounts(Array.isArray(res) ? res : res?.data || []);
+      // As empresas vem junto para montar o seletor de vinculo.
+      if (res?.brands) setIgBrands(res.brands);
     } catch {}
+  }
+
+  /**
+   * Vincula a conta a uma empresa.
+   *
+   * E ISTO que torna o sistema multicliente: sem o vinculo, todo relatorio,
+   * inbox e metrica cai na conta padrao do dono — e o cliente B ve os
+   * numeros do cliente A.
+   */
+  async function handleVincularIg(id: string, brandId: string) {
+    try {
+      await api.vincularContaAEmpresa(id, brandId || null);
+      await loadIgAccounts();
+    } catch (e: any) {
+      alert(e?.message || 'Não consegui vincular');
+    }
   }
 
   async function handleAddIgAccount() {
@@ -837,39 +857,65 @@ export default function SettingsPage() {
                 <p className="text-xs text-text-muted">Nenhuma conta adicionada. Clique em "Adicionar Conta".</p>
               )}
               {igAccounts.map((acc) => (
-                <div key={acc.id} className="flex items-center gap-3 p-3 rounded-lg bg-bg-main mb-2">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
-                    {(acc.username || '?')[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-text-primary">@{acc.username || acc.instagramUserId}</p>
-                      {acc.isDefault && (
-                        <span className="px-1.5 py-0.5 rounded bg-primary/10 text-[10px] font-bold text-primary">PADRAO</span>
-                      )}
+                <div key={acc.id} className="p-3 rounded-lg bg-bg-main mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+                      {(acc.username || '?')[0].toUpperCase()}
                     </div>
-                    <p className="text-[10px] text-text-muted">
-                      Expira: {new Date(acc.expiresAt).toLocaleDateString('pt-BR')}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {!acc.isDefault && (
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-text-primary">@{acc.username || acc.instagramUserId}</p>
+                        {acc.isDefault && (
+                          <span className="px-1.5 py-0.5 rounded bg-primary/10 text-[10px] font-bold text-primary">PADRAO</span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-text-muted">
+                        Expira: {new Date(acc.expiresAt).toLocaleDateString('pt-BR')}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {!acc.isDefault && (
+                        <button
+                          onClick={() => handleSetDefaultIg(acc.id)}
+                          className="px-2 py-1 rounded text-[10px] font-semibold text-primary hover:bg-primary/10 transition-colors"
+                        >
+                          Tornar padrao
+                        </button>
+                      )}
                       <button
-                        onClick={() => handleSetDefaultIg(acc.id)}
-                        className="px-2 py-1 rounded text-[10px] font-semibold text-primary hover:bg-primary/10 transition-colors"
+                        onClick={() => handleDeleteIg(acc.id)}
+                        className="p-1.5 rounded text-text-muted hover:text-status-failed hover:bg-red-500/10 transition-colors"
                       >
-                        Tornar padrao
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
-                    )}
-                    <button
-                      onClick={() => handleDeleteIg(acc.id)}
-                      className="p-1.5 rounded text-text-muted hover:text-status-failed hover:bg-red-500/10 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    </div>
                   </div>
+
+                  {/* O vinculo com a empresa: e ele que separa os dados dos
+                      clientes. Sem vincular, relatorio e inbox de todas as
+                      empresas caem na conta padrao. */}
+                  {igBrands.length > 0 && (
+                    <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-border">
+                      <span className="text-[10px] text-text-muted flex-shrink-0">Empresa:</span>
+                      <select
+                        value={acc.brandId || ''}
+                        onChange={(e) => handleVincularIg(acc.id, e.target.value)}
+                        className="flex-1 px-2 py-1 rounded border border-border bg-bg-card text-[11px] text-text-primary"
+                      >
+                        <option value="">Nenhuma — dados podem se misturar</option>
+                        {igBrands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
+                    </div>
+                  )}
                 </div>
               ))}
+
+              {igAccounts.length > 1 && igAccounts.some((a) => !a.brandId) && (
+                <p className="text-[11px] text-amber-500 mt-2">
+                  Você tem mais de uma conta conectada e alguma sem empresa vinculada. Vincule cada uma para os
+                  relatórios, o inbox e as métricas de cada cliente não se misturarem.
+                </p>
+              )}
             </div>
           </div>
         </div>

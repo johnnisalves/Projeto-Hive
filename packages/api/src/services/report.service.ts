@@ -1,5 +1,6 @@
 import { prisma } from '../config/database';
 import { consolidarReceita, calcularRoi, formatarReais } from './attribution.service';
+import { contaDaMarca, enderecoDaConta } from './account-resolver.service';
 
 /**
  * Relatorio mensal por marca, em PDF.
@@ -75,21 +76,22 @@ export function variacao(atual: number, anterior: number): number | null {
  */
 async function metricasDoPeriodo(
   userId: string,
+  brandId: string,
   inicio: Date,
   fim: Date,
 ): Promise<{ curtidas: number; comentarios: number; porLegenda: Map<string, { curtidas: number; comentarios: number }> }> {
   const vazio = { curtidas: 0, comentarios: 0, porLegenda: new Map() };
 
-  const conta = await prisma.instagramToken.findFirst({
-    where: { userId },
-    orderBy: { isDefault: 'desc' },
-  }).catch(() => null);
-  if (!conta) return vazio;
+  // A conta E DESTA MARCA. Antes isto pegava a conta padrao do dono, entao
+  // o relatorio do cliente B saia com as curtidas do cliente A — o erro que
+  // a agencia so descobre na reuniao com o cliente.
+  const { conta, mensagem } = await contaDaMarca(userId, brandId);
+  if (!conta) {
+    if (mensagem) console.warn(`[Relatorio] Sem metricas para a marca ${brandId}: ${mensagem}`);
+    return vazio;
+  }
 
-  const base = conta.accessToken.startsWith('EAA')
-    ? 'https://graph.facebook.com/v21.0'
-    : 'https://graph.instagram.com/v21.0';
-  const uid = conta.accessToken.startsWith('EAA') ? conta.instagramUserId : 'me';
+  const { base, uid } = enderecoDaConta(conta);
 
   try {
     const r = await fetch(
@@ -156,7 +158,7 @@ export async function coletarDados(userId: string, brandId: string, ano: number,
     prisma.shortLink.findMany({ where: { userId, brandId }, select: { clicks: true } }).catch(() => []),
   ]);
 
-  const metricas = await metricasDoPeriodo(userId, inicio, fim);
+  const metricas = await metricasDoPeriodo(userId, brandId, inicio, fim);
 
   const porPlataforma: Record<string, number> = {};
   for (const p of publicados) {

@@ -7,6 +7,7 @@ import { preverNota } from '../services/engagement.service';
 import { melhoresDepoimentos, prepararDepoimento } from '../services/sentinel.service';
 import { podeGerar, montar, montarHtml, renderizar } from '../services/wrapped.service';
 import { coletarDados } from '../services/report.service';
+import { contaDaMarca, enderecoDaConta } from '../services/account-resolver.service';
 
 /**
  * Preview do feed e gatilhos de contexto local.
@@ -48,18 +49,13 @@ router.get('/grid', async (req: AuthRequest, res: Response) => {
     let publicados: any[] = [];
     let aviso: string | undefined;
 
-    const conta = await prisma.instagramToken.findFirst({
-      where: { userId: ownerId },
-      orderBy: { isDefault: 'desc' },
-    });
+    // A conta E DESTA MARCA: mostrar o feed publicado de outro cliente
+    // dentro do preview de um seria pior que nao mostrar nada.
+    const { conta, mensagem } = await contaDaMarca(ownerId, brandId);
+    if (!conta) aviso = mensagem;
 
     if (conta) {
-      const base = conta.accessToken.startsWith('EAA')
-        ? 'https://graph.facebook.com/v21.0'
-        : 'https://graph.instagram.com/v21.0';
-      // No Login do Instagram o proprio id nao serve como caminho; o alias
-      // "me" e o que funciona nos dois modos.
-      const uid = conta.accessToken.startsWith('EAA') ? conta.instagramUserId : 'me';
+      const { base, uid } = enderecoDaConta(conta);
       try {
         const r = await fetch(
           `${base}/${uid}/media?fields=id,media_type,media_url,thumbnail_url,permalink,timestamp,caption&limit=18&access_token=${conta.accessToken}`,
@@ -79,8 +75,6 @@ router.get('/grid', async (req: AuthRequest, res: Response) => {
       } catch (e: any) {
         aviso = e?.message;
       }
-    } else {
-      aviso = 'Conecte uma conta do Instagram para ver os posts já publicados no grid.';
     }
 
     // Se o Instagram nao respondeu, cai para o que temos no banco: um grid
@@ -256,7 +250,7 @@ router.get('/depoimentos', async (req: AuthRequest, res: Response) => {
     // compartilhado por toda a instalacao: o comentario recebido por um
     // cliente podia virar depoimento sugerido para outro.
     const comentarios: Array<{ id: string; texto: string; criadoEm: Date; sentimento?: string }> =
-      await coletarComentarios(ownerId).catch(() => []);
+      await coletarComentarios(ownerId, req.query.brandId ? String(req.query.brandId) : null).catch(() => []);
 
     const melhores = melhoresDepoimentos(comentarios, 5);
     res.json({
@@ -333,15 +327,12 @@ router.post('/retrospectiva/arte', async (req: AuthRequest, res: Response) => {
   }
 });
 
-/** Comentarios recentes da conta, com o sentimento que o inbox ja classificou. */
-async function coletarComentarios(userId: string) {
-  const conta = await prisma.instagramToken.findFirst({ where: { userId }, orderBy: { isDefault: 'desc' } });
+/** Comentarios recentes DA MARCA, com o sentimento que o inbox ja classificou. */
+async function coletarComentarios(userId: string, brandId?: string | null) {
+  const { conta } = await contaDaMarca(userId, brandId);
   if (!conta) return [];
 
-  const base = conta.accessToken.startsWith('EAA')
-    ? 'https://graph.facebook.com/v21.0'
-    : 'https://graph.instagram.com/v21.0';
-  const uid = conta.accessToken.startsWith('EAA') ? conta.instagramUserId : 'me';
+  const { base, uid } = enderecoDaConta(conta);
 
   const r = await fetch(`${base}/${uid}/media?fields=id,comments{id,text,timestamp}&limit=12&access_token=${conta.accessToken}`);
   const j = (await r.json()) as any;

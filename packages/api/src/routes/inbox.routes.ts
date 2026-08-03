@@ -17,7 +17,7 @@ router.use(authMiddleware);
 router.get('/', async (req: AuthRequest, res: Response) => {
   try {
     const ownerId = await resolveOwnerId(req.userId!);
-    const data = await getInbox(ownerId);
+    const data = await getInbox(ownerId, req.query.brandId ? String(req.query.brandId) : null);
     res.json({ success: true, data });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Falha ao carregar inbox' });
@@ -100,7 +100,7 @@ router.post('/comments-enabled', validate(enabledSchema), async (req: AuthReques
 router.get('/dms', async (req: AuthRequest, res: Response) => {
   try {
     const ownerId = await resolveOwnerId(req.userId!);
-    const data = await getDMs(ownerId);
+    const data = await getDMs(ownerId, req.query.brandId ? String(req.query.brandId) : null);
     res.json({ success: true, data });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Falha ao carregar DMs' });

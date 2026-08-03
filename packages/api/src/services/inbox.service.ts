@@ -12,36 +12,52 @@ function graphBase(token: string): string {
     : 'https://graph.instagram.com/v21.0';
 }
 
-async function resolveIgAccount(userId: string) {
-  let acc = await prisma.instagramToken.findFirst({ where: { userId, isDefault: true } });
-  if (!acc) acc = await prisma.instagramToken.findFirst({ where: { userId } });
-  if (acc) return { token: acc.accessToken, igUserId: acc.instagramUserId, username: acc.username };
-  if (env.INSTAGRAM_ACCESS_TOKEN && env.INSTAGRAM_USER_ID) {
-    return { token: env.INSTAGRAM_ACCESS_TOKEN, igUserId: env.INSTAGRAM_USER_ID, username: null as string | null };
+import { contaDaMarca, enderecoDaConta } from './account-resolver.service';
+
+/**
+ * A conta DESTA MARCA. Antes caia sempre na conta padrao do dono: numa
+ * agencia, o inbox de um cliente mostrava as mensagens de outro.
+ */
+async function resolveIgAccount(userId: string, brandId?: string | null) {
+  const { conta, mensagem } = await contaDaMarca(userId, brandId);
+  if (conta) {
+    const { uid } = enderecoDaConta(conta);
+    return { token: conta.accessToken, igUserId: uid, username: conta.username, aviso: null as string | null };
   }
-  return null;
+  if (!brandId && env.INSTAGRAM_ACCESS_TOKEN && env.INSTAGRAM_USER_ID) {
+    return {
+      token: env.INSTAGRAM_ACCESS_TOKEN,
+      igUserId: env.INSTAGRAM_USER_ID,
+      username: null as string | null,
+      aviso: null as string | null,
+    };
+  }
+  return { token: null as string | null, igUserId: null as string | null, username: null as string | null, aviso: mensagem || null };
 }
 
-async function getAccount(userId: string) {
-  const account = await resolveIgAccount(userId);
-  if (!account) throw new Error('Nenhuma conta do Instagram conectada. Conecte em Configuracoes.');
-  return account;
+async function getAccount(userId: string, brandId?: string | null) {
+  const account = await resolveIgAccount(userId, brandId);
+  if (!account.token || !account.igUserId) {
+    throw new Error(account.aviso || 'Nenhuma conta do Instagram conectada. Conecte em Configuracoes.');
+  }
+  return { token: account.token, igUserId: account.igUserId, username: account.username };
 }
 
-export async function getInbox(userId: string) {
+export async function getInbox(userId: string, brandId?: string | null) {
   const warnings: string[] = [];
-  const account = await resolveIgAccount(userId);
+  const account = await resolveIgAccount(userId, brandId);
 
-  const result: any = { connected: !!account, username: account?.username || null, items: [], warnings };
-  if (!account) {
-    warnings.push('Nenhuma conta do Instagram conectada. Conecte em Configuracoes.');
+  const conectado = Boolean(account.token && account.igUserId);
+  const result: any = { connected: conectado, username: account.username || null, items: [], warnings };
+  if (!conectado) {
+    warnings.push(account.aviso || 'Nenhuma conta do Instagram conectada. Conecte em Configuracoes.');
     return result;
   }
   result.username = account.username;
 
-  const base = graphBase(account.token);
-  const tok = account.token;
-  const uid = account.igUserId;
+  const base = graphBase(account.token!);
+  const tok = account.token!;
+  const uid = account.igUserId!;
 
   // Publicacoes recentes com contagem de comentarios
   let media: any[] = [];
@@ -96,16 +112,20 @@ export async function getInbox(userId: string) {
 }
 
 // DMs (mensagens diretas) — requer instagram_manage_messages + conta ligada a uma Pagina.
-export async function getDMs(userId: string) {
+export async function getDMs(userId: string, brandId?: string | null) {
   const warnings: string[] = [];
-  const account = await resolveIgAccount(userId);
-  const result: any = { connected: !!account, username: account?.username || null, items: [], warnings };
-  if (!account) { warnings.push('Nenhuma conta do Instagram conectada.'); return result; }
+  const account = await resolveIgAccount(userId, brandId);
+  const conectado = Boolean(account.token && account.igUserId);
+  const result: any = { connected: conectado, username: account.username || null, items: [], warnings };
+  if (!conectado) {
+    warnings.push(account.aviso || 'Nenhuma conta do Instagram conectada.');
+    return result;
+  }
   result.username = account.username;
 
-  const base = graphBase(account.token);
-  const tok = account.token;
-  const uid = account.igUserId;
+  const base = graphBase(account.token!);
+  const tok = account.token!;
+  const uid = account.igUserId!;
 
   try {
     const url = `${base}/${uid}/conversations?platform=instagram&fields=id,updated_time,participants,messages.limit(1){message,from,created_time}&limit=25&access_token=${tok}`;

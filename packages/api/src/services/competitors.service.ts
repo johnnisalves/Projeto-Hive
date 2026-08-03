@@ -1,4 +1,5 @@
 import { prisma } from '../config/database';
+import { contaDaMarca } from './account-resolver.service';
 
 /**
  * Radar de concorrentes.
@@ -55,11 +56,10 @@ export function delta(atual?: number | null, anterior?: number | null): number |
 }
 
 /** Busca os dados publicos de um perfil. */
-export async function consultarPerfil(userId: string, username: string): Promise<Metricas> {
-  const account = await prisma.instagramToken.findFirst({
-    where: { userId },
-    orderBy: { isDefault: 'desc' },
-  });
+export async function consultarPerfil(userId: string, username: string, brandId?: string | null): Promise<Metricas> {
+  // O business_discovery e assinado pela conta da MARCA que acompanha o
+  // concorrente: assim a cota de chamadas de cada cliente e a dele.
+  const { conta: account } = await contaDaMarca(userId, brandId);
   if (!account) throw new Error('Nenhuma conta do Instagram conectada.');
   if (!account.accessToken.startsWith('EAA')) {
     throw new Error('O radar exige conta conectada via Login do Facebook.');
@@ -103,7 +103,9 @@ export async function atualizarConcorrente(userId: string, id: string) {
   if (!c) throw new Error('Concorrente nao encontrado');
 
   try {
-    const m = await consultarPerfil(userId, c.username);
+    // O concorrente ja sabe de qual marca ele e; a consulta usa a conta
+    // dessa marca em vez da conta padrao do dono.
+    const m = await consultarPerfil(userId, c.username, c.brandId);
     return await prisma.competitor.update({
       where: { id: c.id },
       data: {

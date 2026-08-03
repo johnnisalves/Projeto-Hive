@@ -53,7 +53,7 @@ router.post('/', validate(novoSchema), async (req: AuthRequest, res: Response) =
 
     // Consulta ANTES de gravar: assim um @ inexistente nao entra na lista
     // e o usuario ve o erro na hora, em vez de um card vazio para sempre.
-    const m = await consultarPerfil(userId, username);
+    const m = await consultarPerfil(userId, username, req.body?.brandId || null);
 
     const c = await prisma.competitor.create({
       data: {

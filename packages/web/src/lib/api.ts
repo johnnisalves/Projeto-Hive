@@ -821,6 +821,15 @@ export const api = {
     request('/api/instagram/accounts', { method: 'POST', body: JSON.stringify(body) }),
   setDefaultInstagramAccount: (id: string) =>
     request(`/api/instagram/accounts/${id}/default`, { method: 'PUT' }),
+
+  // Vincula a conta a uma empresa. E ISTO que torna o sistema multicliente:
+  // sem vinculo, todo servico cai na conta padrao do dono e o relatorio de
+  // um cliente sai com os numeros de outro. `brandId: null` desvincula.
+  vincularContaAEmpresa: (id: string, brandId: string | null) =>
+    request<{ id: string; brandId: string | null }>(`/api/instagram/accounts/${id}/brand`, {
+      method: 'PUT',
+      body: JSON.stringify({ brandId }),
+    }),
   deleteInstagramAccount: (id: string) =>
     request(`/api/instagram/accounts/${id}`, { method: 'DELETE' }),
 

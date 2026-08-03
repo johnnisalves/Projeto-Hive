@@ -565,12 +565,22 @@ model InstagramToken {
   username        String?
   pageId          String?
   isDefault       Boolean  @default(false)
+  /**
+   * A empresa dona desta conta.
+   *
+   * SEM ISSO O SISTEMA NAO E MULTICLIENTE. Todo servico pegava "a conta
+   * padrao do dono", entao numa agencia com 40 clientes o relatorio de um
+   * saia com os numeros de outro. Nulo = conta ainda nao vinculada; o
+   * resolvedor trata isso (ver account-resolver.service.ts).
+   */
+  brandId         String?
   expiresAt       DateTime
   refreshedAt     DateTime @default(now())
   userId          String
   user            User     @relation(fields: [userId], references: [id])
 
   @@index([userId])
+  @@index([brandId])
 }
 
 // Conexao WhatsApp (UAZ API) para publicar no Status do WhatsApp
