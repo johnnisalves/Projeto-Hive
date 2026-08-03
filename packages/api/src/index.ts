@@ -31,6 +31,7 @@ import brandingRoutes from './routes/branding.routes';
 import billingRoutes from './routes/billing.routes';
 import vendasRoutes from './routes/vendas.routes';
 import gatilhosRoutes from './routes/gatilhos.routes';
+import feedRoutes from './routes/feed.routes';
 import { publishWorker } from './jobs/publish.worker';
 import { tokenRefreshWorker, initTokenRefreshJob } from './jobs/token-refresh.worker';
 import { taskReminderWorker } from './jobs/task-reminder.worker';
@@ -87,6 +88,7 @@ app.use('/api/billing', billingRoutes);
 // usados por quem nao tem login (quem clicou no post, quem esta no balcao).
 app.use('/api/vendas', vendasRoutes);
 app.use('/api/gatilhos', gatilhosRoutes);
+app.use('/api/feed', feedRoutes);
 
 // Health check with env diagnostics
 app.get('/api/health', (_req, res) => {

@@ -386,6 +386,24 @@ export const api = {
       body: JSON.stringify({ brandId, valor, txid }),
     }),
 
+  // Preview do feed: publicados + agendados na ordem em que vao aparecer.
+  gridDoFeed: (brandId?: string) =>
+    request<{
+      agendados: Array<{ id: string; imageUrl: string | null; caption: string; scheduledAt: string; publishMode: string; publicado: false }>;
+      publicados: Array<{ id: string; imageUrl: string | null; caption: string; permalink?: string; timestamp: string; publicado: true }>;
+      aviso?: string;
+    }>(`/api/feed/grid${brandId ? `?brandId=${brandId}` : ''}`),
+
+  // Gatilho de clima: a previsao da noite recomenda algum post hoje?
+  climaDeHoje: (brandId: string) =>
+    request<{
+      cidade?: string; condicao: 'chuva' | 'frio' | 'calor' | null;
+      detalhe?: string; liberado?: boolean; pauta?: string | null; motivo?: string;
+    }>(`/api/feed/clima?brandId=${brandId}`),
+
+  climaUsado: (brandId: string, condicao: string) =>
+    request<{ ok: boolean }>('/api/feed/clima/usado', { method: 'POST', body: JSON.stringify({ brandId, condicao }) }),
+
   // --- Gatilhos de comentario, cerebro da marca e diario de bordo ---
 
   listarGatilhos: () =>
