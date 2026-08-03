@@ -312,7 +312,18 @@ async function ensureBrandColumns() {
     `CREATE INDEX IF NOT EXISTS "ShortLink_userId_idx" ON "ShortLink"("userId")`,
     `CREATE INDEX IF NOT EXISTS "ShortLink_postId_idx" ON "ShortLink"("postId")`,
     `CREATE TABLE IF NOT EXISTS "Coupon" ("id" TEXT PRIMARY KEY, "code" TEXT NOT NULL, "descricao" TEXT, "maxUsos" INTEGER, "usos" INTEGER NOT NULL DEFAULT 0, "ativo" BOOLEAN NOT NULL DEFAULT true, "expiresAt" TIMESTAMP(3), "postId" TEXT, "brandId" TEXT, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS "Coupon_userId_code_key" ON "Coupon"("userId", "code")`,
+    // O codigo do cupom precisa ser unico GLOBALMENTE: o resgate acontece
+    // numa rota publica que so recebe o codigo, sem usuario para desempatar.
+    // Com unicidade por usuario, duas agencias podiam ter o mesmo
+    // "PROMO-K4T" e o resgate de uma cairia no cupom da outra.
+    //
+    // Desduplicar ANTES de criar o indice: o runner de DDL so avisa quando
+    // uma instrucao falha, entao um indice unico sobre dados duplicados
+    // simplesmente nao existiria — e o bug continuaria de pe em silencio.
+    // Mantem o mais antigo com o codigo original e renomeia os demais.
+    `UPDATE "Coupon" c SET "code" = c."code" || '-' || substr(c."id", 1, 4) WHERE EXISTS (SELECT 1 FROM "Coupon" o WHERE o."code" = c."code" AND o."createdAt" < c."createdAt")`,
+    `DROP INDEX IF EXISTS "Coupon_userId_code_key"`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "Coupon_code_key" ON "Coupon"("code")`,
     `CREATE INDEX IF NOT EXISTS "Coupon_userId_idx" ON "Coupon"("userId")`,
     `CREATE TABLE IF NOT EXISTS "CouponRedemption" ("id" TEXT PRIMARY KEY, "valorCentavos" INTEGER NOT NULL DEFAULT 0, "observacao" TEXT, "couponId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE INDEX IF NOT EXISTS "CouponRedemption_couponId_idx" ON "CouponRedemption"("couponId")`,

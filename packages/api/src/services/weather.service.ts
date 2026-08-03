@@ -62,7 +62,13 @@ export function avaliarPrevisao(horas: HoraPrevista[]): { condicao: Condicao; de
     return { condicao: 'chuva', detalhe: `${Math.round(chuvaMax)}% de chance de chuva hoje à noite` };
   }
 
-  const temps = noite.map((h) => h.temperatura).filter((t) => typeof t === 'number');
+  // `previsaoDeHoje` preenche temperatura ausente com 0, e 0 e um numero
+  // valido — sem descartar aqui, uma resposta incompleta da API viraria
+  // "0°C hoje a noite" e o gatilho de frio dispararia em pleno verao no
+  // Nordeste. Nenhum lugar habitado do Brasil chega a -50.
+  const temps = noite
+    .map((h) => h.temperatura)
+    .filter((t) => typeof t === 'number' && !isNaN(t));
   if (temps.length === 0) return { condicao: null, detalhe: '' };
 
   const min = Math.min(...temps);
@@ -140,7 +146,9 @@ export async function previsaoDeHoje(cidade: string): Promise<{ horas: HoraPrevi
       horas: tempos.map((hora, i) => ({
         hora,
         chuvaProb: probs[i] ?? 0,
-        temperatura: temps[i] ?? 0,
+        // NaN em vez de 0 quando o dado nao veio: 0 e uma temperatura
+        // valida e passaria pela conferencia como "faz frio".
+        temperatura: typeof temps[i] === 'number' ? temps[i] : NaN,
       })),
     };
   } catch {

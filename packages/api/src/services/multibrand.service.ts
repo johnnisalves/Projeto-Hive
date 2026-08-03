@@ -28,15 +28,17 @@ export const CAMPOS: Record<string, string> = {
 export const MARCACOES_DISPONIVEIS = Object.keys(CAMPOS);
 
 /**
- * Acha as marcacoes usadas no texto.
+ * Acha TUDO que estiver entre chaves duplas, valido ou nao.
  *
- * Aceita espaco dentro das chaves ("{{ nome }}") porque e como a pessoa
- * digita quando copia de outro lugar — e uma marcacao nao reconhecida
- * viraria texto literal no post publicado.
+ * O padrao e proposital: qualquer coisa entre {{ }} vai sair literal no
+ * post se nao for substituida. Um regex que so casasse [a-z_] deixaria
+ * "{{nome2}}", "{{endereço}}" e "{{ nome completo }}" passarem sem serem
+ * nem substituidos nem reportados como erro — e eles apareceriam assim,
+ * com as chaves, no feed do cliente.
  */
 export function extrairMarcacoes(texto: string): string[] {
-  const achadas = (texto || '').match(/\{\{\s*([a-z_]+)\s*\}\}/gi) || [];
-  const nomes = achadas.map((m) => m.replace(/[{}\s]/g, '').toLowerCase());
+  const achadas = (texto || '').match(/\{\{([^{}]*)\}\}/g) || [];
+  const nomes = achadas.map((m) => m.slice(2, -2).trim().toLowerCase()).filter(Boolean);
   return Array.from(new Set(nomes));
 }
 
@@ -58,8 +60,11 @@ export interface MarcaParaPreencher {
  * numero vai para a ARTE e para a legenda, onde e lido por gente.
  */
 export function preencher(template: string, marca: MarcaParaPreencher): string {
-  return (template || '').replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (original, chave) => {
-    const campo = CAMPOS[String(chave).toLowerCase()];
+  return (template || '').replace(/\{\{([^{}]*)\}\}/g, (original, chave) => {
+    // trim() aqui tem que casar com o de extrairMarcacoes, senao
+    // "{{ nome }}" seria reportado como valido na conferencia e mesmo
+    // assim sairia literal no post.
+    const campo = CAMPOS[String(chave).trim().toLowerCase()];
     if (!campo) return original;
     const valor = marca[campo];
     if (valor === null || valor === undefined || valor === '') return original;

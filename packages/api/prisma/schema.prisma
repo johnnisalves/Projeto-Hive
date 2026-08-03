@@ -396,7 +396,15 @@ model ShortLink {
  */
 model Coupon {
   id          String   @id @default(uuid())
-  code        String
+  /**
+   * Unico GLOBALMENTE, nao por usuario.
+   *
+   * O resgate acontece numa rota publica que so recebe o codigo — nao ha
+   * usuario logado para desempatar. Com unicidade por usuario, duas
+   * agencias podiam ter o mesmo "PROMO-K4T" e o resgate de uma cairia no
+   * cupom da outra: o dinheiro apareceria no relatorio do cliente errado.
+   */
+  code        String   @unique
   descricao   String?
   /** Nulo = sem limite. Zero = esgotado. A diferenca importa. */
   maxUsos     Int?
@@ -410,7 +418,6 @@ model Coupon {
   resgates    CouponRedemption[]
   createdAt   DateTime @default(now())
 
-  @@unique([userId, code])
   @@index([userId])
 }
 

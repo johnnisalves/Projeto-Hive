@@ -98,6 +98,15 @@ describe('temPergunta / temChamada', () => {
   test('nao confunde palavra parecida', () => {
     assert.ok(!temChamada('recomendado por todos'));
   });
+
+  // O erro mais irritante possivel numa feature que da conselho: penalizar
+  // uma legenda que TEM chamada para acao porque ela foi escrita com
+  // acento — que e como a pessoa realmente escreve.
+  test('chamada acentuada conta como chamada', () => {
+    assert.ok(temChamada('Peça já o seu'));
+    assert.ok(temChamada('Agende seu horário'));
+    assert.ok(temChamada('Reserve sua mesa'));
+  });
 });
 
 describe('preverNota', () => {

@@ -140,6 +140,21 @@ describe('lerDataBr', () => {
     assert.equal(lerDataBr('abc/def/ghi'), null);
   });
 
+  // ISO e inequivoco na ORDEM, mas nao na validade: 2026-02-30 tambem
+  // "rola" para 2 de marco no construtor do JS. A conferencia de rolagem
+  // precisa valer para os dois formatos, nao so para o brasileiro.
+  test('data ISO que nao existe tambem e recusada', () => {
+    assert.equal(lerDataBr('2026-02-30'), null);
+    assert.equal(lerDataBr('2026-13-01'), null);
+    assert.equal(lerDataBr('2026-04-31'), null);
+    assert.equal(lerDataBr('2027-02-29'), null);
+  });
+
+  test('data ISO valida continua passando', () => {
+    assert.equal(lerDataBr('2028-02-29')!.getDate(), 29);
+    assert.equal(lerDataBr('2026-08-31')!.getDate(), 31);
+  });
+
   test('29 de fevereiro passa em ano bissexto e falha fora dele', () => {
     assert.ok(lerDataBr('29/02/2028'));
     assert.equal(lerDataBr('29/02/2027'), null);
@@ -241,5 +256,42 @@ describe('lerPlanilha', () => {
   test('arquivo salvo no Windows (CRLF) e lido igual', () => {
     const csv = 'data,legenda\r\n03/08/2026 10:00,Pizza nova\r\n';
     assert.equal(lerPlanilha(csv, agora).validas, 1);
+  });
+
+  // Legenda de Instagram TEM quebra de linha, e o Excel salva isso como um
+  // campo entre aspas com \n dentro. Cortar ali despedacava a legenda E
+  // criava uma linha fantasma que aparecia como "sem data".
+  test('legenda com quebra de linha dentro de aspas continua uma linha so', () => {
+    const csv = 'data,legenda\n03/08/2026 10:00,"Chegou a pizza nova\n\nVem provar hoje"';
+    const r = lerPlanilha(csv, agora);
+    assert.equal(r.linhas.length, 1);
+    assert.equal(r.validas, 1);
+    assert.ok(r.linhas[0].legenda.includes('Vem provar hoje'));
+    assert.ok(r.linhas[0].legenda.includes('\n'));
+  });
+
+  test('quebra dentro de aspas nao vira linha fantasma sem data', () => {
+    const csv = 'data,legenda\n03/08/2026 10:00,"Um\ndois"\n04/08/2026 10:00,Outro';
+    const r = lerPlanilha(csv, agora);
+    assert.equal(r.linhas.length, 2);
+    assert.equal(r.invalidas, 0);
+  });
+
+  // Truncar em silencio faria o usuario achar que importou tudo e so
+  // descobrir o buraco quando a grade acabasse no meio.
+  test('planilha grande demais avisa o que ficou de fora', () => {
+    const linhas = Array.from({ length: 520 }, (_, i) => {
+      const dia = String((i % 27) + 1).padStart(2, '0');
+      const hora = String(i % 24).padStart(2, '0');
+      const min = String(i % 60).padStart(2, '0');
+      return `${dia}/09/2026 ${hora}:${min},Post ${i}`;
+    });
+    const r = lerPlanilha(['data,legenda', ...linhas].join('\n'), agora);
+    assert.ok(r.aviso);
+    assert.match(r.aviso!, /20/);
+  });
+
+  test('planilha dentro do limite nao gera aviso', () => {
+    assert.equal(lerPlanilha('data,legenda\n03/08/2026 10:00,Post', agora).aviso, undefined);
   });
 });

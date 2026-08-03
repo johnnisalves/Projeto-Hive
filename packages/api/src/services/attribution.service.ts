@@ -169,21 +169,37 @@ export function formatarReais(centavos: number): string {
 
 // --- Acesso ao banco ---
 
-/** Cria (ou reaproveita) o link curto de um post. */
+/**
+ * Cria (ou reaproveita) o link curto de um post.
+ *
+ * `brandId` NAO e opcional na pratica: o relatorio mensal conta cliques
+ * filtrando por marca, e link salvo sem ela nunca aparece — os cliques do
+ * PDF ficavam zerados mesmo com o botao sendo usado.
+ */
 export async function linkDoPost(
   userId: string,
   postId: string,
   destino: string,
+  brandId?: string | null,
 ): Promise<{ code: string; url: string }> {
   const existente = await prisma.shortLink.findFirst({ where: { userId, postId } });
-  if (existente) return { code: existente.code, url: existente.targetUrl };
+  if (existente) {
+    // Link antigo criado antes deste campo existir: preenche agora, senao
+    // ele fica invisivel no relatorio para sempre.
+    if (brandId && !existente.brandId) {
+      await prisma.shortLink.update({ where: { id: existente.id }, data: { brandId } }).catch(() => {});
+    }
+    return { code: existente.code, url: existente.targetUrl };
+  }
 
   // Colisao de codigo e rara, mas o unique no banco e quem garante: tentamos
   // algumas vezes em vez de confiar na sorte de um sorteio so.
   for (let tentativa = 0; tentativa < 5; tentativa++) {
     const code = gerarCodigoCurto(6);
     try {
-      const l = await prisma.shortLink.create({ data: { code, targetUrl: destino, postId, userId } });
+      const l = await prisma.shortLink.create({
+        data: { code, targetUrl: destino, postId, userId, brandId: brandId || null },
+      });
       return { code: l.code, url: l.targetUrl };
     } catch {
       /* codigo repetido: sorteia outro */

@@ -84,6 +84,17 @@ describe('avaliarPrevisao', () => {
     assert.equal(avaliarPrevisao([]).condicao, null);
     assert.equal(avaliarPrevisao([h('2026-08-02T03:00', 90, 20)]).condicao, null);
   });
+
+  // Temperatura ausente virava 0, e 0 e um numero valido: o gatilho de
+  // frio dispararia em pleno verao no Nordeste por causa de uma resposta
+  // incompleta da API.
+  test('temperatura ausente nao vira gatilho de frio', () => {
+    assert.equal(avaliarPrevisao([h('2026-08-02T20:00', 10, NaN)]).condicao, null);
+  });
+
+  test('zero grau de verdade ainda dispara frio', () => {
+    assert.equal(avaliarPrevisao([h('2026-08-02T20:00', 10, 0)]).condicao, 'frio');
+  });
 });
 
 describe('podeDisparar', () => {

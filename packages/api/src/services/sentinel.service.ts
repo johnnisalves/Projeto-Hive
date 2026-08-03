@@ -113,14 +113,21 @@ export const MAX_CARACTERES_DEPOIMENTO = 140;
  * uma frase minima, senao a fabrica de prova social produz constrangimento.
  */
 export function elegivelComoDepoimento(c: ComentarioObservado): boolean {
-  const t = (c.texto || '').trim();
+  const bruto = (c.texto || '').trim();
+  if (!bruto) return false;
+  if (bruto.length > MAX_CARACTERES_DEPOIMENTO * 2) return false;
+  if (DESCARTAR.test(bruto)) return false;
+  if (c.sentimento === 'negativo') return false;
+
+  // Avalia o texto JA LIMPO, que e o que vai para a arte. Julgar o texto
+  // cru deixava passar comentarios que, depois de tirar @ e hashtag,
+  // ficavam com uma palavra so — ou perdiam o proprio elogio, se ele
+  // estava numa hashtag (#melhorpizzaria).
+  const t = prepararDepoimento(bruto);
   if (!t) return false;
 
   const palavras = (t.match(/\S+/g) || []).length;
   if (palavras < MIN_PALAVRAS_DEPOIMENTO) return false;
-  if (t.length > MAX_CARACTERES_DEPOIMENTO * 2) return false;
-  if (DESCARTAR.test(t)) return false;
-  if (c.sentimento === 'negativo') return false;
 
   return ELOGIO.test(semAcento(t));
 }

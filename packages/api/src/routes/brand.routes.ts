@@ -60,7 +60,9 @@ const createBrandSchema = z.object({
   // --- Venda e atribuicao ---
   // A chave PIX aceita qualquer formato (CPF, e-mail, telefone, aleatoria):
   // validar o formato aqui recusaria chaves validas que ainda nao previmos.
-  pixKey: optionalString(140),
+  // 77 e o limite que mantem o campo 26 do BR Code dentro dos 99 do EMV
+  // (22 do GUI + 77). Aceitar mais gerava um codigo que o banco recusa.
+  pixKey: optionalString(77),
   pixCity: optionalString(60),
   whatsappPhone: optionalString(30),
   cidade: optionalString(80),

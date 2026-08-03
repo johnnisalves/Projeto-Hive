@@ -250,22 +250,13 @@ router.post('/nota', async (req: AuthRequest, res: Response) => {
 router.get('/depoimentos', async (req: AuthRequest, res: Response) => {
   try {
     const ownerId = await resolveOwnerId(req.userId!);
-    const bruto = await prisma.setting.findUnique({
-      where: { userId_key: { userId: 'webhook', key: 'LAST_COMMENTS' } },
-    }).catch(() => null);
 
-    // A fonte confiavel e o inbox, que ja classifica sentimento. O evento do
-    // webhook e so o mais recente e serve de complemento.
+    // A fonte e a conta do PROPRIO usuario. Antes isto tambem lia um
+    // Setting de pseudo-usuario 'webhook', que era um registro unico
+    // compartilhado por toda a instalacao: o comentario recebido por um
+    // cliente podia virar depoimento sugerido para outro.
     const comentarios: Array<{ id: string; texto: string; criadoEm: Date; sentimento?: string }> =
       await coletarComentarios(ownerId).catch(() => []);
-    if (bruto?.value) {
-      try {
-        const v = JSON.parse(bruto.value);
-        if (v?.id && v?.text) {
-          comentarios.push({ id: v.id, texto: v.text, criadoEm: new Date(), sentimento: undefined });
-        }
-      } catch { /* evento em formato inesperado: ignora */ }
-    }
 
     const melhores = melhoresDepoimentos(comentarios, 5);
     res.json({

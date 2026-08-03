@@ -89,8 +89,17 @@ export function temPergunta(caption: string): boolean {
  * "comenta" logo apos um acento nao casaria. Foi um bug real neste projeto.
  */
 export function temChamada(caption: string): boolean {
-  const t = (caption || '').toLowerCase();
-  return /(?:^|[^\p{L}])(comenta|comente|marca|marque|chama|chame|corre|garanta|peca|pede|clica|clique|link na bio|arrasta|salva|compartilha)/u.test(t);
+  // Normaliza o ACENTO antes de comparar. Sem isso "peça" (a forma que a
+  // pessoa realmente escreve) nao casava com "peca", e a nota PENALIZAVA
+  // uma legenda que tem chamada para acao — o erro mais irritante possivel
+  // numa feature que existe para dar conselho.
+  const t = (caption || '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase();
+  // As alternativas ficam SEM acento de proposito: o texto ja chegou
+  // normalizado, entao "peça" no padrao nunca casaria com nada.
+  return /(?:^|[^\p{L}])(comenta|comente|marca|marque|chama|chame|corre|garanta|peca|pede|clica|clique|link na bio|arrasta|salva|compartilha|aproveit|agend|reserv|adquira|leve)/u.test(t);
 }
 
 export function palavras(caption: string): number {

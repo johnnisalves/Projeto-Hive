@@ -51,6 +51,20 @@ describe('extrairMarcacoes', () => {
     assert.deepEqual(extrairMarcacoes('Post normal sem nada'), []);
     assert.deepEqual(extrairMarcacoes(''), []);
   });
+
+  // Qualquer coisa entre chaves duplas VAI SAIR LITERAL no post se nao for
+  // substituida. Um regex que so casasse [a-z_] deixaria estas passarem
+  // sem serem substituidas nem reportadas — e elas apareceriam com as
+  // chaves no feed do cliente.
+  test('pega marcacao com digito, acento e espaco no meio', () => {
+    assert.deepEqual(extrairMarcacoes('{{nome2}}'), ['nome2']);
+    assert.deepEqual(extrairMarcacoes('{{endereço}}'), ['endereço']);
+    assert.deepEqual(extrairMarcacoes('{{nome completo}}'), ['nome completo']);
+  });
+
+  test('chaves vazias nao viram marcacao', () => {
+    assert.deepEqual(extrairMarcacoes('{{}} e {{   }}'), []);
+  });
 });
 
 describe('marcacoesInvalidas', () => {
@@ -60,6 +74,12 @@ describe('marcacoesInvalidas', () => {
 
   test('template certo nao tem invalidas', () => {
     assert.deepEqual(marcacoesInvalidas('{{nome}} em {{cidade}}'), []);
+  });
+
+  test('marcacao com digito ou acento e apontada, nao ignorada', () => {
+    assert.deepEqual(marcacoesInvalidas('{{nome2}}'), ['nome2']);
+    assert.deepEqual(marcacoesInvalidas('{{endereço}}'), ['endereço']);
+    assert.deepEqual(marcacoesInvalidas('{{nome completo}}'), ['nome completo']);
   });
 });
 

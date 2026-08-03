@@ -124,6 +124,35 @@ export async function coletarEngajamento(userId: string, brandId?: string): Prom
     ? 'https://graph.facebook.com/v21.0'
     : 'https://graph.instagram.com/v21.0';
 
+  /**
+   * Uma consulta so para TODAS as midias, em vez de uma por post.
+   *
+   * O codigo anterior disparava ate 100 chamadas em paralelo a cada
+   * abertura da tela de reciclagem: e a forma mais rapida de estourar o
+   * rate limit da conta e derrubar a publicacao de todo mundo. A listagem
+   * /media devolve like_count e comments_count de uma vez.
+   */
+  const metricas = new Map<string, { likes: number; comments: number }>();
+  if (account) {
+    // No Login do Instagram o id da conta nao serve como caminho; "me" e o
+    // alias que funciona nos dois modos.
+    const uid = account.accessToken.startsWith('EAA') ? account.instagramUserId : 'me';
+    try {
+      const r = await fetch(
+        `${base}/${uid}/media?fields=id,like_count,comments_count&limit=100&access_token=${account.accessToken}`,
+      );
+      const j = (await r.json()) as any;
+      if (j?.error) console.warn('[Reciclagem] Sem metricas:', j.error.message);
+      else {
+        for (const m of j.data || []) {
+          metricas.set(String(m.id), { likes: m.like_count ?? 0, comments: m.comments_count ?? 0 });
+        }
+      }
+    } catch (e: any) {
+      console.warn('[Reciclagem] Falha ao buscar metricas:', e?.message);
+    }
+  }
+
   // Receita atribuida por post: cupons daquele post que foram resgatados.
   // Uma consulta so, agrupada — nao uma por post, que multiplicaria por 100.
   const receitaPorPost = new Map<string, number>();
@@ -139,30 +168,21 @@ export async function coletarEngajamento(userId: string, brandId?: string): Prom
     }
   } catch { /* tabela ainda nao criada ou sem cupons: segue sem receita */ }
 
-  return await Promise.all(posts.map(async (p) => {
-    let likes = 0;
-    let comments = 0;
-    if (account && p.instagramId) {
-      try {
-        const r = await fetch(`${base}/${p.instagramId}?fields=like_count,comments_count&access_token=${account.accessToken}`);
-        const j = (await r.json()) as any;
-        if (!j?.error) {
-          likes = j.like_count ?? 0;
-          comments = j.comments_count ?? 0;
-        }
-      } catch { /* post apagado no Instagram ou sem permissao: fica zero */ }
-    }
+  return posts.map((p) => {
+    // Post fora das 100 midias mais recentes, ou apagado no Instagram,
+    // fica com zero — que a ordenacao ja trata como "sem dado".
+    const m = p.instagramId ? metricas.get(String(p.instagramId)) : undefined;
     return {
       id: p.id,
       caption: p.caption,
       imageUrl: p.imageUrl,
       publishedAt: p.publishedAt,
       recycledAt: p.recycledAt,
-      likes,
-      comments,
+      likes: m?.likes ?? 0,
+      comments: m?.comments ?? 0,
       receitaCentavos: receitaPorPost.get(p.id) || 0,
     };
-  }));
+  });
 }
 
 /**

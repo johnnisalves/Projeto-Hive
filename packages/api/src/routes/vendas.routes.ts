@@ -46,7 +46,10 @@ router.get('/r/:code', async (req: Request, res: Response) => {
 /** GET /api/vendas/cupom/:code — o que o balcao ve antes de resgatar. */
 router.get('/cupom/:code', async (req: Request, res: Response) => {
   const code = String(req.params.code).toUpperCase();
-  const cupom = await prisma.coupon.findFirst({ where: { code } }).catch(() => null);
+  // findUnique, nao findFirst: `code` e unico globalmente e tem indice.
+  // O findFirst sem indice fazia varredura da tabela a cada abertura da
+  // tela de resgate — numa rota publica.
+  const cupom = await prisma.coupon.findUnique({ where: { code } }).catch(() => null);
   if (!cupom) { res.status(404).json({ success: false, error: 'Cupom não encontrado' }); return; }
 
   const recusa = motivoRecusa(
@@ -64,25 +67,61 @@ router.get('/cupom/:code', async (req: Request, res: Response) => {
  * A checagem e o incremento ficam numa transacao: sem isso, dois caixas
  * resgatando ao mesmo tempo passariam os dois do limite.
  */
+/** Teto de seguranca do valor: R$ 100 mil por resgate. */
+const VALOR_MAXIMO_CENTAVOS = 10_000_000;
+
 router.post('/cupom/:code/resgatar', async (req: Request, res: Response) => {
   const code = String(req.params.code).toUpperCase();
-  const valorCentavos = Math.max(0, Math.round(Number(req.body?.valorCentavos) || 0));
+  // O codigo do cupom e publico por design (vai na arte), entao esta rota
+  // aceita valor sem login. O teto impede que um numero absurdo digitado
+  // por engano — ou de proposito — contamine o ROI do relatorio.
+  const valorCentavos = Math.min(
+    VALOR_MAXIMO_CENTAVOS,
+    Math.max(0, Math.round(Number(req.body?.valorCentavos) || 0)),
+  );
 
   try {
     const r = await prisma.$transaction(async (tx) => {
-      const cupom = await tx.coupon.findFirst({ where: { code } });
-      if (!cupom) return { erro: 'Cupom não encontrado' };
+      // O incremento CONDICIONAL e quem garante o limite, nao a leitura
+      // anterior. Ler-decidir-escrever, mesmo dentro de transacao, deixa
+      // dois caixas simultaneos passarem os dois do maxUsos: no nivel de
+      // isolamento padrao do Postgres as duas transacoes leem o mesmo
+      // `usos` antes de qualquer uma escrever.
+      const alterados = await tx.coupon.updateMany({
+        where: {
+          code,
+          ativo: true,
+          OR: [{ expiresAt: null }, { expiresAt: { gte: new Date() } }],
+          // maxUsos nulo = ilimitado. A comparacao com a coluna `usos`
+          // precisa de SQL cru porque o Prisma nao compara duas colunas.
+        },
+        data: { usos: { increment: 1 } },
+      });
 
-      const recusa = motivoRecusa(
-        { expiresAt: cupom.expiresAt, maxUsos: cupom.maxUsos, usos: cupom.usos, ativo: cupom.ativo },
-      );
-      if (recusa) return { erro: recusa };
+      if (alterados.count === 0) {
+        // Nao passou: descobrimos POR QUE para explicar ao caixa.
+        const cupom = await tx.coupon.findUnique({ where: { code } });
+        if (!cupom) return { erro: 'Cupom não encontrado' };
+        return {
+          erro: motivoRecusa({
+            expiresAt: cupom.expiresAt, maxUsos: cupom.maxUsos, usos: cupom.usos, ativo: cupom.ativo,
+          }) || 'Não consegui resgatar este cupom.',
+        };
+      }
+
+      const cupom = await tx.coupon.findUnique({ where: { code } });
+      // O incremento acima nao conhece maxUsos; conferimos DEPOIS e
+      // desfazemos se estourou. Assim duas requisicoes simultaneas nunca
+      // passam as duas: a segunda ve o `usos` ja incrementado pela primeira.
+      if (cupom && cupom.maxUsos != null && cupom.usos > cupom.maxUsos) {
+        await tx.coupon.update({ where: { code }, data: { usos: { decrement: 1 } } });
+        return { erro: 'Este cupom atingiu o limite de usos.' };
+      }
 
       await tx.couponRedemption.create({
-        data: { couponId: cupom.id, valorCentavos, observacao: String(req.body?.observacao || '').slice(0, 200) || null },
+        data: { couponId: cupom!.id, valorCentavos, observacao: String(req.body?.observacao || '').slice(0, 200) || null },
       });
-      await tx.coupon.update({ where: { id: cupom.id }, data: { usos: { increment: 1 } } });
-      return { ok: true, usos: cupom.usos + 1 };
+      return { ok: true, usos: cupom!.usos };
     });
 
     if (r.erro) { res.status(400).json({ success: false, error: r.erro }); return; }
@@ -295,7 +334,7 @@ router.post('/link-do-post', async (req: AuthRequest, res: Response) => {
       return;
     }
 
-    const link = await linkDoPost(ownerId, postId, destino);
+    const link = await linkDoPost(ownerId, postId, destino, post.brandId);
     const base = process.env.PUBLIC_URL || 'https://disparaai.digitalcrm.com.br';
     res.json({ success: true, data: { code: link.code, url: `${base}/api/vendas/r/${link.code}`, destino } });
   } catch (err: any) {

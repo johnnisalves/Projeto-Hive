@@ -38,6 +38,11 @@ export default function VendasPage() {
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [cupons, setCupons] = useState<Cupom[]>([]);
   const [origens, setOrigens] = useState<{ opcoes: string[]; contamNoRoi: string[] } | null>(null);
+  // A marca precisa acompanhar TODA gravação: o relatório mensal filtra
+  // receita por marca, e cupom ou venda salvos sem ela ficam invisíveis no
+  // PDF — que é justamente onde o número prova o trabalho ao cliente.
+  const [marcas, setMarcas] = useState<Array<{ id: string; name: string }>>([]);
+  const [marcaId, setMarcaId] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
 
@@ -47,9 +52,13 @@ export default function VendasPage() {
   const [criando, setCriando] = useState(false);
   const [descricaoCupom, setDescricaoCupom] = useState('');
 
-  async function carregar() {
+  async function carregar(brand = marcaId) {
     try {
-      const [r, c, o] = await Promise.all([api.resumoVendas(30), api.listarCupons(), api.origensDeVenda()]);
+      const [r, c, o] = await Promise.all([
+        api.resumoVendas(30, brand || undefined),
+        api.listarCupons(),
+        api.origensDeVenda(),
+      ]);
       setResumo(r); setCupons(c); setOrigens(o);
     } catch (e: any) {
       setErro(e?.message || 'Falha ao carregar');
@@ -57,7 +66,16 @@ export default function VendasPage() {
     setCarregando(false);
   }
 
-  useEffect(() => { carregar(); }, []);
+  useEffect(() => {
+    api.listBrands()
+      .then((b) => {
+        setMarcas(b.items || []);
+        const primeira = b.items?.[0]?.id || '';
+        setMarcaId(primeira);
+        carregar(primeira);
+      })
+      .catch(() => carregar(''));
+  }, []);
 
   async function marcarVenda(origem: string) {
     setMarcando(origem);
@@ -66,12 +84,11 @@ export default function VendasPage() {
       // Vírgula é como o brasileiro digita valor. Sem essa troca, "49,90"
       // viraria NaN e a venda entraria sem dinheiro nenhum.
       const n = Number(valorVenda.replace(',', '.'));
-      await api.registrarVenda(origem, n > 0 ? Math.round(n * 100) : undefined);
+      await api.registrarVenda(origem, n > 0 ? Math.round(n * 100) : undefined, marcaId || undefined);
       setValorVenda('');
       setMarcado(origem);
       setTimeout(() => setMarcado(''), 1500);
-      const r = await api.resumoVendas(30);
-      setResumo(r);
+      setResumo(await api.resumoVendas(30, marcaId || undefined));
     } catch (e: any) {
       setErro(e?.message || 'Falha ao registrar');
     }
@@ -82,7 +99,11 @@ export default function VendasPage() {
     setCriando(true);
     setErro('');
     try {
-      await api.criarCupom({ descricao: descricaoCupom || undefined, diasValidade: 30 });
+      await api.criarCupom({
+        descricao: descricaoCupom || undefined,
+        diasValidade: 30,
+        brandId: marcaId || undefined,
+      });
       setDescricaoCupom('');
       setCupons(await api.listarCupons());
     } catch (e: any) {
@@ -113,6 +134,16 @@ export default function VendasPage() {
       </div>
 
       {erro && <div className="card p-3 mb-4 border-status-failed/40"><p className="text-[11px] text-status-failed">{erro}</p></div>}
+
+      {marcas.length > 1 && (
+        <select
+          value={marcaId}
+          onChange={(e) => { setMarcaId(e.target.value); carregar(e.target.value); }}
+          className="input-field w-full mb-4"
+        >
+          {marcas.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+      )}
 
       {/* O número grande primeiro: é o que o dono do negócio procura. */}
       <div className="card p-5 mb-4 bg-gradient-to-br from-primary/10 to-transparent">

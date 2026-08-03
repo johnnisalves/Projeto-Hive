@@ -46,6 +46,47 @@ export function separarLinhaCsv(linha: string, separador = ','): string[] {
 }
 
 /**
+ * Quebra o arquivo em REGISTROS, nao em linhas fisicas.
+ *
+ * Legenda de Instagram tem quebra de linha, e o Excel salva isso como um
+ * campo entre aspas contendo \n. Um split(/\n/) seco cortaria a legenda no
+ * meio E criaria uma linha fantasma com o resto do texto — que apareceria
+ * na conferencia como "linha sem data".
+ *
+ * Um registro aqui equivale a uma linha da planilha no Excel, entao a
+ * numeracao que o usuario ve continua batendo.
+ */
+export function separarRegistros(texto: string): string[] {
+  const registros: string[] = [];
+  let atual = '';
+  let dentroDeAspas = false;
+
+  for (let i = 0; i < (texto || '').length; i++) {
+    const c = texto[i];
+
+    if (c === '"') {
+      // Aspas duplicadas sao uma aspa literal; nao alternam o estado.
+      if (dentroDeAspas && texto[i + 1] === '"') { atual += '""'; i++; continue; }
+      dentroDeAspas = !dentroDeAspas;
+      atual += c;
+      continue;
+    }
+
+    if ((c === '\n' || c === '\r') && !dentroDeAspas) {
+      if (c === '\r' && texto[i + 1] === '\n') i++;
+      if (atual.trim()) registros.push(atual);
+      atual = '';
+      continue;
+    }
+
+    atual += c;
+  }
+
+  if (atual.trim()) registros.push(atual);
+  return registros;
+}
+
+/**
  * Descobre o separador olhando o cabecalho.
  *
  * O Excel em portugues salva CSV com PONTO E VIRGULA, nao virgula — e essa
@@ -94,11 +135,22 @@ export function lerDataBr(bruto: string): Date | null {
   const t = (bruto || '').trim();
   if (!t) return null;
 
-  // ISO (2026-08-03 ou 2026-08-03T14:30) e inequivoco: aceita direto.
+  // ISO (2026-08-03 ou 2026-08-03T14:30) e inequivoco na ORDEM, mas nao na
+  // validade: 2026-02-30 "rola" para 2 de marco no construtor do JS, igual
+  // ao formato brasileiro. A conferencia de rolagem vale para os dois.
   const iso = t.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{1,2}):(\d{2}))?/);
   if (iso) {
-    const d = new Date(+iso[1], +iso[2] - 1, +iso[3], +(iso[4] || 9), +(iso[5] || 0));
-    return isNaN(d.getTime()) ? null : d;
+    const ano = +iso[1];
+    const mes = +iso[2];
+    const dia = +iso[3];
+    const hora = iso[4] !== undefined ? +iso[4] : 9;
+    const minuto = iso[5] !== undefined ? +iso[5] : 0;
+    if (mes < 1 || mes > 12 || dia < 1 || dia > 31 || hora > 23 || minuto > 59) return null;
+
+    const d = new Date(ano, mes - 1, dia, hora, minuto);
+    if (isNaN(d.getTime())) return null;
+    if (d.getDate() !== dia || d.getMonth() !== mes - 1) return null;
+    return d;
   }
 
   const br = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})(?:[T ,]+(\d{1,2})[:h](\d{2}))?/);
@@ -144,8 +196,9 @@ export function lerPlanilha(texto: string, agora = new Date()): {
   validas: number;
   invalidas: number;
   erroGeral?: string;
+  aviso?: string;
 } {
-  const cruas = (texto || '').split(/\r?\n/).filter((l) => l.trim());
+  const cruas = separarRegistros(texto);
   if (cruas.length < 2) {
     return { linhas: [], validas: 0, invalidas: 0, erroGeral: 'A planilha precisa do cabeçalho e pelo menos uma linha.' };
   }
@@ -187,9 +240,16 @@ export function lerPlanilha(texto: string, agora = new Date()): {
     linhas.push({ linha: i + 1, data, legenda, imagem, hashtags, erro });
   }
 
+  // Truncar em silencio faria o usuario achar que importou tudo e so
+  // descobrir o buraco semanas depois, quando a grade acabasse no meio.
+  const ignoradas = Math.max(0, cruas.length - 1 - linhas.length);
+
   return {
     linhas,
     validas: linhas.filter((l) => !l.erro).length,
     invalidas: linhas.filter((l) => l.erro).length,
+    ...(ignoradas > 0
+      ? { aviso: `Li as primeiras ${MAX_LINHAS} linhas. Outras ${ignoradas} ficaram de fora — importe o resto numa segunda planilha.` }
+      : {}),
   };
 }

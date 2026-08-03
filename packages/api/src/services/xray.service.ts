@@ -200,6 +200,20 @@ export async function consultarPerfil(
     const j = (await r.json()) as any;
 
     if (j?.error) {
+      const codigo = Number(j.error.code);
+      // Token vencido (190) e limite estourado (4, 17, 32, 613) sao
+      // problemas NOSSOS, nao do perfil consultado. Traduzir tudo para
+      // "perfil nao encontrado" escondia a causa e faria a pagina publica
+      // parecer quebrada para todo mundo, sem nenhum sinal no log.
+      if (codigo === 190 || codigo === 102) {
+        console.error('[RaioX] Token invalido ou expirado:', j.error.message);
+        return { perfil: null, motivo: 'O raio-X está temporariamente indisponível. Tente mais tarde.' };
+      }
+      if ([4, 17, 32, 613].includes(codigo)) {
+        console.warn('[RaioX] Limite da Graph API atingido:', j.error.message);
+        return { perfil: null, motivo: 'Muitas consultas agora. Tente de novo em alguns minutos.' };
+      }
+
       // O Meta devolve o mesmo erro para "nao existe" e "nao e Business",
       // entao explicamos as duas possibilidades em vez de chutar uma.
       return {

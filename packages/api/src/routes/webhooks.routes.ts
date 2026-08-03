@@ -91,15 +91,18 @@ router.post('/meta', async (req: Request, res: Response) => {
         const valor = item?.value;
         console.log(`[Webhook] ${corpo.object}/${campo}:`, JSON.stringify(valor).slice(0, 300));
 
-        // Guardamos o evento cru. A tela de Inbox le daqui, e assim nada se
-        // perde caso o formato mude ou apareca um campo novo.
-        await prisma.setting.upsert({
-          where: { userId_key: { userId: 'webhook', key: `LAST_${String(campo).toUpperCase()}` } },
-          create: { userId: 'webhook', key: `LAST_${String(campo).toUpperCase()}`, value: JSON.stringify(valor).slice(0, 4000) },
-          update: { value: JSON.stringify(valor).slice(0, 4000) },
-        }).catch(() => {});
+        // O evento cru NAO e mais gravado num Setting de pseudo-usuario
+        // 'webhook'. Aquilo nunca funcionou: Setting.userId tem chave
+        // estrangeira para User, entao o upsert falhava sempre e o
+        // .catch(() => {}) engolia o erro em silencio. Pior, se tivesse
+        // funcionado seria um registro unico compartilhado por TODOS os
+        // clientes da instalacao — o evento de um apareceria para o outro.
+        // O log acima ja preserva o formato para depuracao.
 
-        if (campo === 'comments') await tratarComentario(valor);
+        // `entrada.id` e a CONTA que recebeu o evento. Sem passar isso
+        // adiante nao ha como saber de quem e o comentario — ver
+        // tratarComentario.
+        if (campo === 'comments') await tratarComentario(valor, String(entrada?.id || ''));
       }
     }
   } catch (err) {
@@ -111,19 +114,29 @@ router.post('/meta', async (req: Request, res: Response) => {
 /**
  * Comentario recebido: dispara a DM automatica se alguma palavra-gatilho casar.
  *
- * O comentario chega sem dono: o webhook e da conta do Instagram, nao de um
- * usuario do DisparaAI. Achamos o dono pelo instagramUserId que veio no
- * evento — sem isso responderiamos com o token errado, ou pior, com o token
- * de outro cliente da mesma instalacao.
+ * QUEM E O DONO DO COMENTARIO: vem de `entry[].id`, o unico lugar onde a
+ * Meta poe a conta que RECEBEU o evento. O `value` do webhook de comments
+ * traz { id, text, parent_id, from, media:{id, media_product_type} } — nao
+ * existe `media.owner_id` ali.
+ *
+ * `from.id` NAO serve de reserva: e o IGSID de QUEM COMENTOU, nunca casa
+ * com instagramToken.instagramUserId, e ainda tornava a guarda de
+ * auto-resposta tautologica (comparava from.id com ele mesmo). Com isso a
+ * feature inteira ficava morta em silencio.
  */
-async function tratarComentario(valor: any): Promise<void> {
+async function tratarComentario(valor: any, contaWebhookId: string): Promise<void> {
   const commentId = valor?.id;
   const texto = valor?.text;
-  const contaId = String(valor?.media?.owner_id || valor?.from?.id || '');
+  const contaId = String(contaWebhookId || valor?.media?.owner_id || '');
   if (!commentId || !texto || !contaId) return;
 
   const conta = await prisma.instagramToken.findFirst({ where: { instagramUserId: contaId } }).catch(() => null);
-  if (!conta) return;
+  if (!conta) {
+    // Sem log, uma conta nao conectada era indistinguivel de "nao casou
+    // gatilho" — foi assim que o bug anterior passou despercebido.
+    console.warn(`[Gatilho] Comentario da conta ${contaId} ignorado: nenhuma conta conectada com esse id.`);
+    return;
+  }
 
   // Nao responder ao proprio dono: a marca comentando no proprio post
   // dispararia a automacao e mandaria DM para ela mesma.

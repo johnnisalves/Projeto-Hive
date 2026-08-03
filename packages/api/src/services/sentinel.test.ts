@@ -157,6 +157,21 @@ describe('elegivelComoDepoimento', () => {
   test('textao nao vira depoimento', () => {
     assert.ok(!elegivelComoDepoimento(c(`melhor pizza ${'x'.repeat(400)}`)));
   });
+
+  // A elegibilidade tem que julgar o texto JA LIMPO, que e o que vai pra
+  // arte. Julgando o texto cru, estes dois passavam e viravam depoimento
+  // vazio ou sem elogio nenhum na peca publicada.
+  test('elogio que estava so na hashtag nao vira depoimento', () => {
+    assert.ok(!elegivelComoDepoimento(c('comi ontem #melhorpizzaria #top')));
+  });
+
+  test('comentario que fica curto demais depois de limpo nao passa', () => {
+    assert.ok(!elegivelComoDepoimento(c('@pizzaria @amiga melhor #pizza')));
+  });
+
+  test('elogio de verdade continua passando mesmo com @ e hashtag junto', () => {
+    assert.ok(elegivelComoDepoimento(c('@pizzaria a melhor pizza da cidade, massa perfeita #pizza')));
+  });
 });
 
 describe('prepararDepoimento', () => {

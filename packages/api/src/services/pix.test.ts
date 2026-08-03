@@ -170,6 +170,34 @@ describe('gerarPixCopiaECola', () => {
   test('a mesma entrada gera sempre o mesmo codigo', () => {
     assert.equal(gerarPixCopiaECola(base), gerarPixCopiaECola(base));
   });
+
+  // O PIOR TIPO DE FALHA: com chave longa, o campo 26 passava de 99 chars,
+  // o tamanho saia com 3 digitos e desalinhava tudo. O CRC era calculado
+  // sobre o payload ja corrompido, entao pixValido() dizia "esta certo" e
+  // so o app do banco recusava, na frente do comprador.
+  test('chave longa demais e recusada em vez de gerar codigo corrompido', () => {
+    const longa = `${'a'.repeat(70)}@grupoessenzaalimentos.com.br`;
+    assert.ok(longa.length > 77);
+    assert.throws(() => gerarPixCopiaECola({ ...base, chave: longa }), /chave PIX/i);
+  });
+
+  test('chave no limite exato ainda funciona', () => {
+    const noLimite = 'a'.repeat(77);
+    const p = gerarPixCopiaECola({ ...base, chave: noLimite });
+    assert.ok(pixValido(p));
+    assert.ok(p.includes(noLimite));
+  });
+});
+
+describe('campo — limite do EMV', () => {
+  test('valor acima de 99 caracteres falha em vez de emitir tamanho de 3 digitos', () => {
+    assert.throws(() => campo('26', 'x'.repeat(100)), /99/);
+  });
+
+  test('exatamente 99 passa', () => {
+    const c = campo('26', 'x'.repeat(99));
+    assert.ok(c.startsWith('2699'));
+  });
 });
 
 describe('pixValido', () => {

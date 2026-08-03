@@ -33,8 +33,25 @@ export function crc16(payload: string): string {
  * UTF-8 e desalinham a contagem, alem de serem recusados por varios bancos.
  */
 export function campo(id: string, valor: string): string {
+  // padStart so COMPLETA, nunca corta: com 100+ caracteres o cabecalho
+  // sairia com 3 digitos e desalinharia todos os campos seguintes. O pior
+  // e que o CRC seria calculado sobre o payload ja corrompido, entao
+  // `pixValido` diria que esta tudo certo e so o app do banco recusaria,
+  // na frente do comprador. Melhor falhar aqui.
+  if (valor.length > 99) {
+    throw new Error(`Campo ${id} do PIX passou de 99 caracteres e não cabe no padrão.`);
+  }
   return `${id}${String(valor.length).padStart(2, '0')}${valor}`;
 }
+
+/**
+ * Tamanho maximo da chave PIX.
+ *
+ * O campo 26 leva o GUI fixo (22 caracteres) mais a chave, e o EMV limita
+ * cada campo a 99. Sobram 77 — que e tambem o maximo do Banco Central para
+ * chave de e-mail.
+ */
+export const MAX_CHAVE = 77;
 
 /**
  * Deixa o texto no formato que o BR Code aceita: sem acento, sem simbolo e
@@ -92,6 +109,9 @@ export interface PixParams {
 export function gerarPixCopiaECola(params: PixParams): string {
   const chave = (params.chave || '').trim();
   if (!chave) throw new Error('Informe a chave PIX da marca');
+  if (chave.length > MAX_CHAVE) {
+    throw new Error(`A chave PIX passa de ${MAX_CHAVE} caracteres e o código não seria aceito pelo banco.`);
+  }
 
   // A chave vai crua (nao sanitizada): e-mail tem ponto e arroba, chave
   // aleatoria tem hifen. Sanitizar aqui destruiria a chave e o dinheiro

@@ -76,16 +76,13 @@ router.get('/', async (req: Request, res: Response) => {
   }
 
   try {
-    let igUserId = process.env.RAIO_X_IG_USER_ID || '';
-    let token = process.env.RAIO_X_IG_TOKEN || '';
-
-    if ((!igUserId || !token) && process.env.RAIO_X_PUBLICO === 'true') {
-      const conta = await prisma.instagramToken.findFirst({
-        where: { accessToken: { startsWith: 'EAA' } },
-        orderBy: { isDefault: 'desc' },
-      });
-      if (conta) { igUserId = conta.instagramUserId; token = conta.accessToken; }
-    }
+    // SO variavel de ambiente. O fallback que existia aqui pegava "a
+    // primeira conta EAA do banco", ou seja, o token de um CLIENTE
+    // qualquer: as consultas de estranhos na internet queimariam a cota de
+    // Graph API dele, e quando estourasse o Instagram DELE pararia de
+    // publicar — sem ninguem entender por que.
+    const igUserId = process.env.RAIO_X_IG_USER_ID || '';
+    const token = process.env.RAIO_X_IG_TOKEN || '';
 
     if (!igUserId || !token) {
       res.status(503).json({
