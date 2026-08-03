@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { LayoutGrid, Loader2, CloudRain, Snowflake, Sun, Sparkles, Clock } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { api } from '../../lib/api';
+import { useBrand } from '../../components/BrandProvider';
 
 /**
  * Preview do feed + gatilho de clima.
@@ -27,19 +28,14 @@ const ICONE_CLIMA = { chuva: CloudRain, frio: Snowflake, calor: Sun } as const;
 
 export default function GridPage() {
   const router = useRouter();
-  const [marcas, setMarcas] = useState<Array<{ id: string; name: string }>>([]);
-  const [marcaId, setMarcaId] = useState('');
+  // Do seletor global: o preview do feed de um cliente com os posts
+  // publicados de outro seria pior que não mostrar preview nenhum.
+  const { marcaId } = useBrand();
   const [celulas, setCelulas] = useState<Celula[]>([]);
   const [aviso, setAviso] = useState<string | undefined>();
   const [clima, setClima] = useState<any>(null);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
-
-  useEffect(() => {
-    api.listBrands()
-      .then((b) => { setMarcas(b.items || []); if (b.items?.[0]) setMarcaId(b.items[0].id); })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     setCarregando(true);
@@ -78,12 +74,6 @@ export default function GridPage() {
           O que já está no ar e o que vai entrar, na ordem em que aparece no perfil.
         </p>
       </div>
-
-      {marcas.length > 1 && (
-        <select value={marcaId} onChange={(e) => setMarcaId(e.target.value)} className="input-field w-full mb-4">
-          {marcas.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
-      )}
 
       {/* Oportunidade do dia: o reflexo de olhar pela janela e mudar o post. */}
       {clima?.condicao && Icone && (

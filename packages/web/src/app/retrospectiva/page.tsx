@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Sparkles, Loader2, Download, Copy, Check } from 'lucide-react';
 import { api } from '../../lib/api';
+import { useBrand } from '../../components/BrandProvider';
 
 /**
  * Retrospectiva mensal: o mês vira um post que a marca QUER publicar.
@@ -15,8 +16,9 @@ import { api } from '../../lib/api';
  */
 
 export default function RetrospectivaPage() {
-  const [marcas, setMarcas] = useState<Array<{ id: string; name: string }>>([]);
-  const [marcaId, setMarcaId] = useState('');
+  // Do seletor global: a peça sai com o nome da marca em cima. Gerar a
+  // retrospectiva do cliente errado e postar seria irreversível.
+  const { marcaId, carregando: carregandoMarcas } = useBrand();
   const [dados, setDados] = useState<any>(null);
   const [imagem, setImagem] = useState('');
   const [carregando, setCarregando] = useState(true);
@@ -24,12 +26,7 @@ export default function RetrospectivaPage() {
   const [copiado, setCopiado] = useState(false);
   const [erro, setErro] = useState('');
 
-  useEffect(() => {
-    api.listBrands()
-      .then((b) => { setMarcas(b.items || []); if (b.items?.[0]) setMarcaId(b.items[0].id); })
-      .catch(() => {})
-      .finally(() => setCarregando(false));
-  }, []);
+  useEffect(() => { if (!carregandoMarcas) setCarregando(false); }, [carregandoMarcas]);
 
   useEffect(() => {
     if (!marcaId) return;
@@ -72,13 +69,7 @@ export default function RetrospectivaPage() {
         </p>
       </div>
 
-      {marcas.length > 1 && (
-        <select value={marcaId} onChange={(e) => setMarcaId(e.target.value)} className="input-field w-full mb-4">
-          {marcas.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
-      )}
-
-      {erro && <div className="card p-3 mb-4 border-status-failed/40"><p className="text-[11px] text-status-failed">{erro}</p></div>}
+      {erro &&<div className="card p-3 mb-4 border-status-failed/40"><p className="text-[11px] text-status-failed">{erro}</p></div>}
 
       {dados && !dados.pode ? (
         <div className="card p-8 text-center">

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Brain, Loader2, Plus, Power, ScrollText } from 'lucide-react';
 import { api } from '../../lib/api';
+import { useBrand } from '../../components/BrandProvider';
 
 /**
  * O que a IA aprendeu, e o que ela fez sozinha.
@@ -26,8 +27,9 @@ const ATOR: Record<string, string> = {
 };
 
 export default function CerebroPage() {
-  const [marcas, setMarcas] = useState<Array<{ id: string; name: string }>>([]);
-  const [marcaId, setMarcaId] = useState('');
+  // Do seletor global: as regras aprendidas são de UMA marca, e mostrar as
+  // de outra faria o usuário achar que a IA aprendeu errado.
+  const { marcaId } = useBrand();
   const [regras, setRegras] = useState<Regra[]>([]);
   const [prompt, setPrompt] = useState('');
   const [diario, setDiario] = useState<Entrada[]>([]);
@@ -37,12 +39,8 @@ export default function CerebroPage() {
   const [erro, setErro] = useState('');
 
   useEffect(() => {
-    Promise.all([api.listBrands(), api.diarioDeBordo()])
-      .then(([b, d]) => {
-        setMarcas(b.items || []);
-        setDiario(d.items || []);
-        if (b.items?.[0]) setMarcaId(b.items[0].id);
-      })
+    api.diarioDeBordo()
+      .then((d) => setDiario(d.items || []))
       .catch((e) => setErro(e?.message || 'Falha ao carregar'))
       .finally(() => setCarregando(false));
   }, []);
@@ -92,12 +90,6 @@ export default function CerebroPage() {
       </div>
 
       {erro && <div className="card p-3 mb-4 border-status-failed/40"><p className="text-[11px] text-status-failed">{erro}</p></div>}
-
-      {marcas.length > 1 && (
-        <select value={marcaId} onChange={(e) => setMarcaId(e.target.value)} className="input-field w-full mb-4">
-          {marcas.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
-      )}
 
       <div className="card p-5 mb-4">
         <div className="flex gap-2 mb-4">

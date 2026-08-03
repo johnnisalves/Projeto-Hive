@@ -3,6 +3,7 @@ import { LayoutContent } from '../components/LayoutContent';
 import { AuthProvider } from '../components/AuthProvider';
 import { ThemeProvider } from '../components/ThemeProvider';
 import { ConfirmProvider } from '../components/ConfirmModal';
+import { BrandProvider } from '../components/BrandProvider';
 
 export const metadata = {
   title: 'DisparaAI - Plataforma de Conteudo com IA',
@@ -23,7 +24,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeProvider>
           <ConfirmProvider>
             <AuthProvider>
-              <LayoutContent>{children}</LayoutContent>
+              {/* Dentro do AuthProvider: a lista de empresas so pode ser
+                  buscada depois que existe sessao. */}
+              <BrandProvider>
+                <LayoutContent>{children}</LayoutContent>
+              </BrandProvider>
             </AuthProvider>
           </ConfirmProvider>
         </ThemeProvider>

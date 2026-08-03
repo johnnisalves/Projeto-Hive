@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Wallet, Loader2, Plus, Ticket, MousePointerClick, Check, Power } from 'lucide-react';
 import { api } from '../../lib/api';
+import { useBrand } from '../../components/BrandProvider';
 
 /**
  * Vendas: a tela que responde "isso me dá cliente?".
@@ -41,8 +42,11 @@ export default function VendasPage() {
   // A marca precisa acompanhar TODA gravação: o relatório mensal filtra
   // receita por marca, e cupom ou venda salvos sem ela ficam invisíveis no
   // PDF — que é justamente onde o número prova o trabalho ao cliente.
-  const [marcas, setMarcas] = useState<Array<{ id: string; name: string }>>([]);
-  const [marcaId, setMarcaId] = useState('');
+  //
+  // Ela vem do seletor global: aqui se fala de DINHEIRO, e ver a receita de
+  // um cliente achando que é de outro é o pior lugar possível para essa
+  // confusão acontecer.
+  const { marcaId, carregando: carregandoMarcas } = useBrand();
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
 
@@ -67,15 +71,10 @@ export default function VendasPage() {
   }
 
   useEffect(() => {
-    api.listBrands()
-      .then((b) => {
-        setMarcas(b.items || []);
-        const primeira = b.items?.[0]?.id || '';
-        setMarcaId(primeira);
-        carregar(primeira);
-      })
-      .catch(() => carregar(''));
-  }, []);
+    if (carregandoMarcas) return;
+    setCarregando(true);
+    carregar(marcaId);
+  }, [marcaId, carregandoMarcas]);
 
   async function marcarVenda(origem: string) {
     setMarcando(origem);
@@ -135,15 +134,6 @@ export default function VendasPage() {
 
       {erro && <div className="card p-3 mb-4 border-status-failed/40"><p className="text-[11px] text-status-failed">{erro}</p></div>}
 
-      {marcas.length > 1 && (
-        <select
-          value={marcaId}
-          onChange={(e) => { setMarcaId(e.target.value); carregar(e.target.value); }}
-          className="input-field w-full mb-4"
-        >
-          {marcas.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
-      )}
 
       {/* O número grande primeiro: é o que o dono do negócio procura. */}
       <div className="card p-5 mb-4 bg-gradient-to-br from-primary/10 to-transparent">

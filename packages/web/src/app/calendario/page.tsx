@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { CalendarDays, Loader2, Download, Table2, LayoutGrid, Share2, Sparkles, X, Check } from 'lucide-react';
 import { api } from '../../lib/api';
+import { useBrand } from '../../components/BrandProvider';
 
 /**
  * Calendário de conteúdo do mês.
@@ -40,8 +41,9 @@ export default function CalendarioPage() {
   const router = useRouter();
   const hoje = new Date();
 
-  const [marcas, setMarcas] = useState<Array<{ id: string; name: string }>>([]);
-  const [brandId, setBrandId] = useState('');
+  // Do seletor global: o ramo desta empresa entra no prompt, então gerar
+  // com a marca errada produz um mês inteiro de conteúdo do ramo errado.
+  const { marcaId: brandId } = useBrand();
   const [nicho, setNicho] = useState('');
   const [publico, setPublico] = useState('');
   const [plataformas, setPlataformas] = useState<string[]>(['INSTAGRAM']);
@@ -59,15 +61,6 @@ export default function CalendarioPage() {
   const [agendando, setAgendando] = useState(false);
   const [agendado, setAgendado] = useState<number | null>(null);
   const [erro, setErro] = useState('');
-
-  useEffect(() => {
-    api.listBrands()
-      .then((b) => {
-        setMarcas(b.items || []);
-        if (b.items?.[0]) setBrandId(b.items[0].id);
-      })
-      .catch(() => {});
-  }, []);
 
   const meses = Array.from({ length: 12 }, (_, i) => {
     const d = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
@@ -188,16 +181,6 @@ export default function CalendarioPage() {
         {/* ---------------- Briefing ---------------- */}
         <div className="card p-5 h-fit">
           <h2 className="text-sm font-bold text-text-primary mb-3">Planeje seu mês</h2>
-
-          {marcas.length > 0 && (
-            <>
-              <label className="block text-[11px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">Empresa</label>
-              <select value={brandId} onChange={(e) => setBrandId(e.target.value)} className="input-field w-full mb-3">
-                <option value="">Nenhuma</option>
-                {marcas.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-            </>
-          )}
 
           <label className="block text-[11px] font-semibold text-text-secondary mb-1 uppercase tracking-wider">Negócio / tema</label>
           <textarea

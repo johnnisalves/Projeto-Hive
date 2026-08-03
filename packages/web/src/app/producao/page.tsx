@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Factory, Loader2, Sparkles, Clock, Image as ImageIcon, Type } from 'lucide-react';
 import { api } from '../../lib/api';
+import { useBrand } from '../../components/BrandProvider';
 
 /**
  * Produção: transforma rascunho vazio em post pronto.
@@ -23,8 +24,9 @@ const ROTULO_FALTA: Record<string, { texto: string; Icone: typeof Type }> = {
 };
 
 export default function ProducaoPage() {
-  const [marcas, setMarcas] = useState<Array<{ id: string; name: string }>>([]);
-  const [brandId, setBrandId] = useState('');
+  // A empresa vem do seletor global da barra lateral: trocar de cliente ali
+  // troca em todas as telas de uma vez, e a escolha sobrevive à navegação.
+  const { marcaId: brandId, carregando: carregandoMarcas } = useBrand();
   const [dados, setDados] = useState<any>(null);
   const [carregando, setCarregando] = useState(true);
   const [enviando, setEnviando] = useState(false);
@@ -41,17 +43,13 @@ export default function ProducaoPage() {
     setCarregando(false);
   }
 
+  // Recarrega quando a empresa muda no seletor global.
   useEffect(() => {
-    api.listBrands()
-      .then((b) => {
-        setMarcas(b.items || []);
-        const primeira = b.items?.[0]?.id || '';
-        setBrandId(primeira);
-        carregar(primeira);
-      })
-      .catch(() => carregar(''));
+    if (carregandoMarcas) return;
+    setCarregando(true);
+    carregar(brandId);
     return () => { if (timer.current) clearInterval(timer.current); };
-  }, []);
+  }, [brandId, carregandoMarcas]);
 
   /**
    * Enquanto há trabalho na fila, atualiza sozinho.
@@ -102,16 +100,6 @@ export default function ProducaoPage() {
 
       {erro && <div className="card p-3 mb-4 border-status-failed/40"><p className="text-[11px] text-status-failed">{erro}</p></div>}
       {aviso && <div className="card p-3 mb-4 border-amber-500/40"><p className="text-[11px] text-amber-500">{aviso}</p></div>}
-
-      {marcas.length > 1 && (
-        <select
-          value={brandId}
-          onChange={(e) => { setBrandId(e.target.value); setCarregando(true); carregar(e.target.value); }}
-          className="input-field w-full mb-4"
-        >
-          {marcas.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-        </select>
-      )}
 
       <div className="card p-5 mb-4">
         <div className="flex items-baseline justify-between gap-2 mb-2">
