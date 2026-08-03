@@ -2,6 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   naJanela,
+  pareceNegativo,
   detectarCrise,
   devePausar,
   elegivelComoDepoimento,
@@ -32,6 +33,36 @@ describe('naJanela', () => {
   test('crise se mede em minutos, nao em dias', () => {
     assert.ok(naJanela(c('a', 'negativo', 10), agora));
     assert.ok(!naJanela(c('a', 'negativo', 200), agora));
+  });
+});
+
+describe('pareceNegativo', () => {
+  test('reclamacao de verdade e reconhecida', () => {
+    assert.ok(pareceNegativo('péssimo atendimento, nunca mais volto'));
+    assert.ok(pareceNegativo('chegou frio e demorou muito'));
+    assert.ok(pareceNegativo('propaganda enganosa, vou no Procon'));
+  });
+
+  // Listar as variantes acentuadas uma a uma deixaria buraco — foi assim
+  // que o detector de elogio ja falhou neste projeto.
+  test('funciona com e sem acento', () => {
+    assert.ok(pareceNegativo('pessimo'));
+    assert.ok(pareceNegativo('péssimo'));
+    assert.ok(pareceNegativo('HORRÍVEL'));
+    assert.ok(pareceNegativo('decepção total'));
+  });
+
+  // Um cliente satisfeito nao pode derrubar a grade de promocao da marca.
+  test('elogio escrito com palavra negativa NAO conta', () => {
+    assert.ok(!pareceNegativo('não é ruim não, gostei'));
+    assert.ok(!pareceNegativo('longe de ser péssimo, muito bom'));
+    assert.ok(!pareceNegativo('nada decepcionante, recomendo'));
+  });
+
+  test('comentario neutro ou elogioso nao dispara', () => {
+    assert.ok(!pareceNegativo('que delícia, amei'));
+    assert.ok(!pareceNegativo('qual o horário de funcionamento?'));
+    assert.ok(!pareceNegativo(''));
   });
 });
 

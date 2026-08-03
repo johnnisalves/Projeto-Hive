@@ -58,6 +58,24 @@ async function request<T = unknown>(path: string, options: RequestInit = {}): Pr
   return data?.data;
 }
 
+/** Etapa de um funil, como a API devolve. */
+export interface FunnelStage {
+  id: string;
+  title: string;
+  color?: string | null;
+  order?: number;
+  steps?: FunnelStep[];
+}
+
+/** Passo dentro de uma etapa. */
+export interface FunnelStep {
+  id: string;
+  title: string;
+  description?: string | null;
+  order?: number;
+  [extra: string]: unknown;
+}
+
 export const api = {
   login: (email: string, password: string) =>
     request<{ user: any; token: string }>('/api/auth/login', {
@@ -730,16 +748,19 @@ export const api = {
   updateFunnel: (id: string, body: Record<string, unknown>) =>
     request(`/api/funnels/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteFunnel: (id: string) => request(`/api/funnels/${id}`, { method: 'DELETE' }),
+  // Tipados de propriedade: sem isto, `request` devolve `unknown` e a tela
+  // nao consegue espalhar o retorno ({ ...stage, steps: [] }) — eram quatro
+  // erros de TypeScript com a mesma origem.
   addStage: (funnelId: string, body: Record<string, unknown>) =>
-    request(`/api/funnels/${funnelId}/stages`, { method: 'POST', body: JSON.stringify(body) }),
+    request<FunnelStage>(`/api/funnels/${funnelId}/stages`, { method: 'POST', body: JSON.stringify(body) }),
   updateStage: (funnelId: string, stageId: string, body: Record<string, unknown>) =>
-    request(`/api/funnels/${funnelId}/stages/${stageId}`, { method: 'PUT', body: JSON.stringify(body) }),
+    request<FunnelStage>(`/api/funnels/${funnelId}/stages/${stageId}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteStage: (funnelId: string, stageId: string) =>
     request(`/api/funnels/${funnelId}/stages/${stageId}`, { method: 'DELETE' }),
   addStep: (funnelId: string, stageId: string, body: Record<string, unknown>) =>
-    request(`/api/funnels/${funnelId}/stages/${stageId}/steps`, { method: 'POST', body: JSON.stringify(body) }),
+    request<FunnelStep>(`/api/funnels/${funnelId}/stages/${stageId}/steps`, { method: 'POST', body: JSON.stringify(body) }),
   updateStep: (funnelId: string, stageId: string, stepId: string, body: Record<string, unknown>) =>
-    request(`/api/funnels/${funnelId}/stages/${stageId}/steps/${stepId}`, { method: 'PUT', body: JSON.stringify(body) }),
+    request<FunnelStep>(`/api/funnels/${funnelId}/stages/${stageId}/steps/${stepId}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteStep: (funnelId: string, stageId: string, stepId: string) =>
     request(`/api/funnels/${funnelId}/stages/${stageId}/steps/${stepId}`, { method: 'DELETE' }),
   reorderStages: (funnelId: string, stageIds: string[]) =>

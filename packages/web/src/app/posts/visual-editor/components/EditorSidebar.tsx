@@ -83,7 +83,12 @@ interface EditorSidebarProps {
   setHashtags: (v: string) => void;
   scheduledAt: string;
   setScheduledAt: (v: string) => void;
-  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  /**
+   * `RefObject<HTMLInputElement | null>` e o que o useRef(null) produz, mas
+   * a prop `ref` do JSX nao aceita esse tipo — dai o erro. `Ref` cobre as
+   * duas formas e continua deixando `.current` ser lido.
+   */
+  fileInputRef: React.RefObject<HTMLInputElement | null> & React.Ref<HTMLInputElement>;
   copyLayoutToNext: () => void;
   savedTemplates: SavedTemplate[];
   saveTemplate: (name: string) => void;

@@ -21,6 +21,52 @@ export interface ComentarioObservado {
   sentimento?: string;
 }
 
+// --- Sentimento negativo ---
+
+/**
+ * Sinais de reclamacao de verdade.
+ *
+ * Comparados SEM ACENTO (ver `semAcento`): "péssimo", "não recomendo" e
+ * "horrível" sao exatamente as formas que a pessoa escreve, e listar as
+ * variantes acentuadas uma a uma deixaria buraco — foi assim que o detector
+ * de elogio ja falhou neste projeto.
+ */
+const NEGATIVO = [
+  'pessim', 'horrivel', 'terrivel', 'lixo', 'vergonha', 'absurdo',
+  'nunca mais', 'nao recomendo', 'decepcion', 'decepcao', 'enganad',
+  'propaganda enganosa', 'golpe', 'roubo', 'caro demais', 'demorou muito',
+  'nao chegou', 'veio errado', 'estragad', 'estraga', 'frio', 'cru',
+  'mal atendid', 'grosseir', 'descaso', 'reclamacao', 'procon',
+  'nao gostei', 'nao volto', 'pior', 'ruim', 'pessimo atendimento',
+];
+
+/**
+ * Palavras que INVERTEM a reclamacao.
+ *
+ * "não é ruim", "longe de ser péssimo" e "nada decepcionante" sao elogios
+ * escritos com palavra negativa dentro. Sem esta checagem, um cliente
+ * satisfeito derrubaria a grade de promocao da marca.
+ */
+const NEGACAO = /(?:^|[^\p{L}])(nao e|nao esta|nada|longe de ser|nem um pouco|jamais)\s*$/iu;
+
+export function pareceNegativo(texto: string): boolean {
+  const t = semAcento((texto || '').toLowerCase());
+  if (!t.trim()) return false;
+
+  for (const termo of NEGATIVO) {
+    const i = t.indexOf(termo);
+    if (i === -1) continue;
+
+    // Olha as 20 letras antes do termo: se houver negacao colada, o
+    // comentario esta ELOGIANDO com palavra negativa.
+    const antes = t.slice(Math.max(0, i - 20), i);
+    if (NEGACAO.test(antes)) continue;
+
+    return true;
+  }
+  return false;
+}
+
 // --- Deteccao de crise ---
 
 /** Janela curta de propósito: crise se mede em minutos, nao em dias. */

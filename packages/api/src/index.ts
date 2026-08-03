@@ -42,6 +42,7 @@ import { publishWorker } from './jobs/publish.worker';
 import { tokenRefreshWorker, initTokenRefreshJob } from './jobs/token-refresh.worker';
 import { taskReminderWorker } from './jobs/task-reminder.worker';
 import { evergreenWorker, initEvergreenJob } from './jobs/evergreen.worker';
+import { sentinelWorker, initSentinelJob } from './jobs/sentinel.worker';
 
 const app = express();
 
@@ -425,6 +426,10 @@ function start() {
     console.error(`Evergreen job ${job?.id} failed:`, err.message);
   });
 
+  sentinelWorker.on('failed', (job, err) => {
+    console.error(`Sentinel job ${job?.id} failed:`, err.message);
+  });
+
   // Inits de background — NAO bloqueiam o listen; erros/hangs aqui nao derrubam a API.
   ensureBrandColumns()
     .catch((err) => console.warn('[boot] ensureBrandColumns failed (continuing):', (err as Error).message));
@@ -440,6 +445,12 @@ function start() {
   initEvergreenJob()
     .then(() => console.log('Evergreen job scheduled'))
     .catch((err) => console.warn('Evergreen job failed to start:', (err as Error).message));
+
+  // A sentinela existia so como logica testada, sem nada chamando: era
+  // codigo que nunca rodou. Agora varre de 20 em 20 minutos.
+  initSentinelJob()
+    .then(() => console.log('Sentinel job scheduled'))
+    .catch((err) => console.warn('Sentinel job failed to start:', (err as Error).message));
 }
 
 start();

@@ -400,7 +400,10 @@ function FunnelFlowInner({
         <Controls position="bottom-right" showInteractive={false} />
         <MiniMap
           nodeColor={(node) => {
-            if (node.type === 'stage') return node.data?.color || '#6366f1';
+            // `node.data` e tipado como desconhecido pelo React Flow, entao a
+            // cor precisa sair daqui como string — o minimapa nao aceita
+            // outra coisa.
+            if (node.type === 'stage') return String((node.data as { color?: string })?.color || '#6366f1');
             return '#e5e7eb';
           }}
           maskColor="rgba(255,255,255,0.8)"
