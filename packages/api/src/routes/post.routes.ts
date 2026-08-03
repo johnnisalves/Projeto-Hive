@@ -23,6 +23,7 @@ import { coletarDados, montarHtml, gerarPdf } from '../services/report.service';
 import { coletarEngajamento, ranquear, pontuacao, reescreverLegenda } from '../services/recycle.service';
 import { analisarEquilibrio } from '../services/pillars.service';
 import { rememberContacts, usernamesFromPost } from '../services/ig-contacts.service';
+import { lerPlanilha } from '../services/import.service';
 
 const router = Router();
 
@@ -382,6 +383,78 @@ router.post('/campaign', validate(campaignSchema), async (req: AuthRequest, res:
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Falha ao criar a campanha' });
+  }
+});
+
+/**
+ * POST /api/posts/importar/conferir — le a planilha e mostra o que deu certo.
+ *
+ * Etapa separada da gravacao DE PROPOSITO: o usuario ve todos os erros e
+ * corrige a planilha numa passada so, em vez de descobrir os problemas um
+ * por vez depois de ja ter meia campanha no ar.
+ */
+router.post('/importar/conferir', async (req: AuthRequest, res: Response) => {
+  try {
+    const texto = String(req.body?.texto || '');
+    if (texto.length > 2_000_000) {
+      res.status(400).json({ success: false, error: 'Planilha grande demais. Divida em partes menores.' });
+      return;
+    }
+    res.json({ success: true, data: lerPlanilha(texto) });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao ler a planilha' });
+  }
+});
+
+/**
+ * POST /api/posts/importar — grava so as linhas boas.
+ *
+ * Reconferimos aqui em vez de confiar no que a tela mandou: entre a
+ * conferencia e o envio a planilha pode ter mudado, e uma data que passou
+ * a estar no passado agendaria um post que nunca sai.
+ */
+router.post('/importar', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const { linhas } = lerPlanilha(String(req.body?.texto || ''));
+    const boas = linhas.filter((l) => !l.erro && l.data);
+
+    if (boas.length === 0) {
+      res.status(400).json({ success: false, error: 'Nenhuma linha válida para importar.' });
+      return;
+    }
+
+    const criados: string[] = [];
+    const falhas: Array<{ linha: number; erro: string }> = [];
+
+    for (const l of boas) {
+      try {
+        const post = await prisma.post.create({
+          data: {
+            userId,
+            brandId: req.body?.brandId || null,
+            caption: l.legenda,
+            imageUrl: l.imagem,
+            hashtags: l.hashtags,
+            platforms: (req.body?.platforms as any) || ['INSTAGRAM'],
+            imageSource: 'UPLOAD',
+            source: 'WEB',
+            scheduledAt: l.data!,
+            status: 'SCHEDULED',
+          },
+        });
+        await schedulePost(post.id, l.data!);
+        criados.push(post.id);
+      } catch (err: any) {
+        // Uma linha ruim nao derruba o lote: o resto entra e a resposta diz
+        // exatamente qual linha da planilha falhou.
+        falhas.push({ linha: l.linha, erro: err?.message || 'Falha ao criar' });
+      }
+    }
+
+    res.json({ success: true, data: { criados: criados.length, falhas } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao importar' });
   }
 });
 

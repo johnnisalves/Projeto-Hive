@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, PlusSquare, FileText, Calendar, CalendarRange, CheckSquare, FolderKanban, Settings, LogOut, Hexagon, Users, GitBranch, Video, Palette, Wand2, LayoutTemplate, BarChart3, MessageCircle, Wallet, Moon, Sun, Rocket, Radar, RefreshCw, TrendingUp, Zap, Brain, HandCoins, LayoutGrid } from 'lucide-react';
+import { Home, PlusSquare, FileText, Calendar, CalendarRange, CheckSquare, FolderKanban, Settings, LogOut, Hexagon, Users, GitBranch, Video, Palette, Wand2, LayoutTemplate, BarChart3, MessageCircle, Wallet, Moon, Sun, Rocket, Radar, RefreshCw, TrendingUp, Zap, Brain, HandCoins, LayoutGrid, FileSpreadsheet } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { useTheme } from './ThemeProvider';
 
@@ -12,6 +12,7 @@ const links = [
   { href: '/posts/visual-editor', label: 'Editor Visual', icon: Wand2, page: 'posts' },
   { href: '/posts/videos', label: 'Reels / Videos', icon: Video, page: 'posts' },
   { href: '/posts', label: 'Posts', icon: FileText, page: 'posts' },
+  { href: '/importar', label: 'Importar Planilha', icon: FileSpreadsheet, page: 'posts' },
   { href: '/calendar', label: 'Calendario', icon: Calendar, page: 'calendar' },
   { href: '/grid', label: 'Preview do Feed', icon: LayoutGrid, page: 'calendar' },
   { href: '/analytics', label: 'Analytics', icon: BarChart3, page: 'analytics' },

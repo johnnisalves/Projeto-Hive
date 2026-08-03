@@ -386,6 +386,20 @@ export const api = {
       body: JSON.stringify({ brandId, valor, txid }),
     }),
 
+  // Importacao de planilha. Conferir e importar sao chamadas separadas: o
+  // usuario ve todos os erros antes de qualquer coisa ser gravada.
+  conferirPlanilha: (texto: string) =>
+    request<{
+      linhas: Array<{ linha: number; data: string | null; legenda: string; imagem: string | null; hashtags: string[]; erro?: string }>;
+      validas: number; invalidas: number; erroGeral?: string;
+    }>('/api/posts/importar/conferir', { method: 'POST', body: JSON.stringify({ texto }) }),
+
+  importarPlanilha: (texto: string, brandId?: string, platforms?: string[]) =>
+    request<{ criados: number; falhas: Array<{ linha: number; erro: string }> }>('/api/posts/importar', {
+      method: 'POST',
+      body: JSON.stringify({ texto, brandId, platforms }),
+    }),
+
   // Preview do feed: publicados + agendados na ordem em que vao aparecer.
   gridDoFeed: (brandId?: string) =>
     request<{
