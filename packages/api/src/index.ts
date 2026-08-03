@@ -33,6 +33,7 @@ import vendasRoutes from './routes/vendas.routes';
 import gatilhosRoutes from './routes/gatilhos.routes';
 import feedRoutes from './routes/feed.routes';
 import cockpitRoutes from './routes/cockpit.routes';
+import xrayRoutes from './routes/xray.routes';
 import { publishWorker } from './jobs/publish.worker';
 import { tokenRefreshWorker, initTokenRefreshJob } from './jobs/token-refresh.worker';
 import { taskReminderWorker } from './jobs/task-reminder.worker';
@@ -91,6 +92,9 @@ app.use('/api/vendas', vendasRoutes);
 app.use('/api/gatilhos', gatilhosRoutes);
 app.use('/api/feed', feedRoutes);
 app.use('/api/cockpit', cockpitRoutes);
+// Publico e sem login: tem limite por IP e cache proprio, porque cada
+// consulta gasta cota da Graph API (ver xray.routes.ts).
+app.use('/api/raio-x', xrayRoutes);
 
 // Health check with env diagnostics
 app.get('/api/health', (_req, res) => {
