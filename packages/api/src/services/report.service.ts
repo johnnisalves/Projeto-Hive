@@ -1,4 +1,5 @@
 import { prisma } from '../config/database';
+import { consolidarReceita, calcularRoi, formatarReais } from './attribution.service';
 
 /**
  * Relatorio mensal por marca, em PDF.
@@ -23,6 +24,22 @@ export interface DadosRelatorio {
   variacaoPosts: number | null;
   melhores: Array<{ caption: string; curtidas: number; comentarios: number; data: string }>;
   porPlataforma: Record<string, number>;
+  /**
+   * Receita atribuida e ROI. Sao os numeros que renovam contrato — o resto
+   * do relatorio conta o que foi FEITO, esta secao conta o que RENDEU.
+   * Nulo quando nao ha nada atribuido no periodo: melhor omitir a secao do
+   * que estampar "R$ 0,00" e parecer que o trabalho nao deu resultado.
+   */
+  receita: {
+    totalCentavos: number;
+    cupomCentavos: number;
+    balcaoCentavos: number;
+    vendasBalcao: number;
+    cliques: number;
+    /** Nulo quando a marca nao tem fee cadastrado. */
+    roi: number | null;
+    feeCentavos: number | null;
+  } | null;
 }
 
 /** Primeiro e ultimo instante de um mes. */
@@ -55,7 +72,7 @@ export async function coletarDados(userId: string, brandId: string, ano: number,
   const anteriorAno = mes === 1 ? ano - 1 : ano;
   const anterior = intervaloDoMes(anteriorAno, anteriorMes);
 
-  const [publicados, agendados, publicadosAnterior] = await Promise.all([
+  const [publicados, agendados, publicadosAnterior, cupons, balcao, links] = await Promise.all([
     prisma.post.findMany({
       where: { userId, brandId, status: 'PUBLISHED', publishedAt: { gte: inicio, lte: fim } },
       orderBy: { publishedAt: 'desc' },
@@ -66,6 +83,15 @@ export async function coletarDados(userId: string, brandId: string, ano: number,
     prisma.post.count({
       where: { userId, brandId, status: 'PUBLISHED', publishedAt: { gte: anterior.inicio, lte: anterior.fim } },
     }),
+    prisma.couponRedemption.findMany({
+      where: { createdAt: { gte: inicio, lte: fim }, coupon: { userId, brandId } },
+      select: { valorCentavos: true },
+    }).catch(() => []),
+    prisma.saleOrigin.findMany({
+      where: { userId, brandId, createdAt: { gte: inicio, lte: fim } },
+      select: { valorCentavos: true, origem: true },
+    }).catch(() => []),
+    prisma.shortLink.findMany({ where: { userId, brandId }, select: { clicks: true } }).catch(() => []),
   ]);
 
   const porPlataforma: Record<string, number> = {};
@@ -75,6 +101,13 @@ export async function coletarDados(userId: string, brandId: string, ano: number,
 
   const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
     'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+
+  const consolidado = consolidarReceita({ cupons, balcao });
+  const cliques = links.reduce((s, l) => s + l.clicks, 0);
+  // Sem nada atribuido, a secao inteira sai fora. Estampar "R$ 0,00" faria
+  // o trabalho do mes parecer sem resultado, quando na verdade e so ausencia
+  // de medicao.
+  const temAtribuicao = consolidado.totalCentavos > 0 || cliques > 0;
 
   return {
     marca: brand.name,
@@ -94,6 +127,14 @@ export async function coletarDados(userId: string, brandId: string, ano: number,
       data: p.publishedAt ? new Date(p.publishedAt).toLocaleDateString('pt-BR') : '',
     })),
     porPlataforma,
+    receita: temAtribuicao
+      ? {
+        ...consolidado,
+        cliques,
+        roi: calcularRoi(consolidado.totalCentavos, brand.feeCentavos),
+        feeCentavos: brand.feeCentavos ?? null,
+      }
+      : null,
   };
 }
 
@@ -125,13 +166,47 @@ export function montarHtml(d: DadosRelatorio): string {
         </tr>`).join('')
     : '<tr><td colspan="2" style="padding:12px;color:#888;font-size:11px">Nenhuma publicação no período</td></tr>';
 
+  // A secao de dinheiro vem ANTES das metricas de atividade: e o que o dono
+  // do negocio procura primeiro, e o que a agencia usa para renovar contrato.
+  const r = d.receita;
+  const secaoReceita = !r ? '' : `
+  <div style="background:${cor};border-radius:12px;padding:18px;margin-bottom:24px;color:#fff">
+    <div style="font-size:11px;opacity:.85;text-transform:uppercase;letter-spacing:.5px">Receita atribuída no mês</div>
+    <div style="font-size:34px;font-weight:800;margin-top:4px">${esc(formatarReais(r.totalCentavos))}</div>
+    ${r.roi !== null
+      ? `<div style="font-size:12px;margin-top:8px;opacity:.95">
+           Você investiu ${esc(formatarReais(r.feeCentavos || 0))} e o social devolveu
+           <strong>${esc(String(r.roi))}x</strong> esse valor.
+         </div>`
+      : `<div style="font-size:11px;margin-top:8px;opacity:.8">
+           Cadastre o valor do contrato na marca para ver o retorno sobre o investimento.
+         </div>`}
+  </div>
+
+  <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+    <tbody>
+      <tr>
+        <td style="padding:8px 6px;border-bottom:1px solid #eee;font-size:11px;color:#666">Cupons resgatados no balcão</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #eee;font-size:12px;font-weight:700;text-align:right">${esc(formatarReais(r.cupomCentavos))}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 6px;border-bottom:1px solid #eee;font-size:11px;color:#666">Vendas marcadas como vindas do social (${r.vendasBalcao})</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #eee;font-size:12px;font-weight:700;text-align:right">${esc(formatarReais(r.balcaoCentavos))}</td>
+      </tr>
+      <tr>
+        <td style="padding:8px 6px;border-bottom:1px solid #eee;font-size:11px;color:#666">Cliques nos botões de pedido</td>
+        <td style="padding:8px 6px;border-bottom:1px solid #eee;font-size:12px;font-weight:700;text-align:right">${r.cliques}</td>
+      </tr>
+    </tbody>
+  </table>`;
+
   return `
 <div style="font-family:Inter,system-ui,sans-serif;color:#111">
   <div style="border-top:6px solid ${cor};padding-top:18px;margin-bottom:22px">
     <h1 style="font-size:26px;font-weight:800;margin:0">${esc(d.marca)}</h1>
     <p style="font-size:13px;color:#666;margin-top:4px">Relatório de ${esc(d.periodo)}</p>
   </div>
-
+${secaoReceita}
   <div style="display:flex;gap:12px;margin-bottom:24px">
     <div style="flex:1;background:#f7f7f8;border-radius:10px;padding:14px">
       <div style="font-size:30px;font-weight:800;color:${cor}">${d.publicados}</div>

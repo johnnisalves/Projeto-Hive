@@ -47,14 +47,17 @@ export default function CampaignPlanner({ images, brandId, platforms, aspectRati
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const previewDates = buildCampaignSchedule(images.length, cadence, undefined, horasPublico);
-  const spanDays = campaignSpanDays(previewDates);
-
   // Teto de publicacao do Instagram: 50 posts por 24h. Sem este aviso, uma
   // campanha grande falharia no meio sem o usuario entender por que.
   const [limite, setLimite] = useState<{ restantes: number; total: number; disponivel: boolean } | null>(null);
   // Horarios reais dos seguidores online. Sem eles, cai na curadoria padrao.
   const [horasPublico, setHorasPublico] = useState<number[] | undefined>(undefined);
+
+  // Precisa vir DEPOIS do useState de horasPublico: ler a variavel antes da
+  // declaracao cai na zona morta temporal e derruba o componente inteiro
+  // com ReferenceError a cada render.
+  const previewDates = buildCampaignSchedule(images.length, cadence, undefined, horasPublico);
+  const spanDays = campaignSpanDays(previewDates);
 
   useEffect(() => {
     api.getPublishingLimit()

@@ -338,6 +338,86 @@ export const api = {
       `/api/ig-contacts/places?q=${encodeURIComponent(q)}`,
     ),
 
+  // --- Vendas e atribuicao: ligar post a dinheiro no caixa ---
+
+  // O numero que responde "isso me da cliente?".
+  resumoVendas: (dias = 30, brandId?: string) =>
+    request<{
+      dias: number;
+      totalCentavos: number; cupomCentavos: number; balcaoCentavos: number;
+      vendasBalcao: number; cliques: number;
+      topLinks: Array<{ code: string; clicks: number; postId: string | null }>;
+      roi: number | null; feeCentavos: number | null;
+    }>(`/api/vendas/resumo?dias=${dias}${brandId ? `&brandId=${brandId}` : ''}`),
+
+  listarCupons: () =>
+    request<Array<{
+      id: string; code: string; descricao: string | null; usos: number; maxUsos: number | null;
+      ativo: boolean; expiresAt: string | null; postId: string | null; receitaCentavos: number;
+    }>>('/api/vendas/cupons'),
+
+  criarCupom: (body: { descricao?: string; postId?: string; brandId?: string; maxUsos?: number; diasValidade?: number }) =>
+    request<{ id: string; code: string }>('/api/vendas/cupons', { method: 'POST', body: JSON.stringify(body) }),
+
+  alternarCupom: (id: string, ativo: boolean) =>
+    request<{ ativo: boolean }>(`/api/vendas/cupons/${id}`, { method: 'PATCH', body: JSON.stringify({ ativo }) }),
+
+  // Modo balcao: origem da venda em dois toques.
+  registrarVenda: (origem: string, valorCentavos?: number, brandId?: string) =>
+    request<{ id: string }>('/api/vendas/balcao', {
+      method: 'POST',
+      body: JSON.stringify({ origem, valorCentavos, brandId }),
+    }),
+
+  origensDeVenda: () =>
+    request<{ opcoes: string[]; contamNoRoi: string[] }>('/api/vendas/origens'),
+
+  // Botao "Pedir no Zap" rastreavel para um post.
+  linkDoPost: (postId: string, mensagem?: string) =>
+    request<{ code: string; url: string; destino: string }>('/api/vendas/link-do-post', {
+      method: 'POST',
+      body: JSON.stringify({ postId, mensagem }),
+    }),
+
+  // PIX copia e cola, gerado no proprio servidor pela spec EMV.
+  gerarPix: (brandId: string, valor?: number, txid?: string) =>
+    request<{ payload: string }>('/api/vendas/pix', {
+      method: 'POST',
+      body: JSON.stringify({ brandId, valor, txid }),
+    }),
+
+  // --- Gatilhos de comentario, cerebro da marca e diario de bordo ---
+
+  listarGatilhos: () =>
+    request<{ items: Array<{ id: string; palavra: string; resposta: string; ativo: boolean; disparos: number; postId: string | null }> }>(
+      '/api/gatilhos',
+    ),
+
+  criarGatilho: (body: { palavra: string; resposta: string; postId?: string; brandId?: string }) =>
+    request<{ id: string }>('/api/gatilhos', { method: 'POST', body: JSON.stringify(body) }),
+
+  alternarGatilho: (id: string, ativo: boolean) =>
+    request<{ ativo: boolean }>(`/api/gatilhos/${id}`, { method: 'PATCH', body: JSON.stringify({ ativo }) }),
+
+  removerGatilho: (id: string) =>
+    request<{ deleted: boolean }>(`/api/gatilhos/${id}`, { method: 'DELETE' }),
+
+  regrasDaMarca: (brandId: string) =>
+    request<{ items: Array<{ id: string; regra: string; peso: number; ativa: boolean; origem: string }>; prompt: string }>(
+      `/api/gatilhos/regras/${brandId}`,
+    ),
+
+  alternarRegra: (id: string, ativa: boolean) =>
+    request<{ ativa: boolean }>(`/api/gatilhos/regras/item/${id}`, { method: 'PATCH', body: JSON.stringify({ ativa }) }),
+
+  ensinarRegra: (brandId: string, regra: string) =>
+    request<{ id: string }>(`/api/gatilhos/regras/${brandId}`, { method: 'POST', body: JSON.stringify({ regra }) }),
+
+  diarioDeBordo: (brandId?: string) =>
+    request<{ items: Array<{ id: string; ator: string; acao: string; justificativa: string | null; createdAt: string }> }>(
+      `/api/gatilhos/diario/log${brandId ? `?brandId=${brandId}` : ''}`,
+    ),
+
   // Radar de tendencias. O Meta so deixa consultar 30 hashtags DISTINTAS a
   // cada 7 dias por conta — por isso a resposta traz a cota junto, e as
   // tags que ficaram de fora vem em `bloqueadas` em vez de sumirem.

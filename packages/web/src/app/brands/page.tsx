@@ -30,6 +30,12 @@ interface Brand {
   tonePrompt?: string | null;
   stylePrompt?: string | null;
   isDefault: boolean;
+  // Venda e atribuicao
+  pixKey?: string | null;
+  pixCity?: string | null;
+  whatsappPhone?: string | null;
+  cidade?: string | null;
+  feeCentavos?: number | null;
 }
 
 const EMPTY_BRAND: Partial<Brand> = {
@@ -56,6 +62,11 @@ const EMPTY_BRAND: Partial<Brand> = {
   tonePrompt: '',
   stylePrompt: '',
   isDefault: false,
+  pixKey: '',
+  pixCity: '',
+  whatsappPhone: '',
+  cidade: '',
+  feeCentavos: null,
 };
 
 export default function BrandsPage() {
@@ -196,6 +207,13 @@ export default function BrandsPage() {
         tonePrompt: opt(editing.tonePrompt),
         stylePrompt: opt(editing.stylePrompt),
         isDefault: editing.isDefault,
+        pixKey: opt(editing.pixKey),
+        pixCity: opt(editing.pixCity),
+        whatsappPhone: opt(editing.whatsappPhone),
+        cidade: opt(editing.cidade),
+        // O usuario digita reais; o banco guarda centavos. null limpa o campo
+        // (e diferente de undefined, que manteria o valor antigo).
+        feeCentavos: editing.feeCentavos ?? null,
       };
 
       // Remove undefined keys so they're not sent in JSON
@@ -714,6 +732,61 @@ export default function BrandsPage() {
                       className="input-field"
                     />
                     <p className="text-[10px] text-text-muted mt-1">Agentes podem analisar o estilo para manter consistencia</p>
+                  </div>
+                </div>
+              </section>
+
+              {/* Section: Venda e atribuicao */}
+              <section>
+                <h4 className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-3">Venda e resultado</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">WhatsApp comercial</label>
+                    <input
+                      value={editing.whatsappPhone || ''}
+                      onChange={(e) => setEditing({ ...editing, whatsappPhone: e.target.value })}
+                      placeholder="(87) 99999-8888"
+                      className="input-field"
+                    />
+                    <p className="text-[10px] text-text-muted mt-1">Vira o botao &quot;Pedir no Zap&quot; rastreavel dos posts</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Cidade</label>
+                    <input
+                      value={editing.cidade || ''}
+                      onChange={(e) => setEditing({ ...editing, cidade: e.target.value })}
+                      placeholder="Petrolina"
+                      className="input-field"
+                    />
+                    <p className="text-[10px] text-text-muted mt-1">Usada nos gatilhos locais e no PIX</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Chave PIX</label>
+                    <input
+                      value={editing.pixKey || ''}
+                      onChange={(e) => setEditing({ ...editing, pixKey: e.target.value })}
+                      placeholder="CPF, CNPJ, e-mail, telefone ou chave aleatoria"
+                      className="input-field"
+                    />
+                    <p className="text-[10px] text-text-muted mt-1">Gera o QR code e o copia e cola nas artes e no link na bio</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Valor do contrato (R$/mes)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={editing.feeCentavos != null ? editing.feeCentavos / 100 : ''}
+                      onChange={(e) => {
+                        // Campo vazio limpa o fee. Guardar 0 faria o relatorio
+                        // mostrar "ROI infinito" em vez de omitir a linha.
+                        const v = e.target.value.trim();
+                        setEditing({ ...editing, feeCentavos: v === '' ? null : Math.round(Number(v) * 100) });
+                      }}
+                      placeholder="1500,00"
+                      className="input-field"
+                    />
+                    <p className="text-[10px] text-text-muted mt-1">Base do calculo de retorno no relatorio. Deixe vazio para nao mostrar</p>
                   </div>
                 </div>
               </section>

@@ -45,6 +45,11 @@ model User {
   igContacts     IgContact[]
   competitors    Competitor[]
   hashtagQueries HashtagQuery[]
+  shortLinks     ShortLink[]
+  coupons        Coupon[]
+  saleOrigins    SaleOrigin[]
+  commentTriggers CommentTrigger[]
+  agentLogs      AgentLog[]
   allowedPages   String[]        @default([])
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
@@ -87,6 +92,26 @@ model Brand {
   // Endereco publico do link-in-bio. Nulo = pagina desligada.
   bioSlug         String?  @unique
   bioLinks        BioLink[]
+  rules           BrandRule[]
+  // --- Venda e atribuicao ---
+  // Chave PIX da marca. O codigo copia e cola e gerado aqui mesmo pela spec
+  // EMV, sem depender de banco nem de PSP.
+  pixKey          String?
+  pixCity         String?
+  // WhatsApp comercial: vira o botao "Pedir no Zap" rastreavel dos posts.
+  whatsappPhone   String?
+  // Quanto a agencia cobra por esta marca, em CENTAVOS. Base do calculo de
+  // ROI no relatorio. Nulo = nao mostrar a linha, em vez de mostrar "0x".
+  feeCentavos     Int?
+  // CPM usado para converter alcance organico em reais. Configuravel porque
+  // varia muito por segmento.
+  cpmCentavos     Int      @default(2000)
+  // Cidade da marca: alimenta o gatilho de clima e o calendario local.
+  cidade          String?
+  // --- Autonomia ---
+  // Pilares que o piloto automatico pode publicar sem pedir aprovacao.
+  // Vazio = tudo pede aprovacao (o padrao, mais conservador).
+  autoPublicarPilares String[] @default([])
   mixVender       Int      @default(3)
   mixEducar       Int      @default(4)
   mixEngajar      Int      @default(3)
@@ -339,6 +364,161 @@ model HashtagQuery {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, queriedAt])
+}
+
+/**
+ * Link curto proprio, que conta o clique e leva ao destino.
+ *
+ * E a base da atribuicao: o `code` viaja dentro da mensagem do WhatsApp, e
+ * quando a conversa chega ela ja nasce ligada ao post que a gerou.
+ */
+model ShortLink {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  targetUrl String
+  clicks    Int      @default(0)
+  postId    String?
+  brandId   String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([postId])
+}
+
+/**
+ * Cupom rastreavel por post, resgatado no balcao.
+ *
+ * Serve ao comercio 100% fisico, que nunca tera pixel nem e-commerce — e
+ * que e exatamente o cliente tipico das agencias que usam o DisparaAI.
+ */
+model Coupon {
+  id          String   @id @default(uuid())
+  code        String
+  descricao   String?
+  /** Nulo = sem limite. Zero = esgotado. A diferenca importa. */
+  maxUsos     Int?
+  usos        Int      @default(0)
+  ativo       Boolean  @default(true)
+  expiresAt   DateTime?
+  postId      String?
+  brandId     String?
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resgates    CouponRedemption[]
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, code])
+  @@index([userId])
+}
+
+model CouponRedemption {
+  id            String   @id @default(uuid())
+  /** Valor da venda em CENTAVOS: somar reais em ponto flutuante nao fecha. */
+  valorCentavos Int      @default(0)
+  observacao    String?
+  couponId      String
+  coupon        Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+
+  @@index([couponId])
+}
+
+/**
+ * Modo balcao: origem da venda em dois toques.
+ *
+ * E o degrau zero da atribuicao — funciona no dia seguinte, em qualquer
+ * comercio, sem treinar ninguem e sem integrar PDV.
+ */
+model SaleOrigin {
+  id            String   @id @default(uuid())
+  /** INSTAGRAM, FACEBOOK, WHATSAPP, PASSOU_NA_FRENTE, INDICACAO, OUTRO */
+  origem        String
+  valorCentavos Int?
+  brandId       String?
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/**
+ * Palavra-gatilho que transforma comentario em DM automatica.
+ *
+ * Usa Private Replies da Graph API (oficial). E a mecanica "comente EU QUERO
+ * que eu te chamo", que hoje o cliente paga a parte em outra ferramenta.
+ */
+model CommentTrigger {
+  id         String   @id @default(uuid())
+  /** Palavra que o seguidor comenta. Comparada sem acento e sem caixa. */
+  palavra    String
+  resposta   String
+  /** Nulo = vale para qualquer post da conta. */
+  postId     String?
+  ativo      Boolean  @default(true)
+  /** Tambem responde publicamente ao comentario, alem da DM. */
+  responderPublico Boolean @default(false)
+  respostaPublica  String?
+  disparos   Int      @default(0)
+  brandId    String?
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+/** Comentario ja respondido, para nao mandar DM duas vezes para a mesma pessoa. */
+model TriggerLog {
+  id         String   @id @default(uuid())
+  commentId  String   @unique
+  triggerId  String
+  createdAt  DateTime @default(now())
+}
+
+/**
+ * Regra de estilo que a IA aprendeu observando aprovacoes e reprovacoes.
+ *
+ * Transforma o custo do retrabalho em ativo: quanto mais o cliente corrige,
+ * mais a IA escreve como ele.
+ */
+model BrandRule {
+  id        String   @id @default(uuid())
+  regra     String
+  /** aprovacao | reprovacao | edicao | manual */
+  origem    String   @default("edicao")
+  /** Quantas vezes o mesmo padrao foi observado. Ordena o que entra no prompt. */
+  peso      Int      @default(1)
+  ativa     Boolean  @default(true)
+  brandId   String
+  brand     Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([brandId])
+}
+
+/**
+ * Diario de bordo: cada decisao automatica, explicada em portugues.
+ *
+ * Autonomia sem prestacao de contas gera desconfianca. E esta tabela que
+ * torna as decisoes do piloto automatico aceitaveis.
+ */
+model AgentLog {
+  id          String   @id @default(uuid())
+  /** piloto | inbox | reciclagem | clima | sentinela | atribuicao */
+  ator        String
+  acao        String
+  /** Por que o sistema decidiu isso, em linguagem de dono de negocio. */
+  justificativa String?
+  postId      String?
+  brandId     String?
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
 }
 
 model InstagramToken {

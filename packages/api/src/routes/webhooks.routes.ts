@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { prisma } from '../config/database';
+import { processarComentario } from '../services/comment-trigger.service';
+import { registrarDecisao } from '../services/brand-brain.service';
 
 /**
  * Receptor de webhooks da Meta (Instagram e Facebook).
@@ -96,6 +98,8 @@ router.post('/meta', async (req: Request, res: Response) => {
           create: { userId: 'webhook', key: `LAST_${String(campo).toUpperCase()}`, value: JSON.stringify(valor).slice(0, 4000) },
           update: { value: JSON.stringify(valor).slice(0, 4000) },
         }).catch(() => {});
+
+        if (campo === 'comments') await tratarComentario(valor);
       }
     }
   } catch (err) {
@@ -103,5 +107,48 @@ router.post('/meta', async (req: Request, res: Response) => {
     console.error('[Webhook] Falha ao processar evento:', (err as Error).message);
   }
 });
+
+/**
+ * Comentario recebido: dispara a DM automatica se alguma palavra-gatilho casar.
+ *
+ * O comentario chega sem dono: o webhook e da conta do Instagram, nao de um
+ * usuario do DisparaAI. Achamos o dono pelo instagramUserId que veio no
+ * evento — sem isso responderiamos com o token errado, ou pior, com o token
+ * de outro cliente da mesma instalacao.
+ */
+async function tratarComentario(valor: any): Promise<void> {
+  const commentId = valor?.id;
+  const texto = valor?.text;
+  const contaId = String(valor?.media?.owner_id || valor?.from?.id || '');
+  if (!commentId || !texto || !contaId) return;
+
+  const conta = await prisma.instagramToken.findFirst({ where: { instagramUserId: contaId } }).catch(() => null);
+  if (!conta) return;
+
+  // Nao responder ao proprio dono: a marca comentando no proprio post
+  // dispararia a automacao e mandaria DM para ela mesma.
+  if (String(valor?.from?.id || '') === contaId) return;
+
+  const r = await processarComentario({
+    userId: conta.userId,
+    commentId: String(commentId),
+    texto: String(texto),
+    postId: valor?.media?.id ? String(valor.media.id) : null,
+    username: valor?.from?.username || null,
+    token: conta.accessToken,
+  }).catch((e) => ({ respondido: false, motivo: e?.message }));
+
+  if (r.respondido) {
+    console.log(`[Gatilho] DM automatica enviada para o comentario ${commentId}`);
+    await registrarDecisao({
+      userId: conta.userId,
+      ator: 'gatilho',
+      acao: `Respondi no direct quem comentou "${String(texto).slice(0, 40)}"`,
+      justificativa: 'A palavra bateu com um gatilho que você cadastrou.',
+    });
+  } else if (r.motivo && r.motivo !== 'nenhum gatilho casou' && r.motivo !== 'comentario ja respondido') {
+    console.warn(`[Gatilho] Nao respondeu ${commentId}: ${r.motivo}`);
+  }
+}
 
 export default router;

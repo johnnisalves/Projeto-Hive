@@ -29,6 +29,8 @@ import analyticsRoutes from './routes/analytics.routes';
 import inboxRoutes from './routes/inbox.routes';
 import brandingRoutes from './routes/branding.routes';
 import billingRoutes from './routes/billing.routes';
+import vendasRoutes from './routes/vendas.routes';
+import gatilhosRoutes from './routes/gatilhos.routes';
 import { publishWorker } from './jobs/publish.worker';
 import { tokenRefreshWorker, initTokenRefreshJob } from './jobs/token-refresh.worker';
 import { taskReminderWorker } from './jobs/task-reminder.worker';
@@ -81,6 +83,10 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/inbox', inboxRoutes);
 app.use('/api/branding', brandingRoutes);
 app.use('/api/billing', billingRoutes);
+// Parcialmente publico: o redirect de link curto e o resgate de cupom sao
+// usados por quem nao tem login (quem clicou no post, quem esta no balcao).
+app.use('/api/vendas', vendasRoutes);
+app.use('/api/gatilhos', gatilhosRoutes);
 
 // Health check with env diagnostics
 app.get('/api/health', (_req, res) => {
@@ -283,6 +289,35 @@ async function ensureBrandColumns() {
     // Radar de tendencias: controle da cota de 30 hashtags por semana
     `CREATE TABLE IF NOT EXISTS "HashtagQuery" ("id" TEXT PRIMARY KEY, "tag" TEXT NOT NULL, "queriedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "userId" TEXT NOT NULL)`,
     `CREATE INDEX IF NOT EXISTS "HashtagQuery_userId_queriedAt_idx" ON "HashtagQuery"("userId", "queriedAt")`,
+    // --- Atribuicao: ligar post a dinheiro no caixa ---
+    `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "pixKey" TEXT`,
+    `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "pixCity" TEXT`,
+    `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "whatsappPhone" TEXT`,
+    `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "feeCentavos" INTEGER`,
+    `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "cpmCentavos" INTEGER NOT NULL DEFAULT 2000`,
+    `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "cidade" TEXT`,
+    `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "autoPublicarPilares" TEXT[] NOT NULL DEFAULT '{}'`,
+    `CREATE TABLE IF NOT EXISTS "ShortLink" ("id" TEXT PRIMARY KEY, "code" TEXT NOT NULL, "targetUrl" TEXT NOT NULL, "clicks" INTEGER NOT NULL DEFAULT 0, "postId" TEXT, "brandId" TEXT, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "ShortLink_code_key" ON "ShortLink"("code")`,
+    `CREATE INDEX IF NOT EXISTS "ShortLink_userId_idx" ON "ShortLink"("userId")`,
+    `CREATE INDEX IF NOT EXISTS "ShortLink_postId_idx" ON "ShortLink"("postId")`,
+    `CREATE TABLE IF NOT EXISTS "Coupon" ("id" TEXT PRIMARY KEY, "code" TEXT NOT NULL, "descricao" TEXT, "maxUsos" INTEGER, "usos" INTEGER NOT NULL DEFAULT 0, "ativo" BOOLEAN NOT NULL DEFAULT true, "expiresAt" TIMESTAMP(3), "postId" TEXT, "brandId" TEXT, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "Coupon_userId_code_key" ON "Coupon"("userId", "code")`,
+    `CREATE INDEX IF NOT EXISTS "Coupon_userId_idx" ON "Coupon"("userId")`,
+    `CREATE TABLE IF NOT EXISTS "CouponRedemption" ("id" TEXT PRIMARY KEY, "valorCentavos" INTEGER NOT NULL DEFAULT 0, "observacao" TEXT, "couponId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE INDEX IF NOT EXISTS "CouponRedemption_couponId_idx" ON "CouponRedemption"("couponId")`,
+    `CREATE TABLE IF NOT EXISTS "SaleOrigin" ("id" TEXT PRIMARY KEY, "origem" TEXT NOT NULL, "valorCentavos" INTEGER, "brandId" TEXT, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE INDEX IF NOT EXISTS "SaleOrigin_userId_createdAt_idx" ON "SaleOrigin"("userId", "createdAt")`,
+    // Comentario vira DM automatica (Private Replies)
+    `CREATE TABLE IF NOT EXISTS "CommentTrigger" ("id" TEXT PRIMARY KEY, "palavra" TEXT NOT NULL, "resposta" TEXT NOT NULL, "postId" TEXT, "ativo" BOOLEAN NOT NULL DEFAULT true, "responderPublico" BOOLEAN NOT NULL DEFAULT false, "respostaPublica" TEXT, "disparos" INTEGER NOT NULL DEFAULT 0, "brandId" TEXT, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE INDEX IF NOT EXISTS "CommentTrigger_userId_idx" ON "CommentTrigger"("userId")`,
+    `CREATE TABLE IF NOT EXISTS "TriggerLog" ("id" TEXT PRIMARY KEY, "commentId" TEXT NOT NULL, "triggerId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "TriggerLog_commentId_key" ON "TriggerLog"("commentId")`,
+    // Cerebro da marca e diario de bordo
+    `CREATE TABLE IF NOT EXISTS "BrandRule" ("id" TEXT PRIMARY KEY, "regra" TEXT NOT NULL, "origem" TEXT NOT NULL DEFAULT 'edicao', "peso" INTEGER NOT NULL DEFAULT 1, "ativa" BOOLEAN NOT NULL DEFAULT true, "brandId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE INDEX IF NOT EXISTS "BrandRule_brandId_idx" ON "BrandRule"("brandId")`,
+    `CREATE TABLE IF NOT EXISTS "AgentLog" ("id" TEXT PRIMARY KEY, "ator" TEXT NOT NULL, "acao" TEXT NOT NULL, "justificativa" TEXT, "postId" TEXT, "brandId" TEXT, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
+    `CREATE INDEX IF NOT EXISTS "AgentLog_userId_createdAt_idx" ON "AgentLog"("userId", "createdAt")`,
     // Link-in-bio por marca
     `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "bioSlug" TEXT`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "Brand_bioSlug_key" ON "Brand"("bioSlug")`,

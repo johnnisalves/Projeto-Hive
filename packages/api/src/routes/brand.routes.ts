@@ -57,6 +57,18 @@ const createBrandSchema = z.object({
   tonePrompt: optionalString(2000),
   stylePrompt: optionalString(2000),
   isDefault: z.boolean().optional(),
+  // --- Venda e atribuicao ---
+  // A chave PIX aceita qualquer formato (CPF, e-mail, telefone, aleatoria):
+  // validar o formato aqui recusaria chaves validas que ainda nao previmos.
+  pixKey: optionalString(140),
+  pixCity: optionalString(60),
+  whatsappPhone: optionalString(30),
+  cidade: optionalString(80),
+  // Valores em CENTAVOS: reais em ponto flutuante nao fecham na soma.
+  feeCentavos: z.number().int().min(0).nullable().optional(),
+  cpmCentavos: z.number().int().min(1).optional(),
+  // Pilares que o piloto automatico pode publicar sem aprovacao.
+  autoPublicarPilares: z.array(z.string()).optional(),
 });
 
 const updateBrandSchema = createBrandSchema.partial();
