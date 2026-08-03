@@ -420,6 +420,24 @@ export const api = {
       resumo: { total: number; criticas: number; atencao: number; ok: number };
     }>('/api/cockpit'),
 
+  // Publicacao em massa: uma arte-mae vira N posts personalizados.
+  // `pendencias` sao as marcas que ficariam com "{{nome}}" a mostra no
+  // post — conferir antes de publicar e obrigatorio.
+  conferirMultimarca: (template: string, brandIds?: string[]) =>
+    request<{
+      prontas: Array<{ id: string; name: string }>;
+      pendencias: Array<{ marcaId: string; marcaNome: string; faltando: string[] }>;
+      invalidas: string[];
+      disponiveis: string[];
+    }>('/api/cockpit/multimarca/conferir', { method: 'POST', body: JSON.stringify({ template, brandIds }) }),
+
+  publicarMultimarca: (body: { template: string; brandIds?: string[]; imageUrl?: string; hashtags?: string[]; scheduledAt?: string }) =>
+    request<{
+      criados: Array<{ brandId: string; nome: string; postId: string }>;
+      falhas: Array<{ nome: string; erro: string }>;
+      pendencias: Array<{ marcaNome: string; faltando: string[] }>;
+    }>('/api/cockpit/multimarca', { method: 'POST', body: JSON.stringify(body) }),
+
   // Rentabilidade: qual cliente da lucro e qual da prejuizo.
   // `temConta` false = falta fee ou custo/hora; a linha nao tem margem
   // calculavel e a tela precisa dizer isso em vez de mostrar 0%.

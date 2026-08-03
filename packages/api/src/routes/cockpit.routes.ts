@@ -4,6 +4,8 @@ import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
 import { resolveOwnerId } from '../helpers/resolveOwnerId';
 import { montarCockpit, resumoDaCarteira, DadosDaMarca } from '../services/cockpit.service';
 import { calcular, feeSugerido, ranquear, LinhaRentabilidade } from '../services/profitability.service';
+import { conferir, preencher, escalonar, MARCACOES_DISPONIVEIS } from '../services/multibrand.service';
+import { schedulePost } from '../services/scheduler.service';
 
 const router = Router();
 router.use(authMiddleware);
@@ -168,6 +170,105 @@ router.get('/rentabilidade', async (req: AuthRequest, res: Response) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Falha ao calcular rentabilidade' });
+  }
+});
+
+const CAMPOS_DA_MARCA = {
+  id: true, name: true, whatsappPhone: true, websiteUrl: true, instagramUrl: true,
+  cidade: true, primaryColor: true, secondaryColor: true, logoUrl: true,
+} as const;
+
+/**
+ * POST /api/cockpit/multimarca/conferir — quem esta pronta para a campanha.
+ *
+ * Etapa obrigatoria antes de publicar: um "{{nome}}" nao substituido indo
+ * ao ar no perfil do cliente e vexame publico e irreversivel.
+ */
+router.post('/multimarca/conferir', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    const template = String(req.body?.template || '');
+    const ids: string[] = Array.isArray(req.body?.brandIds) ? req.body.brandIds : [];
+
+    const marcas = await prisma.brand.findMany({
+      where: { userId: ownerId, ...(ids.length ? { id: { in: ids } } : {}) },
+      select: CAMPOS_DA_MARCA,
+    });
+
+    res.json({
+      success: true,
+      data: { ...conferir(template, marcas as any), disponiveis: MARCACOES_DISPONIVEIS },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao conferir' });
+  }
+});
+
+/**
+ * POST /api/cockpit/multimarca — cria a campanha em todas as marcas prontas.
+ *
+ * As marcas com campo faltando ficam de FORA, e a resposta diz quais. Meia
+ * campanha correta e melhor que uma campanha inteira com buraco no meio.
+ */
+router.post('/multimarca', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    const template = String(req.body?.template || '');
+    const ids: string[] = Array.isArray(req.body?.brandIds) ? req.body.brandIds : [];
+    if (!template.trim()) { res.status(400).json({ success: false, error: 'Escreva a legenda base' }); return; }
+
+    const marcas = await prisma.brand.findMany({
+      where: { userId: ownerId, ...(ids.length ? { id: { in: ids } } : {}) },
+      select: CAMPOS_DA_MARCA,
+    });
+
+    // Reconfere aqui em vez de confiar no que a tela mandou: entre a
+    // conferencia e o envio o cadastro da marca pode ter mudado.
+    const { prontas, pendencias, invalidas } = conferir(template, marcas as any);
+    if (invalidas.length) {
+      res.status(400).json({
+        success: false,
+        error: `Marcações que não existem: ${invalidas.map((m) => `{{${m}}}`).join(', ')}`,
+      });
+      return;
+    }
+    if (prontas.length === 0) {
+      res.status(400).json({ success: false, error: 'Nenhuma marca tem todos os dados que o texto pede.' });
+      return;
+    }
+
+    const inicio = req.body?.scheduledAt ? new Date(req.body.scheduledAt) : new Date(Date.now() + 30 * 60_000);
+    const horarios = escalonar(prontas.length, isNaN(inicio.getTime()) ? new Date() : inicio);
+
+    const criados: Array<{ brandId: string; nome: string; postId: string }> = [];
+    const falhas: Array<{ nome: string; erro: string }> = [];
+
+    for (let i = 0; i < prontas.length; i++) {
+      const m = prontas[i];
+      try {
+        const post = await prisma.post.create({
+          data: {
+            userId: ownerId,
+            brandId: m.id,
+            caption: preencher(template, m),
+            imageUrl: req.body?.imageUrl || null,
+            hashtags: Array.isArray(req.body?.hashtags) ? req.body.hashtags : [],
+            imageSource: 'UPLOAD',
+            source: 'WEB',
+            scheduledAt: horarios[i],
+            status: 'SCHEDULED',
+          },
+        });
+        await schedulePost(post.id, horarios[i]);
+        criados.push({ brandId: m.id, nome: m.name, postId: post.id });
+      } catch (err: any) {
+        falhas.push({ nome: m.name, erro: err?.message || 'Falha ao criar' });
+      }
+    }
+
+    res.json({ success: true, data: { criados, falhas, pendencias } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao publicar em massa' });
   }
 });
 
