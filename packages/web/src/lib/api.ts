@@ -408,6 +408,18 @@ export const api = {
       aviso?: string;
     }>(`/api/feed/grid${brandId ? `?brandId=${brandId}` : ''}`),
 
+  // Cockpit: a carteira inteira numa tela, pior primeiro.
+  cockpit: () =>
+    request<{
+      linhas: Array<{
+        id: string; nome: string; nota: number; gravidade: 'critico' | 'atencao' | 'ok';
+        agendados7d: number; falhas24h: number; aprovacoesParadas: number;
+        diasAteTokenVencer: number | null; ultimaPublicacao: string | null;
+        sinais: Array<{ tipo: string; gravidade: 'critico' | 'atencao' | 'ok'; texto: string }>;
+      }>;
+      resumo: { total: number; criticas: number; atencao: number; ok: number };
+    }>('/api/cockpit'),
+
   // Nota prevista, comparada com o historico da PROPRIA conta.
   // `nota` vem null quando ainda nao ha historico suficiente — melhor dizer
   // que nao da do que inventar um numero em cima de ruido.

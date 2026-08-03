@@ -2,12 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, PlusSquare, FileText, Calendar, CalendarRange, CheckSquare, FolderKanban, Settings, LogOut, Hexagon, Users, GitBranch, Video, Palette, Wand2, LayoutTemplate, BarChart3, MessageCircle, Wallet, Moon, Sun, Rocket, Radar, RefreshCw, TrendingUp, Zap, Brain, HandCoins, LayoutGrid, FileSpreadsheet, Quote } from 'lucide-react';
+import { Home, PlusSquare, FileText, Calendar, CalendarRange, CheckSquare, FolderKanban, Settings, LogOut, Hexagon, Users, GitBranch, Video, Palette, Wand2, LayoutTemplate, BarChart3, MessageCircle, Wallet, Moon, Sun, Rocket, Radar, RefreshCw, TrendingUp, Zap, Brain, HandCoins, LayoutGrid, FileSpreadsheet, Quote, Gauge } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { useTheme } from './ThemeProvider';
 
 const links = [
   { href: '/', label: 'Dashboard', icon: Home, page: 'dashboard' },
+  // Logo abaixo do Dashboard: e a primeira tela que a agencia deve olhar
+  // de manha, antes de decidir o que fazer no dia.
+  { href: '/cockpit', label: 'Cockpit', icon: Gauge, page: 'dashboard' },
   { href: '/posts/new', label: 'Novo Post', icon: PlusSquare, page: 'posts' },
   { href: '/posts/visual-editor', label: 'Editor Visual', icon: Wand2, page: 'posts' },
   { href: '/posts/videos', label: 'Reels / Videos', icon: Video, page: 'posts' },

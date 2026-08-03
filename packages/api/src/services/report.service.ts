@@ -63,6 +63,68 @@ export function variacao(atual: number, anterior: number): number | null {
   return Math.round(((atual - anterior) / anterior) * 100);
 }
 
+/**
+ * Curtidas e comentarios reais do periodo, buscados no Instagram.
+ *
+ * Sem isso o relatorio saia com "0 curtidas" — pior que omitir, porque
+ * parecia que o trabalho do mes nao engajou ninguem.
+ *
+ * Casamos pela LEGENDA e nao pelo id: o post publicado pelo DisparaAI
+ * guarda o instagramId, mas os publicados por fora (ou antes da conexao)
+ * nao teriam par nenhum, e o total do mes ficaria menor que a realidade.
+ */
+async function metricasDoPeriodo(
+  userId: string,
+  inicio: Date,
+  fim: Date,
+): Promise<{ curtidas: number; comentarios: number; porLegenda: Map<string, { curtidas: number; comentarios: number }> }> {
+  const vazio = { curtidas: 0, comentarios: 0, porLegenda: new Map() };
+
+  const conta = await prisma.instagramToken.findFirst({
+    where: { userId },
+    orderBy: { isDefault: 'desc' },
+  }).catch(() => null);
+  if (!conta) return vazio;
+
+  const base = conta.accessToken.startsWith('EAA')
+    ? 'https://graph.facebook.com/v21.0'
+    : 'https://graph.instagram.com/v21.0';
+  const uid = conta.accessToken.startsWith('EAA') ? conta.instagramUserId : 'me';
+
+  try {
+    const r = await fetch(
+      `${base}/${uid}/media?fields=id,caption,timestamp,like_count,comments_count&limit=100&access_token=${conta.accessToken}`,
+    );
+    const j = (await r.json()) as any;
+    if (j?.error) {
+      console.warn('[Relatorio] Sem metricas do Instagram:', j.error.message);
+      return vazio;
+    }
+
+    let curtidas = 0;
+    let comentarios = 0;
+    const porLegenda = new Map<string, { curtidas: number; comentarios: number }>();
+
+    for (const m of j.data || []) {
+      const quando = m.timestamp ? new Date(m.timestamp) : null;
+      if (!quando || quando < inicio || quando > fim) continue;
+
+      const l = Number(m.like_count || 0);
+      const c = Number(m.comments_count || 0);
+      curtidas += l;
+      comentarios += c;
+      if (m.caption) porLegenda.set(String(m.caption).slice(0, 60), { curtidas: l, comentarios: c });
+    }
+
+    return { curtidas, comentarios, porLegenda };
+  } catch (e: any) {
+    // Metrica indisponivel nao pode derrubar o relatorio inteiro: o resto
+    // (o que foi publicado, a receita) continua valendo.
+    console.warn('[Relatorio] Falha ao buscar metricas:', e?.message);
+    return vazio;
+  }
+}
+
 export async function coletarDados(userId: string, brandId: string, ano: number, mes: number): Promise<DadosRelatorio> {
   const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
   if (!brand) throw new Error('Marca nao encontrada');
@@ -94,6 +156,8 @@ export async function coletarDados(userId: string, brandId: string, ano: number,
     prisma.shortLink.findMany({ where: { userId, brandId }, select: { clicks: true } }).catch(() => []),
   ]);
 
+  const metricas = await metricasDoPeriodo(userId, inicio, fim);
+
   const porPlataforma: Record<string, number> = {};
   for (const p of publicados) {
     for (const plat of p.platforms) porPlataforma[plat] = (porPlataforma[plat] || 0) + 1;
@@ -115,17 +179,26 @@ export async function coletarDados(userId: string, brandId: string, ano: number,
     periodo: `${MESES[mes - 1]} de ${ano}`,
     publicados: publicados.length,
     agendados,
-    // As metricas de engajamento vem do Instagram e nem sempre estao
-    // disponiveis; zero aqui significa "sem dado", nao "sem engajamento".
-    curtidas: 0,
-    comentarios: 0,
+    // Vem do Instagram. Zero aqui significa "sem dado" (conta nao conectada
+    // ou permissao faltando), nao "sem engajamento" — e o HTML escreve isso
+    // com todas as letras em vez de estampar um zero seco.
+    curtidas: metricas.curtidas,
+    comentarios: metricas.comentarios,
     variacaoPosts: variacao(publicados.length, publicadosAnterior),
-    melhores: publicados.slice(0, 5).map((p) => ({
-      caption: (p.caption || '(sem legenda)').slice(0, 120),
-      curtidas: 0,
-      comentarios: 0,
-      data: p.publishedAt ? new Date(p.publishedAt).toLocaleDateString('pt-BR') : '',
-    })),
+    melhores: publicados
+      .map((p) => {
+        const m = metricas.porLegenda.get((p.caption || '').slice(0, 60));
+        return {
+          caption: (p.caption || '(sem legenda)').slice(0, 120),
+          curtidas: m?.curtidas ?? 0,
+          comentarios: m?.comentarios ?? 0,
+          data: p.publishedAt ? new Date(p.publishedAt).toLocaleDateString('pt-BR') : '',
+        };
+      })
+      // Os MELHORES do mes, nao os mais recentes: e a secao que a agencia
+      // usa para mostrar o que funcionou.
+      .sort((a, b) => b.curtidas + b.comentarios * 3 - (a.curtidas + a.comentarios * 3))
+      .slice(0, 5),
     porPlataforma,
     receita: temAtribuicao
       ? {
@@ -158,13 +231,32 @@ export function montarHtml(d: DadosRelatorio): string {
     .map(([nome, qtd]) => `<li><strong>${esc(nome)}</strong>: ${qtd} publicações</li>`)
     .join('') || '<li style="color:#888">Nenhuma publicação no período</li>';
 
+  // Zero engajamento com posts publicados quase sempre significa metrica
+  // indisponivel, nao post ruim. Estampar "0 curtidas" faria o cliente achar
+  // que o mes foi um fracasso.
+  const semMetrica = d.publicados > 0 && d.curtidas === 0 && d.comentarios === 0;
+
   const melhores = d.melhores.length
     ? d.melhores.map((m) => `
         <tr>
           <td style="padding:8px 6px;border-bottom:1px solid #eee;font-size:11px;color:#666">${esc(m.data)}</td>
           <td style="padding:8px 6px;border-bottom:1px solid #eee;font-size:11px">${esc(m.caption)}</td>
+          <td style="padding:8px 6px;border-bottom:1px solid #eee;font-size:11px;text-align:right;white-space:nowrap">${
+  semMetrica ? '<span style="color:#bbb">—</span>' : `${m.curtidas} ❤ · ${m.comentarios} 💬`
+}</td>
         </tr>`).join('')
-    : '<tr><td colspan="2" style="padding:12px;color:#888;font-size:11px">Nenhuma publicação no período</td></tr>';
+    : '<tr><td colspan="3" style="padding:12px;color:#888;font-size:11px">Nenhuma publicação no período</td></tr>';
+
+  const blocoEngajamento = semMetrica
+    ? `<div style="flex:1;background:#f7f7f8;border-radius:10px;padding:14px">
+         <div style="font-size:13px;font-weight:600;color:#999;margin-top:6px">sem dados</div>
+         <div style="font-size:10px;color:#999;margin-top:4px">Conecte o Instagram para ver curtidas e comentários</div>
+       </div>`
+    : `<div style="flex:1;background:#f7f7f8;border-radius:10px;padding:14px">
+         <div style="font-size:30px;font-weight:800;color:${cor}">${d.curtidas + d.comentarios}</div>
+         <div style="font-size:11px;color:#666;margin-top:2px">interações no mês</div>
+         <div style="font-size:10px;color:#888;margin-top:6px">${d.curtidas} curtidas · ${d.comentarios} comentários</div>
+       </div>`;
 
   // A secao de dinheiro vem ANTES das metricas de atividade: e o que o dono
   // do negocio procura primeiro, e o que a agencia usa para renovar contrato.
@@ -217,17 +309,19 @@ ${secaoReceita}
       <div style="font-size:30px;font-weight:800;color:${cor}">${d.agendados}</div>
       <div style="font-size:11px;color:#666;margin-top:2px">agendadas para o período</div>
     </div>
+    ${blocoEngajamento}
   </div>
 
   <h2 style="font-size:14px;font-weight:700;margin:0 0 8px">Por canal</h2>
   <ul style="font-size:12px;color:#333;margin:0 0 22px;padding-left:18px;line-height:1.7">${plataformas}</ul>
 
-  <h2 style="font-size:14px;font-weight:700;margin:0 0 8px">Publicações do período</h2>
+  <h2 style="font-size:14px;font-weight:700;margin:0 0 8px">Destaques do período</h2>
   <table style="width:100%;border-collapse:collapse">
     <thead>
       <tr style="text-align:left">
         <th style="padding:6px;font-size:10px;color:#888;text-transform:uppercase;width:80px">Data</th>
         <th style="padding:6px;font-size:10px;color:#888;text-transform:uppercase">Publicação</th>
+        <th style="padding:6px;font-size:10px;color:#888;text-transform:uppercase;text-align:right">Engajamento</th>
       </tr>
     </thead>
     <tbody>${melhores}</tbody>
