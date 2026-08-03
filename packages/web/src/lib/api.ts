@@ -420,6 +420,30 @@ export const api = {
       resumo: { total: number; criticas: number; atencao: number; ok: number };
     }>('/api/cockpit'),
 
+  // Rentabilidade: qual cliente da lucro e qual da prejuizo.
+  // `temConta` false = falta fee ou custo/hora; a linha nao tem margem
+  // calculavel e a tela precisa dizer isso em vez de mostrar 0%.
+  rentabilidade: (dias = 30) =>
+    request<{
+      dias: number;
+      custoHoraCentavos: number | null;
+      precisaConfigurar: boolean;
+      linhas: Array<{
+        id: string; nome: string; temConta: boolean;
+        esforco: { posts: number; artes: number; respostas: number; tarefas: number };
+        minutos?: number; custoCentavos?: number; feeCentavos?: number;
+        margemCentavos?: number; margemPct?: number;
+        situacao?: 'saudavel' | 'apertado' | 'prejuizo';
+        feeSugeridoCentavos?: number;
+      }>;
+    }>(`/api/cockpit/rentabilidade?dias=${dias}`),
+
+  salvarCustoHora: (custoHoraCentavos: number) =>
+    request<{ custoHoraCentavos: number }>('/api/cockpit/custo-hora', {
+      method: 'PUT',
+      body: JSON.stringify({ custoHoraCentavos }),
+    }),
+
   // Nota prevista, comparada com o historico da PROPRIA conta.
   // `nota` vem null quando ainda nao ha historico suficiente — melhor dizer
   // que nao da do que inventar um numero em cima de ruido.
