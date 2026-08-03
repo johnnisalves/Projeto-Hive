@@ -408,6 +408,21 @@ export const api = {
       aviso?: string;
     }>(`/api/feed/grid${brandId ? `?brandId=${brandId}` : ''}`),
 
+  // Nota prevista, comparada com o historico da PROPRIA conta.
+  // `nota` vem null quando ainda nao ha historico suficiente — melhor dizer
+  // que nao da do que inventar um numero em cima de ruido.
+  notaDoPost: (body: { caption: string; hashtags?: string[]; publishMode?: string; mediaType?: string; scheduledAt?: string }) =>
+    request<{ nota: number | null; motivos: Array<{ texto: string; impacto: number }>; base: string }>(
+      '/api/feed/nota',
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+
+  // Elogios que merecem virar arte de depoimento.
+  depoimentos: () =>
+    request<{ items: Array<{ id: string; texto: string; original: string }>; analisados: number }>(
+      '/api/feed/depoimentos',
+    ),
+
   // Gatilho de clima: a previsao da noite recomenda algum post hoje?
   climaDeHoje: (brandId: string) =>
     request<{

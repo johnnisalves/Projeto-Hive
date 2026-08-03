@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, PlusSquare, FileText, Calendar, CalendarRange, CheckSquare, FolderKanban, Settings, LogOut, Hexagon, Users, GitBranch, Video, Palette, Wand2, LayoutTemplate, BarChart3, MessageCircle, Wallet, Moon, Sun, Rocket, Radar, RefreshCw, TrendingUp, Zap, Brain, HandCoins, LayoutGrid, FileSpreadsheet } from 'lucide-react';
+import { Home, PlusSquare, FileText, Calendar, CalendarRange, CheckSquare, FolderKanban, Settings, LogOut, Hexagon, Users, GitBranch, Video, Palette, Wand2, LayoutTemplate, BarChart3, MessageCircle, Wallet, Moon, Sun, Rocket, Radar, RefreshCw, TrendingUp, Zap, Brain, HandCoins, LayoutGrid, FileSpreadsheet, Quote } from 'lucide-react';
 import { useAuth } from './AuthProvider';
 import { useTheme } from './ThemeProvider';
 
@@ -19,6 +19,7 @@ const links = [
   { href: '/inbox', label: 'Inbox', icon: MessageCircle, page: 'inbox' },
   { href: '/vendas', label: 'Vendas', icon: HandCoins, page: 'analytics' },
   { href: '/gatilhos', label: 'Comentou, respondeu', icon: Zap, page: 'inbox' },
+  { href: '/depoimentos', label: 'Elogios viram post', icon: Quote, page: 'inbox' },
   { href: '/cerebro', label: 'O que eu aprendi', icon: Brain, page: 'ai-studio' },
   { href: '/planner', label: 'Planejador IA', icon: CalendarRange, page: 'planner' },
   // As telas novas reaproveitam os `page` que ja existem (planner, posts,

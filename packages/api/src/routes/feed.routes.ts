@@ -3,6 +3,8 @@ import { prisma } from '../config/database';
 import { authMiddleware, AuthRequest } from '../middleware/auth.middleware';
 import { resolveOwnerId } from '../helpers/resolveOwnerId';
 import { previsaoDeHoje, avaliarPrevisao, pautaPara, podeDisparar } from '../services/weather.service';
+import { preverNota } from '../services/engagement.service';
+import { melhoresDepoimentos, prepararDepoimento } from '../services/sentinel.service';
 
 /**
  * Preview do feed e gatilhos de contexto local.
@@ -186,5 +188,117 @@ router.post('/clima/usado', async (req: AuthRequest, res: Response) => {
     res.status(500).json({ success: false, error: err?.message || 'Falha ao registrar' });
   }
 });
+
+/**
+ * POST /api/feed/nota — quanto esse post promete, antes de publicar.
+ *
+ * Compara com o historico da PROPRIA conta. Repetir "melhores praticas"
+ * genericas que contradizem os numeros do usuario destroi a confianca na
+ * ferramenta inteira.
+ */
+router.post('/nota', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+
+    const publicados = await prisma.post.findMany({
+      where: { userId: ownerId, status: 'PUBLISHED', publishedAt: { not: null } },
+      orderBy: { publishedAt: 'desc' },
+      take: 60,
+      select: { caption: true, publishMode: true, mediaType: true, publishedAt: true, publishedResults: true },
+    });
+
+    // O engajamento fica em publishedResults, gravado quando o post sai.
+    // Ausente = sem dado, e o servico ja descarta esses da media.
+    const historico = publicados.map((p) => {
+      const r = (p.publishedResults as any) || {};
+      return {
+        caption: p.caption,
+        publishMode: p.publishMode,
+        mediaType: p.mediaType,
+        publishedAt: p.publishedAt!,
+        engajamento: Number(r.likes || 0) + Number(r.comments || 0),
+      };
+    });
+
+    const quando = req.body?.scheduledAt ? new Date(req.body.scheduledAt) : new Date();
+    res.json({
+      success: true,
+      data: preverNota(
+        {
+          caption: String(req.body?.caption || ''),
+          hashtags: Array.isArray(req.body?.hashtags) ? req.body.hashtags : [],
+          publishMode: String(req.body?.publishMode || 'FEED'),
+          mediaType: String(req.body?.mediaType || 'IMAGE'),
+          scheduledAt: isNaN(quando.getTime()) ? new Date() : quando,
+        },
+        historico,
+      ),
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao calcular a nota' });
+  }
+});
+
+/**
+ * GET /api/feed/depoimentos — elogios que merecem virar arte.
+ *
+ * O elogio espontaneo e o conteudo que mais converte para negocio local, e
+ * o que mais morre esquecido nos comentarios.
+ */
+router.get('/depoimentos', async (req: AuthRequest, res: Response) => {
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    const bruto = await prisma.setting.findUnique({
+      where: { userId_key: { userId: 'webhook', key: 'LAST_COMMENTS' } },
+    }).catch(() => null);
+
+    // A fonte confiavel e o inbox, que ja classifica sentimento. O evento do
+    // webhook e so o mais recente e serve de complemento.
+    const comentarios: Array<{ id: string; texto: string; criadoEm: Date; sentimento?: string }> =
+      await coletarComentarios(ownerId).catch(() => []);
+    if (bruto?.value) {
+      try {
+        const v = JSON.parse(bruto.value);
+        if (v?.id && v?.text) {
+          comentarios.push({ id: v.id, texto: v.text, criadoEm: new Date(), sentimento: undefined });
+        }
+      } catch { /* evento em formato inesperado: ignora */ }
+    }
+
+    const melhores = melhoresDepoimentos(comentarios, 5);
+    res.json({
+      success: true,
+      data: {
+        items: melhores.map((c) => ({ id: c.id, texto: prepararDepoimento(c.texto), original: c.texto })),
+        analisados: comentarios.length,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao buscar depoimentos' });
+  }
+});
+
+/** Comentarios recentes da conta, com o sentimento que o inbox ja classificou. */
+async function coletarComentarios(userId: string) {
+  const conta = await prisma.instagramToken.findFirst({ where: { userId }, orderBy: { isDefault: 'desc' } });
+  if (!conta) return [];
+
+  const base = conta.accessToken.startsWith('EAA')
+    ? 'https://graph.facebook.com/v21.0'
+    : 'https://graph.instagram.com/v21.0';
+  const uid = conta.accessToken.startsWith('EAA') ? conta.instagramUserId : 'me';
+
+  const r = await fetch(`${base}/${uid}/media?fields=id,comments{id,text,timestamp}&limit=12&access_token=${conta.accessToken}`);
+  const j = (await r.json()) as any;
+  if (j?.error) return [];
+
+  const out: Array<{ id: string; texto: string; criadoEm: Date; sentimento?: string }> = [];
+  for (const m of j.data || []) {
+    for (const c of m?.comments?.data || []) {
+      if (c?.id && c?.text) out.push({ id: c.id, texto: c.text, criadoEm: new Date(c.timestamp || Date.now()) });
+    }
+  }
+  return out;
+}
 
 export default router;

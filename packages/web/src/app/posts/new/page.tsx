@@ -19,6 +19,7 @@ const PLATFORM_OPTIONS: { value: Platform; label: string; icon: typeof Instagram
 import { emptySlide, SlideState, AspectRatio, defaultGlobalStyle } from '../visual-editor/types';
 import InstagramOptions, { IgOptions, defaultIgOptions, igOptionsToPayload } from './InstagramOptions';
 import CampaignPlanner, { CarouselOrCampaign } from './CampaignPlanner';
+import NotaPrevista from './NotaPrevista';
 import { useEffect } from 'react';
 
 const ASPECT_RATIOS = [
@@ -829,6 +830,16 @@ export default function NewPost() {
               </div>
             )}
           </div>
+
+          {/* Nota prevista: aparece DEPOIS da legenda e das hashtags, porque
+              e sobre elas que ela opina. Some sozinha se a legenda ainda
+              esta curta demais para avaliar. */}
+          <NotaPrevista
+            caption={caption}
+            hashtags={hashtags.split(',').map((h) => h.trim().replace(/^#/, '')).filter(Boolean)}
+            publishMode={publishMode}
+            mediaType={images.length > 1 ? 'CAROUSEL' : 'IMAGE'}
+          />
 
           {/* Schedule / Publish now */}
           <div className="card p-5">
