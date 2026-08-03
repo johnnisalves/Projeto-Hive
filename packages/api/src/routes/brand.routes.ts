@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate';
+import { opcoes } from '../services/niche.service';
 import {
   createBrand,
   listBrands,
@@ -66,6 +67,9 @@ const createBrandSchema = z.object({
   pixCity: optionalString(60),
   whatsappPhone: optionalString(30),
   cidade: optionalString(80),
+  // Ramo da empresa. Decide termos de elogio, chamadas, contexto da IA e
+  // se o gatilho de clima existe (ver niche.service.ts).
+  nicho: optionalString(30),
   // Valores em CENTAVOS: reais em ponto flutuante nao fecham na soma.
   feeCentavos: z.number().int().min(0).nullable().optional(),
   cpmCentavos: z.number().int().min(1).optional(),
@@ -76,6 +80,11 @@ const createBrandSchema = z.object({
 const updateBrandSchema = createBrandSchema.partial();
 
 router.use(authMiddleware);
+
+/** GET /api/brands/nichos — as opcoes do seletor de ramo. */
+router.get('/nichos', (_req, res) => {
+  res.json({ success: true, data: { items: opcoes() } });
+});
 
 router.post('/', validate(createBrandSchema), createBrand);
 router.get('/', listBrands);

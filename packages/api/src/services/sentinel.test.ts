@@ -151,7 +151,18 @@ describe('elegivelComoDepoimento', () => {
   // casaria com \bótimo. Bug ja visto neste projeto.
   test('elogio acentuado colado em pontuacao e reconhecido', () => {
     assert.ok(elegivelComoDepoimento(c('nossa, ótimo atendimento sempre')));
-    assert.ok(elegivelComoDepoimento(c('que delícia essa pizza, parabens')));
+  });
+
+  // Termo do ramo so vale quando o ramo esta informado. "delicioso" numa
+  // clinica seria sinal errado; num restaurante e o elogio mais comum.
+  test('elogio especifico do ramo depende do nicho', () => {
+    assert.ok(!elegivelComoDepoimento(c('que delícia esse prato, parabens')));
+    assert.ok(elegivelComoDepoimento(c('que delícia esse prato, parabens'), 'alimentacao'));
+  });
+
+  test('elogio de outro ramo e reconhecido no ramo certo', () => {
+    assert.ok(elegivelComoDepoimento(c('ficou linda demais, arrasou'), 'beleza'));
+    assert.ok(elegivelComoDepoimento(c('resolveu tudo, muito pontual'), 'servicos'));
   });
 
   test('textao nao vira depoimento', () => {

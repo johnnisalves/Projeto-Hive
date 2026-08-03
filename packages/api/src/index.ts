@@ -35,6 +35,8 @@ import feedRoutes from './routes/feed.routes';
 import cockpitRoutes from './routes/cockpit.routes';
 import xrayRoutes from './routes/xray.routes';
 import crmRoutes from './routes/crm.routes';
+import { authMiddleware } from './middleware/auth.middleware';
+import { resolveOwnerId } from './helpers/resolveOwnerId';
 import { publishWorker } from './jobs/publish.worker';
 import { tokenRefreshWorker, initTokenRefreshJob } from './jobs/token-refresh.worker';
 import { taskReminderWorker } from './jobs/task-reminder.worker';
@@ -148,26 +150,37 @@ app.get('/api/instagram/status', (_req, res) => {
   res.json({ success: true, data: { connected: configured } });
 });
 
-// Instagram profile + recent media (tries Business API first, then Instagram API)
-app.get('/api/instagram/profile', async (_req, res) => {
-  const accountId = _req.query.accountId as string | undefined;
+/**
+ * Perfil e midias recentes de uma conta conectada.
+ *
+ * ESTA ROTA ERA UM VAZAMENTO ENTRE EMPRESAS: ficava fora da autenticacao e
+ * buscava a conta com findUnique({ id: accountId }), sem conferir dono.
+ * Qualquer pessoa com um UUID de conta lia o perfil, os seguidores e as
+ * midias de outra empresa. E, sem accountId, respondia com o token da
+ * instalacao para quem perguntasse.
+ *
+ * Agora exige login e so devolve conta DO PROPRIO dono.
+ */
+app.get('/api/instagram/profile', authMiddleware, async (req: any, res) => {
+  const accountId = req.query.accountId as string | undefined;
 
-  let token = env.INSTAGRAM_ACCESS_TOKEN;
-  let igUserId = env.INSTAGRAM_USER_ID;
+  let token: string | undefined;
+  let igUserId: string | undefined;
 
-  // If accountId provided, look up from database
-  if (accountId && accountId !== 'env') {
-    try {
-      const account = await prisma.instagramToken.findUnique({ where: { id: accountId } });
-      if (account) {
-        token = account.accessToken;
-        igUserId = account.instagramUserId;
-      }
-    } catch {}
-  }
+  try {
+    const ownerId = await resolveOwnerId(req.userId!);
+    const account = accountId && accountId !== 'env'
+      ? await prisma.instagramToken.findFirst({ where: { id: accountId, userId: ownerId } })
+      : await prisma.instagramToken.findFirst({ where: { userId: ownerId }, orderBy: { isDefault: 'desc' } });
+
+    if (account) {
+      token = account.accessToken;
+      igUserId = account.instagramUserId;
+    }
+  } catch { /* sem conta: cai no aviso abaixo */ }
 
   if (!token) {
-    res.json({ success: false, error: 'Instagram not configured' });
+    res.json({ success: false, error: 'Nenhuma conta do Instagram conectada. Conecte em Configurações.' });
     return;
   }
   try {
@@ -306,6 +319,9 @@ async function ensureBrandColumns() {
     `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "feeCentavos" INTEGER`,
     `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "cpmCentavos" INTEGER NOT NULL DEFAULT 2000`,
     `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "cidade" TEXT`,
+    // Ramo da empresa: decide termos de elogio, chamadas, contexto da IA e
+    // se o gatilho de clima existe. Sem isso o sistema so serve a comida.
+    `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "nicho" TEXT`,
     `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "autoPublicarPilares" TEXT[] NOT NULL DEFAULT '{}'`,
     `CREATE TABLE IF NOT EXISTS "ShortLink" ("id" TEXT PRIMARY KEY, "code" TEXT NOT NULL, "targetUrl" TEXT NOT NULL, "clicks" INTEGER NOT NULL DEFAULT 0, "postId" TEXT, "brandId" TEXT, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "ShortLink_code_key" ON "ShortLink"("code")`,

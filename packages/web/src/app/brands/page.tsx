@@ -36,7 +36,31 @@ interface Brand {
   whatsappPhone?: string | null;
   cidade?: string | null;
   feeCentavos?: number | null;
+  nicho?: string | null;
 }
+
+/**
+ * Ramo da empresa.
+ *
+ * É o que faz o sistema servir a qualquer negócio: decide os termos de
+ * elogio que viram depoimento, as chamadas para ação que a nota reconhece,
+ * o contexto da IA e SE o gatilho de clima existe para essa empresa.
+ */
+const NICHOS = [
+  { chave: 'alimentacao', rotulo: 'Alimentação e bebidas' },
+  { chave: 'beleza', rotulo: 'Beleza e estética' },
+  { chave: 'saude', rotulo: 'Saúde e bem-estar' },
+  { chave: 'fitness', rotulo: 'Academia e esportes' },
+  { chave: 'varejo', rotulo: 'Loja e varejo' },
+  { chave: 'servicos', rotulo: 'Serviços em geral' },
+  { chave: 'educacao', rotulo: 'Educação e cursos' },
+  { chave: 'imobiliario', rotulo: 'Imóveis' },
+  { chave: 'automotivo', rotulo: 'Automotivo' },
+  { chave: 'pet', rotulo: 'Pet' },
+  { chave: 'eventos', rotulo: 'Eventos e festas' },
+  { chave: 'juridico', rotulo: 'Jurídico e contábil' },
+  { chave: 'generico', rotulo: 'Outro' },
+];
 
 const EMPTY_BRAND: Partial<Brand> = {
   name: '',
@@ -67,6 +91,7 @@ const EMPTY_BRAND: Partial<Brand> = {
   whatsappPhone: '',
   cidade: '',
   feeCentavos: null,
+  nicho: '',
 };
 
 export default function BrandsPage() {
@@ -211,6 +236,7 @@ export default function BrandsPage() {
         pixCity: opt(editing.pixCity),
         whatsappPhone: opt(editing.whatsappPhone),
         cidade: opt(editing.cidade),
+        nicho: opt(editing.nicho),
         // O usuario digita reais; o banco guarda centavos. null limpa o campo
         // (e diferente de undefined, que manteria o valor antigo).
         feeCentavos: editing.feeCentavos ?? null,
@@ -759,6 +785,21 @@ export default function BrandsPage() {
                       className="input-field"
                     />
                     <p className="text-[10px] text-text-muted mt-1">Usada nos gatilhos locais e no PIX</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Ramo da empresa</label>
+                    <select
+                      value={editing.nicho || ''}
+                      onChange={(e) => setEditing({ ...editing, nicho: e.target.value })}
+                      className="input-field"
+                    >
+                      <option value="">Selecione o ramo</option>
+                      {NICHOS.map((n) => <option key={n.chave} value={n.chave}>{n.rotulo}</option>)}
+                    </select>
+                    <p className="text-[10px] text-text-muted mt-1">
+                      Muda o que a IA escreve, quais elogios viram depoimento e quais gatilhos automáticos fazem sentido
+                      para este negócio
+                    </p>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Chave PIX</label>

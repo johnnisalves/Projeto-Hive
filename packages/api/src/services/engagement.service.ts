@@ -8,6 +8,8 @@
  * ferramenta inteira.
  */
 
+import { chamadasDoNicho } from './niche.service';
+
 export interface HistoricoPost {
   caption: string | null;
   publishMode: string;
@@ -88,7 +90,7 @@ export function temPergunta(caption: string): boolean {
  * Sem \b nas alternativas acentuadas: em JavaScript \b usa [A-Za-z0-9_], e
  * "comenta" logo apos um acento nao casaria. Foi um bug real neste projeto.
  */
-export function temChamada(caption: string): boolean {
+export function temChamada(caption: string, nicho?: string | null): boolean {
   // Normaliza o ACENTO antes de comparar. Sem isso "peça" (a forma que a
   // pessoa realmente escreve) nao casava com "peca", e a nota PENALIZAVA
   // uma legenda que tem chamada para acao — o erro mais irritante possivel
@@ -97,9 +99,11 @@ export function temChamada(caption: string): boolean {
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase();
-  // As alternativas ficam SEM acento de proposito: o texto ja chegou
-  // normalizado, entao "peça" no padrao nunca casaria com nada.
-  return /(?:^|[^\p{L}])(comenta|comente|marca|marque|chama|chame|corre|garanta|peca|pede|clica|clique|link na bio|arrasta|salva|compartilha|aproveit|agend|reserv|adquira|leve)/u.test(t);
+  // Os termos vem do RAMO da empresa: "marque sua consulta" e chamada numa
+  // clinica e nao existe numa pizzaria. As alternativas ficam SEM acento de
+  // proposito, porque o texto ja chegou normalizado.
+  const termos = chamadasDoNicho(nicho).map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return new RegExp(`(?:^|[^\\p{L}])(${termos.join('|')})`, 'u').test(t);
 }
 
 export function palavras(caption: string): number {

@@ -9,6 +9,8 @@
  * novo ao deploy nem cria mais um cadastro para o usuario esquecer.
  */
 
+import { pautaDeClima } from './niche.service';
+
 const GEO = 'https://geocoding-api.open-meteo.com/v1/search';
 const FORECAST = 'https://api.open-meteo.com/v1/forecast';
 
@@ -94,21 +96,17 @@ export function podeDisparar(ultimoDisparo: Date | null | undefined, agora = new
   return agora.getTime() - new Date(ultimoDisparo).getTime() >= DIAS_ENTRE_DISPAROS * 86_400_000;
 }
 
-/** Sugestao de pauta por condicao. Vira o prompt do post de oportunidade. */
-export function pautaPara(condicao: Condicao, cidade: string): string | null {
-  if (condicao === 'chuva') {
-    return `Post de oportunidade: hoje à noite tem previsão de chuva em ${cidade}. `
-      + 'Escreva algo curto e convidativo ligando o clima ao pedido em casa, sem clichê de "dia chuvoso".';
-  }
-  if (condicao === 'frio') {
-    return `Post de oportunidade: a noite vai esfriar em ${cidade}. `
-      + 'Ligue o frio ao que a marca vende de mais aconchegante.';
-  }
-  if (condicao === 'calor') {
-    return `Post de oportunidade: a noite vai ser quente em ${cidade}. `
-      + 'Ligue o calor ao que a marca tem de mais refrescante.';
-  }
-  return null;
+/**
+ * Sugestao de pauta por condicao, DE ACORDO COM O RAMO DA EMPRESA.
+ *
+ * O texto antigo era de comida ("ligando o clima ao pedido em casa") e saia
+ * igual para qualquer cliente. Agora quem decide e o nicho — e para os
+ * ramos em que o clima nao muda a demanda, nao sai pauta nenhuma. Um
+ * escritorio de advocacia postando "noite de chuva pede advogado" e o tipo
+ * de coisa que faz o cliente cancelar a ferramenta.
+ */
+export function pautaPara(condicao: Condicao, cidade: string, nicho?: string | null): string | null {
+  return pautaDeClima(nicho, condicao, cidade);
 }
 
 /** Acha a cidade. A Open-Meteo nao exige chave, entao isso e so um fetch. */

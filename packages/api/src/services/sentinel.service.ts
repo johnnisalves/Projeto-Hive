@@ -11,6 +11,8 @@
  *    quando e o conteudo que mais converte para negocio local.
  */
 
+import { elogiosDoNicho } from './niche.service';
+
 export interface ComentarioObservado {
   id: string;
   texto: string;
@@ -93,7 +95,17 @@ export function devePausar(pilar: string | null | undefined): boolean {
  * Tambem nao usa \b: em JavaScript ele enxerga so [A-Za-z0-9_], entao uma
  * palavra logo apos caractere acentuado nunca casaria.
  */
-const ELOGIO = /(?:^|[^\p{L}])(melhor|maravilh|delici|otim[oa]|excelente|perfeit|sensacional|top demais|amei|adorei|recomendo|nota 10|show de bola|impecavel|apaixonad)/iu;
+/**
+ * Monta o detector de elogio a partir do RAMO da empresa.
+ *
+ * O padrao antigo era fixo e cheio de termo de comida ("delicioso"): numa
+ * clinica ou num escritorio nunca casava, e a fabrica de prova social
+ * ficava muda. Agora cada ramo traz os proprios termos por cima dos gerais.
+ */
+function regexDeElogio(nicho?: string | null): RegExp {
+  const termos = elogiosDoNicho(nicho).map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  return new RegExp(`(?:^|[^\\p{L}])(${termos.join('|')})`, 'iu');
+}
 
 /** Tira acento para comparar, mantendo a letra. */
 function semAcento(s: string): string {
@@ -112,7 +124,7 @@ export const MAX_CARACTERES_DEPOIMENTO = 140;
  * "top" e elogio mas nao e depoimento — numa arte, fica ridiculo. Exigimos
  * uma frase minima, senao a fabrica de prova social produz constrangimento.
  */
-export function elegivelComoDepoimento(c: ComentarioObservado): boolean {
+export function elegivelComoDepoimento(c: ComentarioObservado, nicho?: string | null): boolean {
   const bruto = (c.texto || '').trim();
   if (!bruto) return false;
   if (bruto.length > MAX_CARACTERES_DEPOIMENTO * 2) return false;
@@ -129,7 +141,7 @@ export function elegivelComoDepoimento(c: ComentarioObservado): boolean {
   const palavras = (t.match(/\S+/g) || []).length;
   if (palavras < MIN_PALAVRAS_DEPOIMENTO) return false;
 
-  return ELOGIO.test(semAcento(t));
+  return regexDeElogio(nicho).test(semAcento(t));
 }
 
 /**
@@ -163,9 +175,13 @@ export function prepararDepoimento(texto: string): string {
  * Depoimento mais longo tende a ser mais especifico ("a melhor pizza de
  * Petrolina, massa fina do jeito certo") e converte mais que "muito bom".
  */
-export function melhoresDepoimentos(comentarios: ComentarioObservado[], quantos = 3): ComentarioObservado[] {
+export function melhoresDepoimentos(
+  comentarios: ComentarioObservado[],
+  quantos = 3,
+  nicho?: string | null,
+): ComentarioObservado[] {
   return (comentarios || [])
-    .filter(elegivelComoDepoimento)
+    .filter((c) => elegivelComoDepoimento(c, nicho))
     .sort((a, b) => (b.texto || '').length - (a.texto || '').length)
     .slice(0, quantos);
 }

@@ -109,6 +109,14 @@ model Brand {
   cpmCentavos     Int      @default(2000)
   // Cidade da marca: alimenta o gatilho de clima e o calendario local.
   cidade          String?
+  /**
+   * Ramo da empresa (ver niche.service.ts).
+   *
+   * E o que faz o sistema servir a qualquer negocio: decide os termos de
+   * elogio, as chamadas para acao, o contexto da IA e SE o gatilho de clima
+   * existe. Nulo = generico, nunca comida.
+   */
+  nicho           String?
   // --- Autonomia ---
   // Pilares que o piloto automatico pode publicar sem pedir aprovacao.
   // Vazio = tudo pede aprovacao (o padrao, mais conservador).

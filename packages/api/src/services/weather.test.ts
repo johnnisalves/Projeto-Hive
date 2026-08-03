@@ -120,13 +120,26 @@ describe('podeDisparar', () => {
 });
 
 describe('pautaPara', () => {
-  test('cada condicao gera pauta com a cidade', () => {
-    assert.match(pautaPara('chuva', 'Petrolina')!, /Petrolina/);
-    assert.match(pautaPara('frio', 'Recife')!, /Recife/);
-    assert.match(pautaPara('calor', 'Juazeiro')!, /Juazeiro/);
+  test('ramo em que o clima importa gera pauta com a cidade', () => {
+    assert.match(pautaPara('chuva', 'Petrolina', 'alimentacao')!, /Petrolina/);
+    assert.match(pautaPara('frio', 'Recife', 'alimentacao')!, /Recife/);
+    assert.match(pautaPara('calor', 'Juazeiro', 'alimentacao')!, /Juazeiro/);
+  });
+
+  // O ABSURDO QUE ISTO EVITA: um escritorio de advocacia postando
+  // "noite de chuva pede advogado".
+  test('ramo em que o clima nao muda a demanda nao gera pauta', () => {
+    assert.equal(pautaPara('chuva', 'Petrolina', 'juridico'), null);
+    assert.equal(pautaPara('frio', 'Petrolina', 'saude'), null);
+  });
+
+  // Antes o texto era de comida e saia igual para todo cliente.
+  test('sem ramo informado nao inventa pauta de comida', () => {
+    assert.equal(pautaPara('chuva', 'Petrolina'), null);
+    assert.equal(pautaPara('chuva', 'Petrolina', null), null);
   });
 
   test('sem condicao nao gera pauta', () => {
-    assert.equal(pautaPara(null, 'Petrolina'), null);
+    assert.equal(pautaPara(null, 'Petrolina', 'alimentacao'), null);
   });
 });

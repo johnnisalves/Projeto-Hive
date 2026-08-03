@@ -160,7 +160,9 @@ router.get('/clima', async (req: AuthRequest, res: Response) => {
         condicao,
         detalhe,
         liberado,
-        pauta: liberado ? pautaPara(condicao, previsao.nome) : null,
+        // A pauta sai do RAMO da empresa. Para quem o clima nao muda a
+        // demanda (advocacia, clinica, imobiliaria) nao sai pauta nenhuma.
+        pauta: liberado ? pautaPara(condicao, previsao.nome, brand?.nicho) : null,
         motivo: condicao && !liberado ? 'Você já postou sobre isso nos últimos dias.' : undefined,
       },
     });
@@ -252,7 +254,12 @@ router.get('/depoimentos', async (req: AuthRequest, res: Response) => {
     const comentarios: Array<{ id: string; texto: string; criadoEm: Date; sentimento?: string }> =
       await coletarComentarios(ownerId, req.query.brandId ? String(req.query.brandId) : null).catch(() => []);
 
-    const melhores = melhoresDepoimentos(comentarios, 5);
+    // Os termos de elogio vem do ramo: "delicioso" nao serve numa clinica,
+    // "atencioso" nao aparece na lista de um restaurante.
+    const marca = req.query.brandId
+      ? await prisma.brand.findFirst({ where: { id: String(req.query.brandId), userId: ownerId }, select: { nicho: true } })
+      : null;
+    const melhores = melhoresDepoimentos(comentarios, 5, marca?.nicho);
     res.json({
       success: true,
       data: {

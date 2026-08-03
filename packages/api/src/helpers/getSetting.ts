@@ -25,23 +25,26 @@ const ENV_MAP: Record<string, () => string | undefined> = {
  * then falls back to environment variable.
  */
 export async function getSetting(key: string, userId?: string): Promise<string | undefined> {
-  // Try database first (settings saved via web UI)
   try {
     if (userId) {
       const setting = await prisma.setting.findUnique({
         where: { userId_key: { userId, key } },
       });
       if (setting?.value) return setting.value;
-    } else {
-      // Get from first owner's settings
-      const setting = await prisma.setting.findFirst({
-        where: { key },
-        orderBy: { createdAt: 'asc' },
-      });
-      if (setting?.value) return setting.value;
     }
+    // SEM userId NAO SE LE DO BANCO.
+    //
+    // Havia aqui um findFirst por chave ordenado por createdAt, ou seja:
+    // "a configuracao do dono mais ANTIGO do banco". Numa instalacao com
+    // varias agencias isso significava que toda geracao de IA, todo upload
+    // e todo token de uma agencia rodavam com a CHAVE DE OUTRA — a primeira
+    // que se cadastrou pagava a conta de todas, e um token de Instagram
+    // podia atravessar de uma empresa para outra.
+    //
+    // Sem dono identificado, a unica fonte legitima e a variavel de
+    // ambiente da propria instalacao.
   } catch {
-    // DB not available, fall through to env
+    // Banco indisponivel: cai para a variavel de ambiente.
   }
 
   // Fallback to environment variable
