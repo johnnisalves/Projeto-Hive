@@ -333,13 +333,15 @@ const FOOD_HERO_ENFORCEMENT = `FOOD HERO (when food is present):
  * Device screens are where diffusion models produce garbled micro-text. Keep
  * any phone/app UI suggested with blocks, icons and at most one short label.
  */
-const DEVICE_SCREEN_RULE = `DEVICE SCREENS: If a phone, tablet or app interface appears, keep the on-screen UI simple and suggested — colour blocks, a few clean icons, and at most one short legible label. Do NOT render tiny paragraphs, menus, price lists or dense text inside a screen; small in-screen text always garbles. The screen should read as a polished app at a glance, not a readable document.`;
+const DEVICE_SCREEN_RULE = `DEVICE SCREENS: If a phone, tablet or app interface appears, keep the on-screen UI simple and suggested — colour blocks, a few clean icons, and AT MOST ONE short label, in Brazilian Portuguese, taken from the brief. Absolutely NO numbers, prices, currency symbols, balances, English words, menus, lists or paragraphs inside a screen — small in-screen text always garbles and invented figures become false claims. The screen should read as a polished app at a glance, not a readable document.`;
 
 const PHOTOGRAPHY_STANDARD = `PHOTOGRAPHY STANDARD:\n- Full-frame commercial realism whenever photographic.\n- Lens chosen on purpose: 35mm environmental, 50mm natural hero, 85mm premium compression, macro only when justified.\n- Physically coherent key, fill, rim and practical lights. Realistic contact shadows and reflections.\n- Layered depth: foreground, subject, background. Natural microtexture; no plastic skin, no synthetic food.\n- Cinematic grading without crushed blacks or blown highlights.`;
 
 const TYPOGRAPHY_STANDARD = `TYPOGRAPHY & COPY PLANNING:\n- Headline ideally 2 to 7 words. Never break a word awkwardly.\n- Maximum two type families; three sizes is usually enough. High contrast, sized for a phone at arm's length.\n- Typography is designed hierarchy, not scattered labels. No paragraphs inside the image.`;
 
-const TRUTH_RULES = `FACTUAL INTEGRITY (absolute):\n- Never invent a price, discount, percentage, date, deadline, phone number, address, website or commercial claim.\n- Use only the facts supplied in the brief and brand context. If a fact is absent, design without it.\n- Never fabricate awards, ratings, certifications or testimonials.`;
+const TRUTH_RULES = `FACTUAL INTEGRITY (absolute):\n- Never invent a price, discount, percentage, cashback, gift, "free", "on us" / "por nossa conta", loyalty programme, date, deadline, phone number, address, website or any commercial claim or promise.\n- Use only the facts supplied in the brief and brand context. If a fact is absent, design without it.\n- Never fabricate awards, ratings, certifications or testimonials.\n- A headline or CTA that promises something the brief did not state is a rejected piece, however beautiful.`;
+
+const BRIEF_FIDELITY = `BRIEF FIDELITY (outranks your creativity):\n- Everything the client states EXPLICITLY is mandatory and verbatim: exact headline, support text, CTA, scene, people, objects, micro-elements, format. You do not "improve" it — you execute it with excellence.\n- Your creative freedom applies ONLY to what the brief leaves open (light, camera, palette details, styling, composition within the requested scene).\n- If the brief dictates text ("escreva exatamente", "HEADLINE:", "TEXTO OBRIGATÓRIO", quoted copy), copy it character by character into the corresponding JSON fields. Do not paraphrase, do not translate, do not add words.\n- If the brief describes a scene (e.g. a person on a sofa ordering on the app), that scene IS the concept. Do not replace it with a product-only hero.\n- Only when the brief is a short idea with no explicit copy or scene do you invent headline, scene and concept.`;
 
 const NEGATIVE_STANDARD = 'NEGATIVE CONSTRAINTS: no Canva-template look, no stock-photo cliché, no cheap bevels or drop shadows, no WordArt, no gibberish or misspelled text, no watermarks, no malformed hands or extra fingers, no duplicated objects, no fabricated logos, no clutter, no purposeless floating particles, no excessive HDR, no oversaturation, no crushed shadows, no plastic food, no anatomy errors, no inconsistent perspective, no multiple competing focal points, no default dark gradient background.';
 
@@ -440,7 +442,9 @@ CANVAS: ${spec.label}, aspect ratio ${spec.ratio}. Plan natively for this shape 
 
 ${TRUTH_RULES}
 
-HEADLINE RULES: Brazilian Portuguese, perfect spelling, 2-7 words, specific to this concept — a headline that would fit any brand has failed.
+${BRIEF_FIDELITY}
+
+HEADLINE RULES: If the brief dictates the headline, use it verbatim. Otherwise write one in Brazilian Portuguese, perfect spelling, 2-7 words, specific to this concept — a headline that would fit any brand has failed. Never a headline that promises an offer the brief did not state.
 
 Return only the JSON object.`;
 }
@@ -462,7 +466,7 @@ export function buildCreativePlanUserPrompt(input: CreativeInput): string {
   return `CLIENT BRIEF: ${input.topic.slice(0, 1800)}
 BRAND (facts you may use — and the only facts you may use):
 ${brandBlock}
-HEADLINE SUGGESTED BY THE USER (improve or replace if weak): ${input.headline || '(none)'}
+HEADLINE FIELD: ${input.headline || '(none — if the brief above dictates copy, that copy is mandatory and verbatim; if it does not, write one)'}
 SUPPORT POINTS: ${(input.points || []).slice(0, 4).join(' | ') || 'none'}
 PLATFORM: ${input.platform || 'instagram'}
 CANVAS: ${spec.label} (${spec.ratio})
@@ -603,6 +607,9 @@ ${nicheRules(niche)}
 CANVAS: ${spec.label} (${spec.ratio}).
 
 ${TRUTH_RULES}
+
+${BRIEF_FIDELITY}
+When the brief dictates copy or a scene, all three routes keep that copy verbatim and that scene — they differ in art direction, not in what the client asked for.
 
 At least two of the three routes must use a light, bright or colourful ground. Never present three dark routes. Return only the JSON array.`;
 }
