@@ -25,8 +25,10 @@ function brandToContext(brand: any): BrandContext | null {
     // Commercial WhatsApp is the phone the engine may print; fall back to `phone`.
     phone: brand.whatsappPhone || brand.phone,
     address: brand.cidade,
+    cidade: brand.cidade,
     // Prisma field is `websiteUrl`.
     website: brand.websiteUrl,
+    referenceImages: Array.isArray(brand.referenceImages) ? brand.referenceImages : [],
   };
 }
 
@@ -102,7 +104,10 @@ export async function generateImageController(req: Request, res: Response) {
 
     // Only pass the logo reference on the engine path (the model reproduces it);
     // the legacy path still reserves an area and composites separately.
-    const referenceImages = usedEngine === 'v2' && logoUrl ? [logoUrl] : undefined;
+    // Logo first (the prompt calls it "reference image 1"), then the brand's real
+    // photos. Capped so a big gallery doesn't blow the request size.
+    const brandRefs: string[] = Array.isArray(brand?.referenceImages) ? brand.referenceImages : [];
+    const referenceImages = usedEngine === 'v2' && logoUrl ? [logoUrl, ...brandRefs].slice(0, 6) : undefined;
     const result = await generateImage({ prompt: finalPrompt, style, aspectRatio, format, negativePrompt, preEnriched, referenceImages });
 
     // ── Optional QA pass ──

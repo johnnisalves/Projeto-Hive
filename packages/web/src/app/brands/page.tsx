@@ -38,6 +38,7 @@ interface Brand {
   cidade?: string | null;
   feeCentavos?: number | null;
   nicho?: string | null;
+  referenceImages?: string[];
 }
 
 /**
@@ -94,6 +95,7 @@ const EMPTY_BRAND: Partial<Brand> = {
   cidade: '',
   feeCentavos: null,
   nicho: '',
+  referenceImages: [],
 };
 
 export default function BrandsPage() {
@@ -164,6 +166,7 @@ export default function BrandsPage() {
     setGerando(null);
   }
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const refInputRef = useRef<HTMLInputElement>(null);
 
   async function loadBrands() {
     setLoading(true);
@@ -199,6 +202,26 @@ export default function BrandsPage() {
       setEditing((prev) => ({ ...prev, logoUrl: result.fileUrl }));
     } catch (err: any) {
       alert(err.message || 'Erro ao enviar logo');
+    }
+    setUploading(false);
+  }
+
+  /** Real photos of the brand (storefront, box, products) — image-model references. */
+  async function handleReferenceUpload(files: FileList) {
+    const current = editing.referenceImages || [];
+    const room = Math.max(0, 6 - current.length);
+    const picked = Array.from(files).slice(0, room);
+    if (!picked.length) { alert('Máximo de 6 fotos de referência.'); return; }
+    setUploading(true);
+    try {
+      const urls: string[] = [];
+      for (const f of picked) {
+        const r = await api.uploadFile(f);
+        urls.push(r.fileUrl);
+      }
+      setEditing((prev) => ({ ...prev, referenceImages: [...(prev.referenceImages || []), ...urls] }));
+    } catch (err: any) {
+      alert(err.message || 'Erro ao enviar foto de referência');
     }
     setUploading(false);
   }
@@ -240,6 +263,7 @@ export default function BrandsPage() {
         whatsappPhone: opt(editing.whatsappPhone),
         cidade: opt(editing.cidade),
         nicho: opt(editing.nicho),
+        referenceImages: (editing.referenceImages || []).filter(Boolean),
         // O usuario digita reais; o banco guarda centavos. null limpa o campo
         // (e diferente de undefined, que manteria o valor antigo).
         feeCentavos: editing.feeCentavos ?? null,
@@ -534,6 +558,50 @@ export default function BrandsPage() {
                       className="input-field"
                     />
                     <p className="text-[10px] text-text-muted mt-1">Aparece nas artes e nos CTAs de contato</p>
+                  </div>
+
+                  {/* Fotos reais de referência (fachada, caixa, produtos) */}
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">
+                      Fotos reais da marca <span className="normal-case font-normal text-text-muted">(fachada, embalagem, produtos — até 6)</span>
+                    </label>
+                    <input
+                      ref={refInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => { if (e.target.files?.length) handleReferenceUpload(e.target.files); e.target.value = ''; }}
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      {(editing.referenceImages || []).map((url, i) => (
+                        <div key={url + i} className="relative">
+                          <img src={url} alt={`Referência ${i + 1}`} className="w-16 h-16 rounded-xl object-cover border border-border" />
+                          <button
+                            type="button"
+                            onClick={() => setEditing({ ...editing, referenceImages: (editing.referenceImages || []).filter((_, j) => j !== i) })}
+                            className="absolute -top-1 -right-1 w-5 h-5 bg-white rounded-full shadow-md flex items-center justify-center"
+                            aria-label="Remover"
+                          >
+                            <X className="w-3 h-3 text-text-muted" />
+                          </button>
+                        </div>
+                      ))}
+                      {(editing.referenceImages || []).length < 6 && (
+                        <button
+                          type="button"
+                          onClick={() => refInputRef.current?.click()}
+                          disabled={uploading}
+                          className="w-16 h-16 rounded-xl bg-bg-main border border-dashed border-border flex flex-col items-center justify-center text-text-muted hover:border-primary/50 hover:text-primary transition-colors"
+                        >
+                          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" strokeWidth={2} />}
+                          <span className="text-[9px] mt-1">Adicionar</span>
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-text-muted mt-1">
+                      A IA recebe estas fotos junto com a logo e reproduz a loja, a caixa e os produtos reais em vez de inventar genéricos.
+                    </p>
                   </div>
                 </div>
               </section>

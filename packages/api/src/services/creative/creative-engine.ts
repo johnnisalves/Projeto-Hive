@@ -36,6 +36,10 @@ export type BrandContext = {
   phone?: string | null;
   address?: string | null;
   website?: string | null;
+  /** City — lets the plan draw on recognisable local context when it helps. */
+  cidade?: string | null;
+  /** Real photos of the brand sent to the model as references (after the logo). */
+  referenceImages?: string[] | null;
 };
 
 export type CreativeInput = {
@@ -380,9 +384,28 @@ function photoRule(hasUserPhoto: boolean | undefined, placement?: PhotoPlacement
 function logoRule(brandName?: string | null, hasLogoReference?: boolean): string {
   const name = brandName || 'the brand';
   if (hasLogoReference) {
-    return `BRAND & LOGO: The official ${name} logo is provided as a reference image. Reproduce it EXACTLY — same symbol, proportions, colours and typography — placed clean, legible and premium in the layout. Never redraw it in a different style, never recolour it, never invent a variant or a similar-looking mark.`;
+    return `BRAND & LOGO: The FIRST reference image is the official ${name} logo. Reproduce it EXACTLY — same symbol, proportions, colours and typography. Never redraw it in another style, never recolour it (if the background fights the logo's colours, change the background or place the logo on a clean badge/plate — never change the logo), never invent a variant.
+LOGO PROMINENCE: the logo is a hero brand element, not a footnote. Size it at roughly 18-25% of the canvas width, in a high-contrast, uncluttered position (top centre, top corner or on a dedicated badge). It must be instantly readable at phone size.`;
   }
-  return `BRAND & LOGO: Do not draw, letter or invent a logo — the real ${name} logo is composited afterwards as an official asset. Reserve a clean, low-contrast, unobstructed logo area (~15% of the width) in one corner, free of texture, text and busy detail.`;
+  return `BRAND & LOGO: Do not draw, letter or invent a logo — the real ${name} logo is composited afterwards as an official asset. Reserve a clean, low-contrast, unobstructed logo area (~20% of the width) in one corner, free of texture, text and busy detail.`;
+}
+
+/**
+ * Real photos of the brand (storefront, packaging, products) come after the
+ * logo in the reference list. Tell the model what they are and to reproduce
+ * them, not to reinterpret them.
+ */
+function referenceAssetsRule(brand?: BrandContext | null): string {
+  const count = brand?.referenceImages?.length || 0;
+  if (!count) return '';
+  return `\n\nREAL BRAND REFERENCES: reference images 2 to ${count + 1} are REAL photographs of this brand (its storefront, its packaging, its products). When the piece shows a shop front, a pizza box, a package or a product, reproduce the one in the references — same colours, materials, shape, signage and details. Do not invent a generic substitute. You may photograph them from a new angle or in new light, but they must be recognisably the same real objects.`;
+}
+
+/** Local flavour — used only when the plan judges it strengthens the piece. */
+function localContextRule(brand?: BrandContext | null): string {
+  const city = brand?.cidade?.trim();
+  if (!city) return '';
+  return `\n\nLOCAL CONTEXT: the brand is in ${city}. When it strengthens the concept (launches, "we have arrived", community, pride), you may reference the city subtly and authentically — a recognisable landmark in soft focus, the local light, the regional atmosphere. Only real, recognisable references; never invent a landmark. Never let the city upstage the product.`;
 }
 
 function textToRender(input: CreativeInput, plan?: CreativePlan): string {
@@ -443,6 +466,7 @@ CANVAS: ${spec.label}, aspect ratio ${spec.ratio}. Plan natively for this shape 
 ${TRUTH_RULES}
 
 ${BRIEF_FIDELITY}
+${referenceAssetsRule(input.brand)}${localContextRule(input.brand)}
 
 HEADLINE RULES: If the brief dictates the headline, use it verbatim. Otherwise write one in Brazilian Portuguese, perfect spelling, 2-7 words, specific to this concept — a headline that would fit any brand has failed. Never a headline that promises an offer the brief did not state.
 
@@ -514,7 +538,7 @@ ${textToRender(input, plan)}
 
 ${photoRule(input.hasUserPhoto, plan.photoPlacement)}
 
-${logoRule(input.brand?.name, input.hasLogoReference)}${safe.top ? `\n\nSAFE AREA: keep all critical text and the logo at least ${safe.top}px from the top and ${safe.bottom}px from the bottom.` : ''}
+${logoRule(input.brand?.name, input.hasLogoReference)}${referenceAssetsRule(input.brand)}${localContextRule(input.brand)}${safe.top ? `\n\nSAFE AREA: keep all critical text and the logo at least ${safe.top}px from the top and ${safe.bottom}px from the bottom.` : ''}
 
 ${TRUTH_RULES}
 ${brandConstraints(input.brand)}
@@ -556,7 +580,7 @@ ${textToRender(input)}
 
 ${photoRule(input.hasUserPhoto)}
 
-${logoRule(input.brand?.name, input.hasLogoReference)}${safe.top ? `\n\nSAFE AREA: keep critical text and the logo at least ${safe.top}px from the top and ${safe.bottom}px from the bottom.` : ''}
+${logoRule(input.brand?.name, input.hasLogoReference)}${referenceAssetsRule(input.brand)}${localContextRule(input.brand)}${safe.top ? `\n\nSAFE AREA: keep critical text and the logo at least ${safe.top}px from the top and ${safe.bottom}px from the bottom.` : ''}
 
 ${TRUTH_RULES}
 ${brandConstraints(input.brand)}

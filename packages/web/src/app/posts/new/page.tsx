@@ -126,7 +126,9 @@ export default function NewPost() {
   const [imageCount, setImageCount] = useState(1);
   // Creative Engine v2 controls
   const [creativeMode, setCreativeMode] = useState('auto');
-  const [creativeIntensity, setCreativeIntensity] = useState('balanced');
+  // "Ousado" by default: social campaigns need hero-scale type and a strong
+  // idea to compete in the feed; "balanced" was producing quiet, catalogue-like pieces.
+  const [creativeIntensity, setCreativeIntensity] = useState('bold');
   const [directorMode, setDirectorMode] = useState(false);
   const [conceptModalOpen, setConceptModalOpen] = useState(false);
   const [conceptsLoading, setConceptsLoading] = useState(false);
