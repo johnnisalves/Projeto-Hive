@@ -47,6 +47,29 @@ const CREATIVE_INTENSITIES = [
   { value: 'experimental', label: 'Muito' },
 ];
 
+/**
+ * Reads an explicit format out of the brief. Returns null when the text says
+ * nothing about it, so a manual button choice is never overridden by silence.
+ * When a brief mentions several (e.g. "versão A 9:16, versão B 4:5") the last
+ * one wins — the user generates one format per run and can switch after.
+ */
+function detectFormatFromText(text: string): '1:1' | '4:5' | '9:16' | null {
+  const t = text.toLowerCase();
+  const candidates: Array<{ re: RegExp; fmt: '1:1' | '4:5' | '9:16' }> = [
+    { re: /9\s*:\s*16|1080\s*[x×]\s*1920|stor(y|ies)|reels?/g, fmt: '9:16' },
+    { re: /4\s*:\s*5|1080\s*[x×]\s*1350|retrato|portrait/g, fmt: '4:5' },
+    { re: /1\s*:\s*1|1080\s*[x×]\s*1080|quadrad[oa]/g, fmt: '1:1' },
+  ];
+  let best: { idx: number; fmt: '1:1' | '4:5' | '9:16' } | null = null;
+  for (const c of candidates) {
+    let m: RegExpExecArray | null;
+    while ((m = c.re.exec(t)) !== null) {
+      if (!best || m.index > best.idx) best = { idx: m.index, fmt: c.fmt };
+    }
+  }
+  return best?.fmt ?? null;
+}
+
 interface CarouselImage {
   url: string;
   prompt?: string;
@@ -97,7 +120,9 @@ export default function NewPost() {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [hashtags, setHashtags] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
-  const [aspectRatio, setAspectRatio] = useState('1:1');
+  // 4:5 is the Instagram feed format that fills the most screen; 1:1 was a
+  // poor default that silently squared every campaign.
+  const [aspectRatio, setAspectRatio] = useState('4:5');
   const [imageCount, setImageCount] = useState(1);
   // Creative Engine v2 controls
   const [creativeMode, setCreativeMode] = useState('auto');
@@ -612,7 +637,15 @@ export default function NewPost() {
                 <label className="block text-xs font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Prompt</label>
                 <textarea
                   value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
+                  onChange={(e) => {
+                    const text = e.target.value;
+                    setPrompt(text);
+                    // A brief that names its format ("9:16", "stories", "1080x1350")
+                    // is explicit intent — follow it instead of leaving the buttons
+                    // on whatever was selected before.
+                    const detected = detectFormatFromText(text);
+                    if (detected && detected !== aspectRatio) setAspectRatio(detected);
+                  }}
                   placeholder="Descreva o tema do post... Ex: 'Post sobre produtividade com dicas de organizacao'"
                   rows={3}
                   className="input-field resize-none"
