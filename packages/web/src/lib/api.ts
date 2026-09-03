@@ -144,10 +144,51 @@ export const api = {
   listSubscriptions: () => request<any>(`/api/billing/subscriptions`),
   cancelSubscription: (id: string) => request<any>(`/api/billing/subscriptions/${id}`, { method: 'DELETE' }),
 
-  generateImage: (prompt: string, aspectRatio?: string) =>
-    request<{ imageUrl: string }>('/api/generate/image', {
+  generateImage: (
+    prompt: string,
+    aspectRatio?: string,
+    opts?: {
+      brandId?: string;
+      creativeEngine?: boolean;
+      creativeMode?: string;
+      creativeIntensity?: string;
+      variationSeed?: number;
+      hasUserPhoto?: boolean;
+      headline?: string;
+      platform?: string;
+      qaMode?: 'off' | 'report';
+      chosenConcept?: unknown;
+      format?: string;
+      bakeText?: boolean;
+      style?: string;
+    },
+  ) =>
+    request<{
+      imageUrl: string;
+      width?: number;
+      height?: number;
+      creativeEngine?: string;
+      plan?: unknown;
+      niche?: string;
+      mode?: string;
+      photoPlacement?: unknown;
+      qa?: unknown;
+    }>('/api/generate/image', {
       method: 'POST',
-      body: JSON.stringify({ prompt, aspectRatio }),
+      body: JSON.stringify({ prompt, aspectRatio, ...opts }),
+    }),
+
+  generateConcepts: (
+    prompt: string,
+    opts?: { brandId?: string; format?: string; aspectRatio?: string; creativeMode?: string; creativeIntensity?: string; platform?: string; headline?: string },
+  ) =>
+    request<{
+      concepts: Array<{ id: string; mode: string; title: string; concept: string; visualHook: string; headline: string; palette: string; whyItWorks: string }>;
+      niche: string;
+      fallback: boolean;
+    }>('/api/generate/concepts', {
+      method: 'POST',
+      body: JSON.stringify({ prompt, ...opts }),
     }),
 
   generateCaption: (topic: string, tone?: string, brandId?: string, mode?: string, platform?: string, imageUrl?: string) =>

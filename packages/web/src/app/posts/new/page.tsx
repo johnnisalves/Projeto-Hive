@@ -28,6 +28,25 @@ const ASPECT_RATIOS = [
   { value: '9:16', label: '9:16', desc: 'Stories/Reels' },
 ];
 
+const CREATIVE_MODES = [
+  { value: 'auto', label: 'Auto', emoji: '✨' },
+  { value: 'cinematic', label: 'Cinema', emoji: '🎬' },
+  { value: 'editorial', label: 'Editorial', emoji: '📰' },
+  { value: 'food', label: 'Food', emoji: '🍕' },
+  { value: 'pop', label: 'Pop', emoji: '🎨' },
+  { value: 'luxury', label: 'Luxo', emoji: '💎' },
+  { value: 'minimal', label: 'Minimal', emoji: '⬜' },
+  { value: 'humanized', label: 'Humano', emoji: '🤝' },
+  { value: 'product', label: 'Produto', emoji: '📦' },
+];
+
+const CREATIVE_INTENSITIES = [
+  { value: 'conservative', label: 'Conserv.' },
+  { value: 'balanced', label: 'Equil.' },
+  { value: 'bold', label: 'Ousado' },
+  { value: 'experimental', label: 'Muito' },
+];
+
 interface CarouselImage {
   url: string;
   prompt?: string;
@@ -63,6 +82,9 @@ export default function NewPost() {
   const [scheduledAt, setScheduledAt] = useState('');
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [imageCount, setImageCount] = useState(1);
+  // Creative Engine v2 controls
+  const [creativeMode, setCreativeMode] = useState('auto');
+  const [creativeIntensity, setCreativeIntensity] = useState('balanced');
   const [loading, setLoading] = useState(false);
   const [genLoading, setGenLoading] = useState(false);
   const [genProgress, setGenProgress] = useState('');
@@ -211,7 +233,16 @@ export default function NewPost() {
     const imagePromises = Array.from({ length: count }, async (_, i) => {
       try {
         const variation = count > 1 ? `${prompt} - variacao ${i + 1} de ${count}` : prompt;
-        const result = await api.generateImage(variation, aspectRatio);
+        const result = await api.generateImage(variation, aspectRatio, {
+          brandId: selectedBrandId || undefined,
+          creativeEngine: true,
+          creativeMode,
+          creativeIntensity,
+          // Distinct seed per variation so the batch doesn't converge on one look.
+          variationSeed: Math.floor(Math.random() * 1_000_000) + i * 1013,
+          platform: platforms[0],
+          bakeText: true,
+        });
         newImages.push({ url: result.imageUrl, prompt: variation });
         generated++;
         if (count > 1) setGenProgress(`${generated}/${count} imagens geradas...`);
@@ -644,6 +675,50 @@ export default function NewPost() {
                   <span className="text-xs opacity-60 block mt-0.5">{ar.desc}</span>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Creative direction (Creative Engine v2) */}
+          <div className="card p-5 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary mb-3 uppercase tracking-wider">Direção criativa</label>
+              <div className="grid grid-cols-3 gap-2">
+                {CREATIVE_MODES.map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => setCreativeMode(m.value)}
+                    className={`py-2 px-2 rounded-btn text-xs border transition-all ${
+                      creativeMode === m.value
+                        ? 'bg-primary/[0.08] border-primary text-primary shadow-sm'
+                        : 'bg-bg-card border-border text-text-secondary hover:border-primary/50'
+                    }`}
+                  >
+                    <span className="block text-base leading-none mb-1">{m.emoji}</span>
+                    <span className="font-semibold block">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-text-muted mt-2">No automático, a IA lê o briefing e escolhe a direção pelo nicho.</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary mb-2 uppercase tracking-wider">Nível de ousadia</label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {CREATIVE_INTENSITIES.map((it) => (
+                  <button
+                    key={it.value}
+                    type="button"
+                    onClick={() => setCreativeIntensity(it.value)}
+                    className={`py-2 px-1 rounded-btn text-[11px] font-semibold border transition-all ${
+                      creativeIntensity === it.value
+                        ? 'bg-primary/[0.08] border-primary text-primary shadow-sm'
+                        : 'bg-bg-card border-border text-text-secondary hover:border-primary/50'
+                    }`}
+                  >
+                    {it.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
