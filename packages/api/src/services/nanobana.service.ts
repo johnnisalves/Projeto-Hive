@@ -1,11 +1,15 @@
 import { randomUUID } from 'crypto';
 import { minioClient } from '../config/minio';
 import { env } from '../config/env';
+import { getFormatSpec, geminiAspectRatio, huggingFaceDimensions, openRouterAspectRatio, type FormatSpec } from './creative/format-spec';
+import { normalizeToSpec } from './creative/image-normalize';
 
 interface GenerateImageParams {
   prompt: string;
   style?: string;
-  aspectRatio?: '1:1' | '9:16' | '4:5';
+  /** Named format ('ig-feed') or bare ratio ('4:5'). Both resolve via format-spec. */
+  aspectRatio?: string;
+  format?: string;
   /** Negative prompt (what to avoid). Appended to the prompt for chat-based image models. */
   negativePrompt?: string;
   /** When true, `prompt` is used as-is (already art-directed) instead of the default wrapper. */
@@ -15,6 +19,9 @@ interface GenerateImageParams {
 interface GenerateImageResult {
   imageUrl: string;
   minioKey: string;
+  /** Actual stored dimensions after normalisation, for callers that care. */
+  width: number;
+  height: number;
 }
 
 // ── Usage Counter (in-memory, resets at midnight) ──
@@ -43,12 +50,6 @@ export function getUsageStats() {
   return { used: usageCount, limit: DAILY_LIMIT, remaining: info.remaining, resetsIn: info.resetsIn };
 }
 
-const ASPECT_MAP: Record<string, { width: number; height: number }> = {
-  '1:1': { width: 1024, height: 1024 },
-  '4:5': { width: 864, height: 1080 },
-  '9:16': { width: 576, height: 1024 },
-};
-
 const HF_MODELS = [
   'black-forest-labs/FLUX.1-schnell',
   'stabilityai/stable-diffusion-xl-base-1.0',
@@ -76,14 +77,14 @@ async function uploadToMinio(imageBuffer: Buffer, contentType: string): Promise<
   return { imageUrl, minioKey: key };
 }
 
-async function generateViaHuggingFace(prompt: string, aspectRatio?: string): Promise<Buffer> {
+async function generateViaHuggingFace(prompt: string, spec: FormatSpec): Promise<Buffer> {
   const { getSetting } = await import('../helpers/getSetting');
   const hfToken = await getSetting('HF_API_TOKEN');
   if (!hfToken) {
     throw new Error('HF_API_TOKEN not configured');
   }
 
-  const dims = ASPECT_MAP[aspectRatio || '4:5'] || ASPECT_MAP['4:5'];
+  const dims = huggingFaceDimensions(spec);
 
   for (const model of HF_MODELS) {
     const url = `https://router.huggingface.co/hf-inference/models/${model}`;
@@ -126,7 +127,7 @@ async function generateViaHuggingFace(prompt: string, aspectRatio?: string): Pro
   throw new Error('All HuggingFace models failed');
 }
 
-async function generateViaGemini(prompt: string, aspectRatio?: string): Promise<{ buffer: Buffer; contentType: string }> {
+async function generateViaGemini(prompt: string, spec: FormatSpec): Promise<{ buffer: Buffer; contentType: string }> {
   const { getSetting } = await import('../helpers/getSetting');
   const apiKey = await getSetting('NANO_BANANA_API_KEY');
   if (!apiKey) {
@@ -135,7 +136,7 @@ async function generateViaGemini(prompt: string, aspectRatio?: string): Promise<
 
   const configured = await getSetting('NANO_BANANA_MODEL');
   const model = configured || 'gemini-2.5-flash-image';
-  const ratio = aspectRatio === '4:5' ? '3:4' : (aspectRatio || '1:1');
+  const ratio = geminiAspectRatio(spec);
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   const body = JSON.stringify({
@@ -169,7 +170,7 @@ async function generateViaGemini(prompt: string, aspectRatio?: string): Promise<
   };
 }
 
-async function generateViaOpenRouter(prompt: string, aspectRatio?: string): Promise<{ buffer: Buffer; contentType: string }> {
+async function generateViaOpenRouter(prompt: string, spec: FormatSpec): Promise<{ buffer: Buffer; contentType: string }> {
   const { getSetting } = await import('../helpers/getSetting');
   const apiKey = await getSetting('OPENROUTER_API_KEY');
   if (!apiKey) {
@@ -178,7 +179,7 @@ async function generateViaOpenRouter(prompt: string, aspectRatio?: string): Prom
 
   const configured = await getSetting('OPENROUTER_IMAGE_MODEL');
   const model = configured || 'google/gemini-3-pro-image';
-  const ratio = aspectRatio || '1:1';
+  const ratio = openRouterAspectRatio(spec);
 
   const url = 'https://openrouter.ai/api/v1/chat/completions';
   const body = JSON.stringify({
@@ -240,6 +241,9 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   const { getSetting } = await import('../helpers/getSetting');
   const provider = ((await getSetting('NANO_BANANA_PROVIDER')) || env.NANO_BANANA_PROVIDER || 'google').toLowerCase();
 
+  // Single source of truth for the canvas. Accepts a named format or a bare ratio.
+  const spec = getFormatSpec(params.format || params.aspectRatio);
+
   const base = params.preEnriched
     ? params.prompt
     : params.style
@@ -254,13 +258,13 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   // graceful fallbacks so image generation never hard-fails when one provider is down.
   const attempts: Array<{ name: string; run: () => Promise<{ buffer: Buffer; contentType: string }> }> = [];
   if (provider === 'openrouter') {
-    attempts.push({ name: 'OpenRouter', run: () => generateViaOpenRouter(enrichedPrompt, params.aspectRatio) });
+    attempts.push({ name: 'OpenRouter', run: () => generateViaOpenRouter(enrichedPrompt, spec) });
   }
   attempts.push({
     name: 'HuggingFace',
-    run: async () => ({ buffer: await generateViaHuggingFace(enrichedPrompt, params.aspectRatio), contentType: 'image/jpeg' }),
+    run: async () => ({ buffer: await generateViaHuggingFace(enrichedPrompt, spec), contentType: 'image/jpeg' }),
   });
-  attempts.push({ name: 'Gemini', run: () => generateViaGemini(enrichedPrompt, params.aspectRatio) });
+  attempts.push({ name: 'Gemini', run: () => generateViaGemini(enrichedPrompt, spec) });
 
   let imageBuffer: Buffer | null = null;
   let contentType = 'image/jpeg';
@@ -282,8 +286,27 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
     throw new Error(`Image generation failed. ${errors.join(' | ')}`);
   }
 
-  const result = await uploadToMinio(imageBuffer, contentType);
+  // Guarantee the exact canvas the caller asked for. No provider returns it
+  // natively (DALL-E, HF buckets, Gemini all round to their own sizes).
+  let finalBuffer = imageBuffer;
+  let finalType = contentType;
+  let outWidth = spec.width;
+  let outHeight = spec.height;
+  try {
+    const normalized = await normalizeToSpec(imageBuffer, spec);
+    finalBuffer = normalized.buffer;
+    finalType = normalized.contentType;
+    outWidth = normalized.width;
+    outHeight = normalized.height;
+    if (normalized.cropped) {
+      console.log(`[NanoBana] normalized ${normalized.sourceWidth}x${normalized.sourceHeight} -> ${outWidth}x${outHeight}`);
+    }
+  } catch (e: any) {
+    console.log(`[NanoBana] normalize failed, storing provider image as-is: ${e.message}`);
+  }
+
+  const result = await uploadToMinio(finalBuffer, finalType);
   usageCount++;
   console.log(`[NanoBana] Done (${usageCount}/${DAILY_LIMIT}). Remaining: ${checkUsage().remaining}. Resets in ${checkUsage().resetsIn}`);
-  return result;
+  return { ...result, width: outWidth, height: outHeight };
 }

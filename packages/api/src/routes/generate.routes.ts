@@ -11,18 +11,32 @@ import { enrichImagePrompt } from '../services/artDirector.service';
 import { prisma } from '../config/database';
 import { resolveOwnerId } from '../helpers/resolveOwnerId';
 import { generateContentPlan } from '../services/content-planner.service';
+import { buildConcepts } from '../services/creative/creative-director.service';
 
 const router = Router();
 
 const imageSchema = z.object({
   prompt: z.string().min(1),
   style: z.string().optional(),
-  aspectRatio: z.enum(['1:1', '9:16', '4:5']).optional(),
-  // Art-director enrichment (opt-in)
+  aspectRatio: z.enum(['1:1', '9:16', '4:5', '16:9']).optional(),
+  // Named format ('ig-feed', 'yt-thumbnail'…). Takes precedence over aspectRatio.
+  format: z.string().optional(),
   brandId: z.string().optional(),
+  // Legacy 1-stage art director (opt-in)
   enrich: z.boolean().optional(),
   artStyle: z.enum(['humanizado', 'grafico']).optional(),
   bakeText: z.boolean().optional(),
+  // Creative Engine v2 (opt-in)
+  creativeEngine: z.boolean().optional(),
+  creativeMode: z.enum(['auto', 'cinematic', 'editorial', 'food', 'pop', 'luxury', 'minimal', 'vintage', 'humor', 'viral', '3d', 'product', 'humanized', 'constructive']).optional(),
+  creativeIntensity: z.enum(['conservative', 'balanced', 'bold', 'experimental']).optional(),
+  variationSeed: z.number().optional(),
+  hasUserPhoto: z.boolean().optional(),
+  headline: z.string().optional(),
+  points: z.array(z.string()).optional(),
+  platform: z.string().optional(),
+  qaMode: z.enum(['off', 'report']).optional(),
+  chosenConcept: z.any().optional(),
 });
 
 const captionSchema = z.object({
@@ -41,6 +55,45 @@ router.use(authMiddleware);
 
 router.post('/image', validate(imageSchema), generateImageController);
 router.post('/caption', validate(captionSchema), generateCaptionController);
+
+// Creative Director mode: three distinct concepts for one brief (text only, cheap).
+const conceptsSchema = z.object({
+  prompt: z.string().min(1),
+  brandId: z.string().optional(),
+  format: z.string().optional(),
+  aspectRatio: z.enum(['1:1', '9:16', '4:5', '16:9']).optional(),
+  creativeMode: z.string().optional(),
+  creativeIntensity: z.enum(['conservative', 'balanced', 'bold', 'experimental']).optional(),
+  platform: z.string().optional(),
+  headline: z.string().optional(),
+});
+router.post('/concepts', validate(conceptsSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const { prompt, brandId, format, aspectRatio, creativeMode, creativeIntensity, platform, headline } = req.body as any;
+    let brand: any = null;
+    if (brandId) {
+      const userId = await resolveOwnerId(req.userId!);
+      brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+    }
+    const result = await buildConcepts({
+      topic: prompt,
+      brand: brand ? {
+        name: brand.name, description: brand.description, voiceTone: brand.voiceTone,
+        primaryColor: brand.primaryColor, secondaryColor: brand.secondaryColor,
+        accentColor: brand.accentColor, backgroundColor: brand.backgroundColor,
+        products: brand.products, artDirection: brand.artDirection,
+      } : null,
+      format: format || aspectRatio,
+      creativeMode,
+      creativeIntensity,
+      platform,
+      headline,
+    });
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao gerar conceitos' });
+  }
+});
 
 // Planejador de conteúdo mensal com IA
 const contentPlanSchema = z.object({

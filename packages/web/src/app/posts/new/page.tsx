@@ -28,10 +28,46 @@ const ASPECT_RATIOS = [
   { value: '9:16', label: '9:16', desc: 'Stories/Reels' },
 ];
 
+const CREATIVE_MODES = [
+  { value: 'auto', label: 'Auto', emoji: '✨' },
+  { value: 'cinematic', label: 'Cinema', emoji: '🎬' },
+  { value: 'editorial', label: 'Editorial', emoji: '📰' },
+  { value: 'food', label: 'Food', emoji: '🍕' },
+  { value: 'pop', label: 'Pop', emoji: '🎨' },
+  { value: 'luxury', label: 'Luxo', emoji: '💎' },
+  { value: 'minimal', label: 'Minimal', emoji: '⬜' },
+  { value: 'humanized', label: 'Humano', emoji: '🤝' },
+  { value: 'product', label: 'Produto', emoji: '📦' },
+];
+
+const CREATIVE_INTENSITIES = [
+  { value: 'conservative', label: 'Conserv.' },
+  { value: 'balanced', label: 'Equil.' },
+  { value: 'bold', label: 'Ousado' },
+  { value: 'experimental', label: 'Muito' },
+];
+
 interface CarouselImage {
   url: string;
   prompt?: string;
 }
+
+interface ConceptOption {
+  id: string;
+  mode: string;
+  title: string;
+  concept: string;
+  visualHook: string;
+  headline: string;
+  palette: string;
+  whyItWorks: string;
+}
+
+const CONCEPT_ACCENT: Record<string, string> = {
+  A: 'border-blue-500/40',
+  B: 'border-amber-500/40',
+  C: 'border-fuchsia-500/40',
+};
 
 // Detecta a proporcao mais proxima (1:1 / 4:5 / 9:16) a partir das dimensoes da imagem.
 function detectAspectRatioFromFile(file: File): Promise<'1:1' | '4:5' | '9:16'> {
@@ -63,6 +99,13 @@ export default function NewPost() {
   const [scheduledAt, setScheduledAt] = useState('');
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [imageCount, setImageCount] = useState(1);
+  // Creative Engine v2 controls
+  const [creativeMode, setCreativeMode] = useState('auto');
+  const [creativeIntensity, setCreativeIntensity] = useState('balanced');
+  const [directorMode, setDirectorMode] = useState(false);
+  const [conceptModalOpen, setConceptModalOpen] = useState(false);
+  const [conceptsLoading, setConceptsLoading] = useState(false);
+  const [concepts, setConcepts] = useState<ConceptOption[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [genLoading, setGenLoading] = useState(false);
   const [genProgress, setGenProgress] = useState('');
@@ -181,7 +224,33 @@ export default function NewPost() {
     setCaptionLoading(false);
   }
 
-  async function handleGenerateImage() {
+  /** Creative Director mode: fetch three routes, let the user pick before generating. */
+  async function openConceptChooser() {
+    if (!prompt) return;
+    setConceptModalOpen(true);
+    setConceptsLoading(true);
+    setConcepts(null);
+    try {
+      const res = await api.generateConcepts(prompt, {
+        brandId: selectedBrandId || undefined,
+        aspectRatio,
+        creativeMode,
+        creativeIntensity,
+        platform: platforms[0],
+      });
+      setConcepts(res.concepts as ConceptOption[]);
+    } catch {
+      setConceptModalOpen(false);
+      setMessage('Não consegui montar os conceitos. Gerando no modo automático.');
+      setMessageType('error');
+      void handleGenerateImage();
+    } finally {
+      setConceptsLoading(false);
+    }
+  }
+
+  async function handleGenerateImage(chosenConcept?: ConceptOption | null) {
+    setConceptModalOpen(false);
     if (!prompt) return;
     const remaining = 10 - images.length;
     const count = Math.min(imageCount, remaining);
@@ -211,7 +280,17 @@ export default function NewPost() {
     const imagePromises = Array.from({ length: count }, async (_, i) => {
       try {
         const variation = count > 1 ? `${prompt} - variacao ${i + 1} de ${count}` : prompt;
-        const result = await api.generateImage(variation, aspectRatio);
+        const result = await api.generateImage(variation, aspectRatio, {
+          brandId: selectedBrandId || undefined,
+          creativeEngine: true,
+          creativeMode: chosenConcept?.mode || creativeMode,
+          creativeIntensity,
+          // Distinct seed per variation so the batch doesn't converge on one look.
+          variationSeed: Math.floor(Math.random() * 1_000_000) + i * 1013,
+          platform: platforms[0],
+          bakeText: true,
+          chosenConcept: chosenConcept || undefined,
+        });
         newImages.push({ url: result.imageUrl, prompt: variation });
         generated++;
         if (count > 1) setGenProgress(`${generated}/${count} imagens geradas...`);
@@ -561,12 +640,12 @@ export default function NewPost() {
                 )}
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <button onClick={handleGenerateImage} disabled={genLoading || !prompt} className="btn-cta justify-center text-xs py-2.5 flex-col h-auto py-3 gap-1">
+                <button onClick={() => (directorMode ? openConceptChooser() : handleGenerateImage())} disabled={genLoading || !prompt} className="btn-cta justify-center text-xs py-2.5 flex-col h-auto py-3 gap-1">
                   <div className="flex items-center gap-1.5">
-                    {genLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : imageCount >= 2 ? <Layers className="w-4 h-4" strokeWidth={1.5} /> : <Wand2 className="w-4 h-4" strokeWidth={1.5} />}
-                    <span className="font-bold">{genLoading ? (genProgress || 'Gerando...') : imageCount >= 2 ? `Imagem Completa (${imageCount})` : 'Imagem Completa'}</span>
+                    {genLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : directorMode ? <span className="text-sm">🎯</span> : imageCount >= 2 ? <Layers className="w-4 h-4" strokeWidth={1.5} /> : <Wand2 className="w-4 h-4" strokeWidth={1.5} />}
+                    <span className="font-bold">{genLoading ? (genProgress || 'Gerando...') : directorMode ? 'Criar 3 Conceitos' : imageCount >= 2 ? `Imagem Completa (${imageCount})` : 'Imagem Completa'}</span>
                   </div>
-                  <span className="text-[10px] opacity-80 font-normal normal-case">IA gera tudo (texto + fundo) • não editável</span>
+                  <span className="text-[10px] opacity-80 font-normal normal-case">{directorMode ? 'Você escolhe a direção antes de gerar' : 'IA gera tudo (texto + fundo) • não editável'}</span>
                 </button>
                 <button onClick={handleGenerateForEditor} disabled={genLoading || !prompt} className="btn-ghost justify-center text-xs py-2.5 flex-col h-auto py-3 gap-1 border-primary/40 text-primary hover:bg-primary/5">
                   <div className="flex items-center gap-1.5">
@@ -645,6 +724,66 @@ export default function NewPost() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Creative direction (Creative Engine v2) */}
+          <div className="card p-5 space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary mb-3 uppercase tracking-wider">Direção criativa</label>
+              <div className="grid grid-cols-3 gap-2">
+                {CREATIVE_MODES.map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    onClick={() => setCreativeMode(m.value)}
+                    className={`py-2 px-2 rounded-btn text-xs border transition-all ${
+                      creativeMode === m.value
+                        ? 'bg-primary/[0.08] border-primary text-primary shadow-sm'
+                        : 'bg-bg-card border-border text-text-secondary hover:border-primary/50'
+                    }`}
+                  >
+                    <span className="block text-base leading-none mb-1">{m.emoji}</span>
+                    <span className="font-semibold block">{m.label}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-text-muted mt-2">No automático, a IA lê o briefing e escolhe a direção pelo nicho.</p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-text-secondary mb-2 uppercase tracking-wider">Nível de ousadia</label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {CREATIVE_INTENSITIES.map((it) => (
+                  <button
+                    key={it.value}
+                    type="button"
+                    onClick={() => setCreativeIntensity(it.value)}
+                    className={`py-2 px-1 rounded-btn text-[11px] font-semibold border transition-all ${
+                      creativeIntensity === it.value
+                        ? 'bg-primary/[0.08] border-primary text-primary shadow-sm'
+                        : 'bg-bg-card border-border text-text-secondary hover:border-primary/50'
+                    }`}
+                  >
+                    {it.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDirectorMode((v) => !v)}
+              className={`w-full flex items-center gap-3 p-3 rounded-btn border text-left transition-all ${
+                directorMode ? 'border-amber-500 bg-amber-500/10' : 'border-border bg-bg-card hover:border-primary/40'
+              }`}
+            >
+              <span className="text-lg">🎯</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-text-primary">Modo Diretor Criativo</p>
+                <p className="text-[10px] text-text-muted mt-0.5">A IA propõe 3 conceitos diferentes e você escolhe antes de gerar</p>
+              </div>
+              <span className={`shrink-0 h-5 w-9 rounded-full transition-colors relative ${directorMode ? 'bg-amber-500' : 'bg-border'}`}>
+                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${directorMode ? 'left-[18px]' : 'left-0.5'}`} />
+              </span>
+            </button>
           </div>
 
           {/* Brand Selector */}
@@ -1055,6 +1194,68 @@ export default function NewPost() {
           </div>
         </div>
       </div>
+
+      {/* Creative Director: three concepts */}
+      {conceptModalOpen && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4 overflow-y-auto modal-backdrop">
+          <div className="w-full max-w-4xl bg-bg-card rounded-card shadow-2xl my-8 modal-content">
+            <div className="flex items-start justify-between gap-4 p-5 border-b border-border">
+              <div>
+                <h2 className="text-base font-bold text-text-primary flex items-center gap-2">🎯 Modo Diretor Criativo</h2>
+                <p className="text-xs text-text-muted mt-1">Três rotas diferentes para o mesmo briefing. Escolha uma — ou deixe a IA decidir.</p>
+              </div>
+              <button onClick={() => setConceptModalOpen(false)} className="shrink-0 text-text-muted hover:text-text-primary p-1.5 rounded-btn hover:bg-bg-hover transition-colors" aria-label="Fechar">
+                <X className="w-4 h-4" strokeWidth={2} />
+              </button>
+            </div>
+
+            {conceptsLoading && (
+              <div className="flex flex-col items-center justify-center gap-3 py-16">
+                <Loader2 className="w-7 h-7 animate-spin text-primary" />
+                <p className="text-sm text-text-muted">Criando três conceitos…</p>
+              </div>
+            )}
+
+            {!conceptsLoading && concepts && (
+              <>
+                <div className="grid gap-3 p-5 md:grid-cols-3">
+                  {concepts.map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => handleGenerateImage(c)}
+                      className={`text-left rounded-card border bg-bg-card p-4 transition-all hover:shadow-lg hover:-translate-y-0.5 ${CONCEPT_ACCENT[c.id] || 'border-border'}`}
+                    >
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-[10px] font-black tracking-widest text-text-muted">CONCEITO {c.id}</span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-badge bg-bg-hover text-text-secondary">{c.mode}</span>
+                      </div>
+                      <h3 className="text-sm font-bold text-text-primary mt-2">{c.title}</h3>
+                      <p className="text-xs text-text-secondary mt-2 leading-relaxed">{c.concept}</p>
+                      <dl className="mt-3 space-y-1.5 text-[11px]">
+                        <div><dt className="font-bold text-text-muted">Headline</dt><dd className="text-text-primary">&ldquo;{c.headline}&rdquo;</dd></div>
+                        <div><dt className="font-bold text-text-muted">Gancho visual</dt><dd className="text-text-secondary">{c.visualHook}</dd></div>
+                        <div><dt className="font-bold text-text-muted">Paleta</dt><dd className="text-text-secondary">{c.palette}</dd></div>
+                      </dl>
+                      <p className="mt-3 pt-3 border-t border-border text-[11px] italic text-text-muted">{c.whyItWorks}</p>
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-5 pt-0">
+                  <p className="text-[11px] text-text-muted">Clique em um conceito para gerar a arte a partir dele.</p>
+                  <button
+                    type="button"
+                    onClick={() => handleGenerateImage(concepts[0])}
+                    className="btn-cta text-xs py-2.5 px-4 inline-flex items-center gap-2"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" /> Gerar automaticamente o melhor
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Full Image Modal */}
       {showFullImage && images.length > 0 && (
