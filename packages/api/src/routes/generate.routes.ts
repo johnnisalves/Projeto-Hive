@@ -82,6 +82,8 @@ router.post('/concepts', validate(conceptsSchema), async (req: AuthRequest, res:
         primaryColor: brand.primaryColor, secondaryColor: brand.secondaryColor,
         accentColor: brand.accentColor, backgroundColor: brand.backgroundColor,
         products: brand.products, artDirection: brand.artDirection,
+        niche: brand.nicho, slogan: brand.slogan, website: brand.websiteUrl,
+        phone: brand.whatsappPhone || brand.phone,
       } : null,
       format: format || aspectRatio,
       creativeMode,
