@@ -104,6 +104,7 @@ async function generateViaHuggingFace(prompt: string, spec: FormatSpec): Promise
           'Content-Type': 'application/json',
         },
         body,
+        signal: AbortSignal.timeout(120_000),
       });
       if (response.ok || response.status !== 503) break;
       console.log(`[HF/${model}] 503 on attempt ${attempt + 1}, retrying in ${(attempt + 1) * 3}s...`);
@@ -132,7 +133,7 @@ async function generateViaHuggingFace(prompt: string, spec: FormatSpec): Promise
 /** Fetches a reference image and returns it as a base64 inlineData part. */
 async function toInlineDataPart(url: string): Promise<{ inlineData: { mimeType: string; data: string } } | null> {
   try {
-    const r = await fetch(url);
+    const r = await fetch(url, { signal: AbortSignal.timeout(15_000) });
     if (!r.ok) return null;
     const contentType = r.headers.get('content-type') || 'image/png';
     const buf = Buffer.from(await r.arrayBuffer());
@@ -172,7 +173,7 @@ async function generateViaGemini(prompt: string, spec: FormatSpec, referenceImag
 
   let response: globalThis.Response | null = null;
   for (let attempt = 0; attempt < 3; attempt++) {
-    response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body });
+    response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, signal: AbortSignal.timeout(180_000) });
     if (response.ok || (response.status !== 503 && response.status !== 429)) break;
     await new Promise(r => setTimeout(r, (attempt + 1) * 5000));
   }
@@ -228,6 +229,8 @@ async function generateViaOpenRouter(prompt: string, spec: FormatSpec, reference
         'X-Title': 'DisparaAI',
       },
       body,
+      // Never let a stuck upstream hold the request open forever.
+      signal: AbortSignal.timeout(180_000),
     });
     if (response.ok || (response.status !== 503 && response.status !== 429)) break;
     await new Promise(r => setTimeout(r, (attempt + 1) * 5000));
