@@ -19,6 +19,7 @@ interface Brand {
   headingFont?: string | null;
   bodyFont?: string | null;
   description?: string | null;
+  slogan?: string | null;
   voiceTone?: string | null;
   websiteUrl?: string | null;
   instagramUrl?: string | null;
@@ -75,6 +76,7 @@ const EMPTY_BRAND: Partial<Brand> = {
   headingFont: '',
   bodyFont: '',
   description: '',
+  slogan: '',
   voiceTone: '',
   websiteUrl: '',
   instagramUrl: '',
@@ -221,6 +223,7 @@ export default function BrandsPage() {
         headingFont: opt(editing.headingFont),
         bodyFont: opt(editing.bodyFont),
         description: opt(editing.description),
+        slogan: opt(editing.slogan),
         voiceTone: opt(editing.voiceTone),
         websiteUrl: opt(editing.websiteUrl),
         instagramUrl: opt(editing.instagramUrl),
@@ -635,6 +638,17 @@ export default function BrandsPage() {
                       placeholder="ia, tecnologia, programacao (separadas por virgula)"
                       className="input-field"
                     />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Slogan</label>
+                    <input
+                      value={editing.slogan || ''}
+                      onChange={(e) => setEditing({ ...editing, slogan: e.target.value })}
+                      maxLength={120}
+                      placeholder="Ex: A pizza que Petrolina esperava"
+                      className="input-field"
+                    />
+                    <p className="text-[10px] text-text-muted mt-1">A IA só usa o slogan literal quando fizer sentido — nunca inventa outro.</p>
                   </div>
                   <div className="md:col-span-2">
                     <div className="flex items-center justify-between mb-1.5">

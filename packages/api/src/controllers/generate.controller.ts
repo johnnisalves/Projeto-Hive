@@ -19,11 +19,14 @@ function brandToContext(brand: any): BrandContext | null {
     backgroundColor: brand.backgroundColor,
     products: brand.products,
     artDirection: brand.artDirection,
-    niche: brand.niche,
+    // Prisma field is `nicho`; the engine expects `niche`.
+    niche: brand.nicho,
     slogan: brand.slogan,
-    phone: brand.phone,
-    address: brand.address,
-    website: brand.website,
+    // Commercial WhatsApp is the phone the engine may print; fall back to `phone`.
+    phone: brand.whatsappPhone || brand.phone,
+    address: brand.cidade,
+    // Prisma field is `websiteUrl`.
+    website: brand.websiteUrl,
   };
 }
 
