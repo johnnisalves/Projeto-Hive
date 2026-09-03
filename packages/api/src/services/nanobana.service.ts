@@ -14,6 +14,8 @@ interface GenerateImageParams {
   negativePrompt?: string;
   /** When true, `prompt` is used as-is (already art-directed) instead of the default wrapper. */
   preEnriched?: boolean;
+  /** Reference images (e.g. the official logo) for multimodal models to reproduce faithfully. */
+  referenceImages?: string[];
 }
 
 interface GenerateImageResult {
@@ -127,7 +129,20 @@ async function generateViaHuggingFace(prompt: string, spec: FormatSpec): Promise
   throw new Error('All HuggingFace models failed');
 }
 
-async function generateViaGemini(prompt: string, spec: FormatSpec): Promise<{ buffer: Buffer; contentType: string }> {
+/** Fetches a reference image and returns it as a base64 inlineData part. */
+async function toInlineDataPart(url: string): Promise<{ inlineData: { mimeType: string; data: string } } | null> {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const contentType = r.headers.get('content-type') || 'image/png';
+    const buf = Buffer.from(await r.arrayBuffer());
+    return { inlineData: { mimeType: contentType.split(';')[0], data: buf.toString('base64') } };
+  } catch {
+    return null;
+  }
+}
+
+async function generateViaGemini(prompt: string, spec: FormatSpec, referenceImages?: string[]): Promise<{ buffer: Buffer; contentType: string }> {
   const { getSetting } = await import('../helpers/getSetting');
   const apiKey = await getSetting('NANO_BANANA_API_KEY');
   if (!apiKey) {
@@ -138,9 +153,17 @@ async function generateViaGemini(prompt: string, spec: FormatSpec): Promise<{ bu
   const model = configured || 'gemini-2.5-flash-image';
   const ratio = geminiAspectRatio(spec);
 
+  // Reference images (logo) go first so the model treats them as assets to reproduce.
+  const parts: any[] = [];
+  for (const ref of referenceImages || []) {
+    const part = await toInlineDataPart(ref);
+    if (part) parts.push(part);
+  }
+  parts.push({ text: `Generate an image: ${prompt}` });
+
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   const body = JSON.stringify({
-    contents: [{ parts: [{ text: `Generate an image: ${prompt}` }] }],
+    contents: [{ parts }],
     generationConfig: {
       responseModalities: ['TEXT', 'IMAGE'],
       imageConfig: { aspectRatio: ratio },
@@ -160,8 +183,8 @@ async function generateViaGemini(prompt: string, spec: FormatSpec): Promise<{ bu
   }
 
   const data = (await response!.json()) as any;
-  const parts = data.candidates?.[0]?.content?.parts || [];
-  const imagePart = parts.find((p: any) => p.inlineData?.mimeType?.startsWith('image/'));
+  const responseParts = data.candidates?.[0]?.content?.parts || [];
+  const imagePart = responseParts.find((p: any) => p.inlineData?.mimeType?.startsWith('image/'));
   if (!imagePart) throw new Error('No image from Gemini');
 
   return {
@@ -170,7 +193,7 @@ async function generateViaGemini(prompt: string, spec: FormatSpec): Promise<{ bu
   };
 }
 
-async function generateViaOpenRouter(prompt: string, spec: FormatSpec): Promise<{ buffer: Buffer; contentType: string }> {
+async function generateViaOpenRouter(prompt: string, spec: FormatSpec, referenceImages?: string[]): Promise<{ buffer: Buffer; contentType: string }> {
   const { getSetting } = await import('../helpers/getSetting');
   const apiKey = await getSetting('OPENROUTER_API_KEY');
   if (!apiKey) {
@@ -181,12 +204,15 @@ async function generateViaOpenRouter(prompt: string, spec: FormatSpec): Promise<
   const model = configured || 'google/gemini-3-pro-image';
   const ratio = openRouterAspectRatio(spec);
 
+  const textPart = { type: 'text', text: `Generate an image with aspect ratio ${ratio}. ${prompt}` };
+  // Reference images (logo) precede the instruction so the model reproduces them.
+  const refs = (referenceImages || []).map((u) => ({ type: 'image_url', image_url: { url: u } }));
+  const content: unknown = refs.length ? [...refs, textPart] : `Generate an image with aspect ratio ${ratio}. ${prompt}`;
+
   const url = 'https://openrouter.ai/api/v1/chat/completions';
   const body = JSON.stringify({
     model,
-    messages: [
-      { role: 'user', content: `Generate an image with aspect ratio ${ratio}. ${prompt}` },
-    ],
+    messages: [{ role: 'user', content }],
     // OpenRouter unified image API: image output comes back in message.images[]
     modalities: ['image', 'text'],
   });
@@ -256,15 +282,17 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   // Ordered cascade of generators. When provider=openrouter, OpenRouter (Nano Banana Pro
   // etc) goes first for best quality; HuggingFace (free) and native Gemini stay as
   // graceful fallbacks so image generation never hard-fails when one provider is down.
+  const refs = params.referenceImages;
   const attempts: Array<{ name: string; run: () => Promise<{ buffer: Buffer; contentType: string }> }> = [];
   if (provider === 'openrouter') {
-    attempts.push({ name: 'OpenRouter', run: () => generateViaOpenRouter(enrichedPrompt, spec) });
+    attempts.push({ name: 'OpenRouter', run: () => generateViaOpenRouter(enrichedPrompt, spec, refs) });
   }
   attempts.push({
+    // HuggingFace diffusion models can't take a logo reference; they stay a pure fallback.
     name: 'HuggingFace',
     run: async () => ({ buffer: await generateViaHuggingFace(enrichedPrompt, spec), contentType: 'image/jpeg' }),
   });
-  attempts.push({ name: 'Gemini', run: () => generateViaGemini(enrichedPrompt, spec) });
+  attempts.push({ name: 'Gemini', run: () => generateViaGemini(enrichedPrompt, spec, refs) });
 
   let imageBuffer: Buffer | null = null;
   let contentType = 'image/jpeg';

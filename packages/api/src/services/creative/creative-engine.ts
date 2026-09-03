@@ -51,6 +51,8 @@ export type CreativeInput = {
   bakeText?: boolean;
   hasUserPhoto?: boolean;
   variationSeed?: number;
+  /** True when the official logo is sent to the model as a reference image. */
+  hasLogoReference?: boolean;
 };
 
 export type PhotoPlacement = {
@@ -314,6 +316,25 @@ export function diversityGuidance(input: CreativeInput): string {
 // Shared rule blocks
 // ─────────────────────────────────────────────────────────────────────────────
 
+const REALISM_ENFORCEMENT = `PHOTOREALISM (non-negotiable when the piece is photographic):
+- This must look like a real photograph shot by a professional advertising crew, NOT an AI render or a 3D illustration.
+- Full-frame DSLR/mirrorless aesthetic, real optics, real depth of field, real film-like grain.
+- Absolutely avoid: plastic or waxy surfaces, over-smooth CGI look, over-HDR glow, fake specular highlights, repeated/duplicated ingredients, floating objects, warped anatomy, extra fingers, impossible perspective — every tell of AI generation.
+- Real human skin with pores and micro-imperfection; real food with natural irregularity.`;
+
+const FOOD_HERO_ENFORCEMENT = `FOOD HERO (when food is present):
+- The food is the desire object: render it large, fresh and irresistible, styled by a real food stylist.
+- For pizza: authentic Neapolitan-style crust with natural leopard-spotting and airy bubbles, real melted mozzarella with believable cheese pull and gravity, vibrant red sauce with natural sheen, fresh basil and real toppings with natural imperfection, thin believable steam, warm side light, shallow depth of field.
+- If a pizza box appears, use a modern premium octagonal (eight-sided) box — never a plain rectangular one.
+- Never show a wood-fired oven, firewood or rustic stove. Kitchens, when shown, are modern and professional.
+- No plastic food, no frozen/cold look, no fake cheese, no duplicated slices.`;
+
+/**
+ * Device screens are where diffusion models produce garbled micro-text. Keep
+ * any phone/app UI suggested with blocks, icons and at most one short label.
+ */
+const DEVICE_SCREEN_RULE = `DEVICE SCREENS: If a phone, tablet or app interface appears, keep the on-screen UI simple and suggested — colour blocks, a few clean icons, and at most one short legible label. Do NOT render tiny paragraphs, menus, price lists or dense text inside a screen; small in-screen text always garbles. The screen should read as a polished app at a glance, not a readable document.`;
+
 const PHOTOGRAPHY_STANDARD = `PHOTOGRAPHY STANDARD:\n- Full-frame commercial realism whenever photographic.\n- Lens chosen on purpose: 35mm environmental, 50mm natural hero, 85mm premium compression, macro only when justified.\n- Physically coherent key, fill, rim and practical lights. Realistic contact shadows and reflections.\n- Layered depth: foreground, subject, background. Natural microtexture; no plastic skin, no synthetic food.\n- Cinematic grading without crushed blacks or blown highlights.`;
 
 const TYPOGRAPHY_STANDARD = `TYPOGRAPHY & COPY PLANNING:\n- Headline ideally 2 to 7 words. Never break a word awkwardly.\n- Maximum two type families; three sizes is usually enough. High contrast, sized for a phone at arm's length.\n- Typography is designed hierarchy, not scattered labels. No paragraphs inside the image.`;
@@ -349,8 +370,16 @@ function photoRule(hasUserPhoto: boolean | undefined, placement?: PhotoPlacement
   return `REAL PHOTO COMPOSITE: A real photograph of a real person will be composited into this design after generation. Generate NO human figure, face, body or silhouette. Reserve a clean, uncluttered area on the ${where}, roughly 35-45% of the width and ${heightPct}% of the height, filled with a simple tone or soft gradient so a cut-out subject reads cleanly. Arrange every other element so the layout already looks finished — the reserved area must read as intentional negative space, not a hole.`;
 }
 
-function logoRule(brandName?: string | null): string {
+/**
+ * When the official logo is provided to the model as a reference image, tell it
+ * to reproduce that exact mark. Otherwise fall back to reserving a clean area so
+ * the real logo can be composited later — and forbid inventing one.
+ */
+function logoRule(brandName?: string | null, hasLogoReference?: boolean): string {
   const name = brandName || 'the brand';
+  if (hasLogoReference) {
+    return `BRAND & LOGO: The official ${name} logo is provided as a reference image. Reproduce it EXACTLY — same symbol, proportions, colours and typography — placed clean, legible and premium in the layout. Never redraw it in a different style, never recolour it, never invent a variant or a similar-looking mark.`;
+  }
   return `BRAND & LOGO: Do not draw, letter or invent a logo — the real ${name} logo is composited afterwards as an official asset. Reserve a clean, low-contrast, unobstructed logo area (~15% of the width) in one corner, free of texture, text and busy detail.`;
 }
 
@@ -469,7 +498,11 @@ ART DIRECTION — ${mode}:\n${styleDirective(mode)}
 
 ${nicheRules(niche)}
 
-${PHOTOGRAPHY_STANDARD}
+${REALISM_ENFORCEMENT}
+
+${niche === 'food' ? FOOD_HERO_ENFORCEMENT + '\n\n' : ''}${PHOTOGRAPHY_STANDARD}
+
+${DEVICE_SCREEN_RULE}
 
 ${TYPOGRAPHY_STANDARD}
 
@@ -477,7 +510,7 @@ ${textToRender(input, plan)}
 
 ${photoRule(input.hasUserPhoto, plan.photoPlacement)}
 
-${logoRule(input.brand?.name)}${safe.top ? `\n\nSAFE AREA: keep all critical text and the logo at least ${safe.top}px from the top and ${safe.bottom}px from the bottom.` : ''}
+${logoRule(input.brand?.name, input.hasLogoReference)}${safe.top ? `\n\nSAFE AREA: keep all critical text and the logo at least ${safe.top}px from the top and ${safe.bottom}px from the bottom.` : ''}
 
 ${TRUTH_RULES}
 ${brandConstraints(input.brand)}
@@ -507,7 +540,11 @@ ${diversityGuidance(input)}
 
 ${intensityGuidance(input.creativeIntensity)}
 
-${PHOTOGRAPHY_STANDARD}
+${REALISM_ENFORCEMENT}
+
+${niche === 'food' ? FOOD_HERO_ENFORCEMENT + '\n\n' : ''}${PHOTOGRAPHY_STANDARD}
+
+${DEVICE_SCREEN_RULE}
 
 ${TYPOGRAPHY_STANDARD}
 
@@ -515,7 +552,7 @@ ${textToRender(input)}
 
 ${photoRule(input.hasUserPhoto)}
 
-${logoRule(input.brand?.name)}${safe.top ? `\n\nSAFE AREA: keep critical text and the logo at least ${safe.top}px from the top and ${safe.bottom}px from the bottom.` : ''}
+${logoRule(input.brand?.name, input.hasLogoReference)}${safe.top ? `\n\nSAFE AREA: keep critical text and the logo at least ${safe.top}px from the top and ${safe.bottom}px from the bottom.` : ''}
 
 ${TRUTH_RULES}
 ${brandConstraints(input.brand)}
