@@ -275,6 +275,7 @@ async function ensureBrandColumns() {
     'ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "phone" TEXT',
     'ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "artDirection" TEXT',
     'ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "slogan" TEXT',
+    `ALTER TABLE "Brand" ADD COLUMN IF NOT EXISTS "referenceImages" TEXT[] NOT NULL DEFAULT '{}'`,
     // SocialAccount.brandId (schema evoluiu; sem isso o publish quebra com prisma.socialAccount.findFirst)
     'ALTER TABLE "SocialAccount" ADD COLUMN IF NOT EXISTS "brandId" TEXT',
     'CREATE INDEX IF NOT EXISTS "SocialAccount_brandId_idx" ON "SocialAccount"("brandId")',

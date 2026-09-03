@@ -73,6 +73,10 @@ model Brand {
   bodyFont        String?
   description     String?
   slogan          String?
+  // Real photos of the brand (storefront, packaging, products). Sent to the
+  // image model as references alongside the logo so it reproduces the real
+  // thing instead of imagining a generic one.
+  referenceImages String[] @default([])
   voiceTone       String?
   websiteUrl      String?
   instagramUrl    String?

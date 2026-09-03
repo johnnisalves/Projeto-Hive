@@ -48,6 +48,8 @@ const createBrandSchema = z.object({
   bodyFont: optionalString(100),
   description: optionalString(10000),
   slogan: optionalString(120),
+  // Up to 6 real photos (storefront, packaging, products) used as image references.
+  referenceImages: z.array(z.string().url()).max(6).optional(),
   voiceTone: optionalString(1000),
   websiteUrl: optionalUrl,
   instagramUrl: optionalUrl,
