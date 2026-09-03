@@ -53,6 +53,10 @@ export async function generateImageController(req: Request, res: Response) {
     let plan: CreativePlan | null = null;
     let usedEngine: 'v2' | 'legacy' | 'none' = 'none';
 
+    // The official logo, when cadastered, is sent to the image model as a
+    // reference so it reproduces the real mark instead of inventing one.
+    const logoUrl: string | undefined = brand?.logoUrl || undefined;
+
     // ── Creative Engine v2 (opt-in via creativeEngine:true) ──
     if (creativeEngine) {
       const input: CreativeInput = {
@@ -67,6 +71,7 @@ export async function generateImageController(req: Request, res: Response) {
         variationSeed,
         hasUserPhoto,
         bakeText,
+        hasLogoReference: !!logoUrl,
       };
       const chosen: Concept | undefined = chosenConcept;
       if (chosen?.mode) input.creativeMode = chosen.mode;
@@ -92,7 +97,10 @@ export async function generateImageController(req: Request, res: Response) {
       usedEngine = 'legacy';
     }
 
-    const result = await generateImage({ prompt: finalPrompt, style, aspectRatio, format, negativePrompt, preEnriched });
+    // Only pass the logo reference on the engine path (the model reproduces it);
+    // the legacy path still reserves an area and composites separately.
+    const referenceImages = usedEngine === 'v2' && logoUrl ? [logoUrl] : undefined;
+    const result = await generateImage({ prompt: finalPrompt, style, aspectRatio, format, negativePrompt, preEnriched, referenceImages });
 
     // ── Optional QA pass ──
     let qa = null;
