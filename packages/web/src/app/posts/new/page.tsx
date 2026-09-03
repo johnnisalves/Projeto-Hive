@@ -261,9 +261,11 @@ export default function NewPost() {
     }
     setGenLoading(true);
     setMessage('');
-    setGenProgress(count > 1 ? `0/${count} imagens geradas...` : '');
+    // The Pro model plus creative planning takes ~1 min; say so up front.
+    setGenProgress(count > 1 ? `0/${count} imagens geradas...` : 'Criando a arte (até 1 min)...');
 
     let generated = 0;
+    let lastError = '';
     const newImages: CarouselImage[] = [];
 
     // Generate images and caption in parallel
@@ -294,8 +296,11 @@ export default function NewPost() {
         newImages.push({ url: result.imageUrl, prompt: variation });
         generated++;
         if (count > 1) setGenProgress(`${generated}/${count} imagens geradas...`);
-      } catch {
-        // skip failed
+      } catch (e: any) {
+        // Surface the reason instead of failing silently — a proxy timeout and a
+        // missing API key look identical to the user otherwise.
+        lastError = e?.message || 'falha desconhecida';
+        console.error('generateImage failed:', e);
       }
     });
 
@@ -305,7 +310,7 @@ export default function NewPost() {
       setImages((prev) => [...prev, ...newImages]);
       setActiveImageIndex(images.length + newImages.length - 1);
     } else {
-      setMessage('Nenhuma imagem gerada. Tente novamente.');
+      setMessage(`Nenhuma imagem gerada${lastError ? ` (${lastError})` : ''}. Tente novamente.`);
       setMessageType('error');
     }
 
@@ -340,8 +345,8 @@ export default function NewPost() {
             bgUrls.push(r.imageUrl);
             done++;
             setGenProgress(`${done}/${count} fundos gerados...`);
-          } catch {
-            // skip failed
+          } catch (e) {
+            console.error('background generation failed:', e);
           }
         }),
       );
