@@ -13,6 +13,7 @@
  */
 
 import { getFormatSpec, safeAreaPx, type FormatSpec } from './format-spec';
+import { mandatoryCopyBlock } from './mandatory-copy';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -514,7 +515,7 @@ ${referenceAssetsRule(input.brand)}${localContextRule(input.brand)}
 
 HEADLINE RULES: If the brief dictates the headline, use it verbatim. Otherwise write one in Brazilian Portuguese, perfect spelling, 2-7 words, specific to this concept — a headline that would fit any brand has failed. Never a headline that promises an offer the brief did not state.
 
-Return only the JSON object.`;
+Return only the JSON object.${mandatoryCopyBlock(input.topic)}`;
 }
 
 export function buildCreativePlanUserPrompt(input: CreativeInput): string {
@@ -531,7 +532,7 @@ export function buildCreativePlanUserPrompt(input: CreativeInput): string {
       ].filter(Boolean).join('\n')
     : 'not provided';
 
-  return `CLIENT BRIEF: ${input.topic.slice(0, 1800)}
+  return `CLIENT BRIEF: ${input.topic.slice(0, 6000)}
 BRAND (facts you may use — and the only facts you may use):
 ${brandBlock}
 HEADLINE FIELD: ${input.headline || '(none — if the brief above dictates copy, that copy is mandatory and verbatim; if it does not, write one)'}
@@ -599,7 +600,7 @@ export function buildFallbackImagePrompt(input: CreativeInput): string {
 
   return `Premium advertising campaign image, ${spec.label}, aspect ratio ${spec.ratio}, composed natively for this canvas.
 
-BRIEF: ${input.topic.slice(0, 900)}
+BRIEF: ${input.topic.slice(0, 2000)}
 ${(input.points || []).slice(0, 3).map((p) => `- ${p.slice(0, 120)}`).join('\n')}
 
 ART DIRECTION — ${mode}:\n${styleDirective(mode)}

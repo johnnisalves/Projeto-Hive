@@ -239,3 +239,37 @@ test('carimbo foge de area ocupada (texto/logo desenhada) e ativa placa', async 
   assert.equal(ok.position, 'top-center');
   assert.equal(ok.plate, false, 'fundo escuro e calmo dispensa placa');
 });
+
+test('copy obrigatoria e extraida de briefing longo', async () => {
+  const { extractMandatoryCopy, mandatoryCopyBlock } = await import('./mandatory-copy');
+  const brief = [
+    'CRIE A ARTE FINAL COMPLETA. Atue como um time senior de campanha publicitaria.',
+    'x'.repeat(2000),
+    'TEXTO OBRIGATORIO — escreva exatamente assim:',
+    'HEADLINE: "A espera acabou."',
+    'TEXTO DE APOIO: "A Essenza abre ainda este mês."',
+    'CTA: "Acompanhe. Está chegando."',
+    'FORMATO: 1080x1350 px, 4:5.',
+  ].join('\n');
+  const copy = extractMandatoryCopy(brief);
+  assert.equal(copy.headline, 'A espera acabou.');
+  assert.equal(copy.support, 'A Essenza abre ainda este mês.');
+  assert.equal(copy.cta, 'Acompanhe. Está chegando.');
+
+  const block = mandatoryCopyBlock(brief);
+  assert.match(block, /MUST be exactly: A espera acabou\./);
+  assert.match(block, /MUST be exactly: Acompanhe\. Está chegando\./);
+
+  // O bloco tem que aparecer no prompt do plano, mesmo com briefing gigante.
+  const sys = buildCreativePlanSystemPrompt({ ...baseInput, topic: brief, bakeText: true });
+  assert.match(sys, /MANDATORY COPY/);
+  assert.match(sys, /A espera acabou\./);
+});
+
+test('"Sem CTA" e instrucao de omitir, nao texto', async () => {
+  const { extractMandatoryCopy } = await import('./mandatory-copy');
+  const c = extractMandatoryCopy('HEADLINE: "Chegou."\nCTA: Sem CTA.');
+  assert.equal(c.headline, 'Chegou.');
+  assert.equal(c.cta, undefined);
+  assert.deepEqual(extractMandatoryCopy('post de pizza sem marcacao nenhuma'), {});
+});
