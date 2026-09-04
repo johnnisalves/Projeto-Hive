@@ -163,3 +163,44 @@ test('normalizacao entrega o canvas exato (cover-crop, sem distorcer)', async ()
     assert.equal(meta.height, spec.height, `${w}x${h} -> ${fmt} height`);
   }
 });
+
+test('logoPlacement: normaliza valores invalidos', async () => {
+  const { normalizeLogoPlacement } = await import('./creative-engine');
+  assert.deepEqual(normalizeLogoPlacement(undefined), { position: 'top-center', widthRatio: 0.22 });
+  assert.deepEqual(normalizeLogoPlacement({ position: 'lado', widthRatio: 0.9 }), { position: 'top-center', widthRatio: 0.3 });
+  assert.deepEqual(normalizeLogoPlacement({ position: 'bottom-right', widthRatio: 0.05 }), { position: 'bottom-right', widthRatio: 0.16 });
+});
+
+test('placa: escolhe a cor mais escura da marca, senao grafite', async () => {
+  const { pickPlateColor } = await import('./logo-composite');
+  assert.equal(pickPlateColor(['#FFF3D0', '#FFC400', '#D8291C']), '#D8291C', 'Essenza -> vermelho');
+  assert.equal(pickPlateColor(['#FFF3D0', '#FFC400']), '#1F2937', 'so cores claras -> grafite');
+  assert.equal(pickPlateColor([null, undefined, 'azul']), '#1F2937', 'lixo -> grafite');
+});
+
+test('carimbo da logo: mantem canvas, placa em fundo claro, sem placa em fundo escuro, respeita safe area', async () => {
+  const { compositeLogoBuffer } = await import('./logo-composite');
+  const spec = getFormatSpec('ig-feed');
+  const block = await sharp({ create: { width: 200, height: 100, channels: 4, background: { r: 255, g: 196, b: 0, alpha: 1 } } }).png().toBuffer();
+  const logo = await sharp({ create: { width: 400, height: 200, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite([{ input: block, left: 100, top: 50 }])
+    .png().toBuffer();
+  const light = await sharp({ create: { width: spec.width, height: spec.height, channels: 3, background: { r: 250, g: 243, b: 208 } } }).png().toBuffer();
+  const dark = await sharp({ create: { width: spec.width, height: spec.height, channels: 3, background: { r: 20, g: 30, b: 25 } } }).png().toBuffer();
+  const placement = { position: 'top-center' as const, widthRatio: 0.22 };
+
+  const a = await compositeLogoBuffer(light, spec, logo, placement, '#D8291C');
+  const ma = await sharp(a.buffer).metadata();
+  assert.equal(ma.width, spec.width);
+  assert.equal(ma.height, spec.height);
+  assert.equal(a.plate, true, 'fundo claro pede placa');
+  assert.equal(a.width, Math.round(spec.width * 0.22), 'logo aparada e redimensionada pela largura');
+
+  const b = await compositeLogoBuffer(dark, spec, logo, placement, '#D8291C');
+  assert.equal(b.plate, false, 'fundo escuro nao pede placa');
+
+  const story = getFormatSpec('ig-stories');
+  const sBase = await sharp({ create: { width: story.width, height: story.height, channels: 3, background: { r: 250, g: 243, b: 208 } } }).png().toBuffer();
+  const c = await compositeLogoBuffer(sBase, story, logo, placement, '#D8291C');
+  assert.ok(c.y >= Math.round(story.height * 0.14), `logo abaixo da safe area (y=${c.y})`);
+});

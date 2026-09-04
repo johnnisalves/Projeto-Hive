@@ -3,7 +3,9 @@ import { generateImage } from '../services/nanobana.service';
 import { generateCaption, refineSlide } from '../services/caption.service';
 import { enrichImagePrompt } from '../services/artDirector.service';
 import { buildCreativePlan, runQA, type Concept } from '../services/creative/creative-director.service';
-import { buildFallbackImagePrompt, buildNegativePrompt, detectNiche, planToImagePrompt, resolveCreativeMode, type BrandContext, type CreativeInput, type CreativePlan } from '../services/creative/creative-engine';
+import { buildFallbackImagePrompt, buildNegativePrompt, detectNiche, normalizeLogoPlacement, planToImagePrompt, resolveCreativeMode, DEFAULT_LOGO_PLACEMENT, type BrandContext, type CreativeInput, type CreativePlan } from '../services/creative/creative-engine';
+import { compositeLogo } from '../services/creative/logo-composite';
+import type { FormatSpec } from '../services/creative/format-spec';
 import { prisma } from '../config/database';
 import { resolveOwnerId } from '../helpers/resolveOwnerId';
 
@@ -81,6 +83,8 @@ export async function generateImageController(req: Request, res: Response) {
       const chosen: Concept | undefined = chosenConcept;
       if (chosen?.mode) input.creativeMode = chosen.mode;
       plan = await buildCreativePlan(input);
+      // The compositing step draws from this, so it must always be sane numbers.
+      if (plan && logoUrl) plan.logoPlacement = normalizeLogoPlacement(plan.logoPlacement);
       finalPrompt = plan ? planToImagePrompt(plan, input) : buildFallbackImagePrompt(input);
       negativePrompt = buildNegativePrompt(plan);
       preEnriched = true;
@@ -108,7 +112,13 @@ export async function generateImageController(req: Request, res: Response) {
     // photos. Capped so a big gallery doesn't blow the request size.
     const brandRefs: string[] = Array.isArray(brand?.referenceImages) ? brand.referenceImages : [];
     const referenceImages = usedEngine === 'v2' && logoUrl ? [logoUrl, ...brandRefs].slice(0, 6) : undefined;
-    const result = await generateImage({ prompt: finalPrompt, style, aspectRatio, format, negativePrompt, preEnriched, referenceImages });
+    // Stamp the REAL logo file on the finished canvas. Image models redraw logos
+    // from references and never get them exact; this does.
+    const logoPlacement = plan?.logoPlacement ?? DEFAULT_LOGO_PLACEMENT;
+    const postProcess = usedEngine === 'v2' && logoUrl
+      ? (buf: Buffer, spec: FormatSpec) => compositeLogo(buf, spec, { logoUrl, placement: logoPlacement, plateCandidates: [brand?.accentColor, brand?.secondaryColor, brand?.primaryColor, brand?.backgroundColor] })
+      : undefined;
+    const result = await generateImage({ prompt: finalPrompt, style, aspectRatio, format, negativePrompt, preEnriched, referenceImages, postProcess });
 
     // ── Optional QA pass ──
     let qa = null;
@@ -123,7 +133,7 @@ export async function generateImageController(req: Request, res: Response) {
       data: {
         ...result,
         creativeEngine: usedEngine,
-        ...(usedEngine === 'v2' ? { plan, niche, mode: plan?.mode || resolveCreativeMode(creativeMode, niche || 'general'), photoPlacement: plan?.photoPlacement ?? null, qa } : {}),
+        ...(usedEngine === 'v2' ? { plan, niche, mode: plan?.mode || resolveCreativeMode(creativeMode, niche || 'general'), photoPlacement: plan?.photoPlacement ?? null, logoPlacement: logoUrl ? logoPlacement : null, qa } : {}),
       },
     });
   } catch (err: any) {

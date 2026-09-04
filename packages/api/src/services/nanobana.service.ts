@@ -16,6 +16,8 @@ interface GenerateImageParams {
   preEnriched?: boolean;
   /** Reference images (e.g. the official logo) for multimodal models to reproduce faithfully. */
   referenceImages?: string[];
+  /** Runs on the normalised canvas right before upload (e.g. stamping the real logo). */
+  postProcess?: (buffer: Buffer, spec: FormatSpec) => Promise<Buffer>;
 }
 
 interface GenerateImageResult {
@@ -334,6 +336,15 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
     }
   } catch (e: any) {
     console.log(`[NanoBana] normalize failed, storing provider image as-is: ${e.message}`);
+  }
+
+  if (params.postProcess) {
+    try {
+      finalBuffer = await params.postProcess(finalBuffer, spec);
+      finalType = 'image/png';
+    } catch (e: any) {
+      console.log(`[NanoBana] postProcess failed, storing image without it: ${e.message}`);
+    }
   }
 
   const result = await uploadToMinio(finalBuffer, finalType);
