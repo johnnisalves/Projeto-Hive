@@ -432,7 +432,7 @@ The system stamps the REAL ${name} logo file onto the finished image afterwards,
 function referenceAssetsRule(brand?: BrandContext | null): string {
   const count = brand?.referenceImages?.length || 0;
   if (!count) return '';
-  return `\n\nREAL BRAND REFERENCES: reference images 2 to ${count + 1} are REAL photographs of this brand (its storefront, its packaging, its products). When the piece shows a shop front, a pizza box, a package or a product, reproduce the one in the references — same colours, materials, shape, signage and details. Do not invent a generic substitute. You may photograph them from a new angle or in new light, but they must be recognisably the same real objects.`;
+  return `\n\nREAL BRAND REFERENCES: the ${count} reference image(s) supplied are REAL photographs of this brand (its storefront, its packaging, its products). When the piece shows a shop front, a pizza box, a package or a product, reproduce the one in the references — same colours, materials, shape, signage and details. Do not invent a generic substitute. You may photograph them from a new angle or in new light, but they must be recognisably the same real objects.`;
 }
 
 /** Local flavour — used only when the plan judges it strengthens the piece. */

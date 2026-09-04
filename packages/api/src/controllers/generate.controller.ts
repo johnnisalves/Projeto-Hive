@@ -108,10 +108,12 @@ export async function generateImageController(req: Request, res: Response) {
 
     // Only pass the logo reference on the engine path (the model reproduces it);
     // the legacy path still reserves an area and composites separately.
-    // Logo first (the prompt calls it "reference image 1"), then the brand's real
-    // photos. Capped so a big gallery doesn't blow the request size.
+    // Only the brand's real photos go as references — NOT the logo.
+    // Sending the logo told the model "here is a mark, reproduce it", so it drew
+    // one and the stamp added a second: the brand appeared twice. The real logo
+    // reaches the artwork through the stamp below, never through the model.
     const brandRefs: string[] = Array.isArray(brand?.referenceImages) ? brand.referenceImages : [];
-    const referenceImages = usedEngine === 'v2' && logoUrl ? [logoUrl, ...brandRefs].slice(0, 6) : undefined;
+    const referenceImages = usedEngine === 'v2' && brandRefs.length ? brandRefs.slice(0, 5) : undefined;
     // Stamp the REAL logo file on the finished canvas. Image models redraw logos
     // from references and never get them exact; this does.
     const logoPlacement = plan?.logoPlacement ?? DEFAULT_LOGO_PLACEMENT;
