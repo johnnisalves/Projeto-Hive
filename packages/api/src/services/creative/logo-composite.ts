@@ -82,6 +82,8 @@ export type CompositeResult = {
   buffer: Buffer; plate: boolean; luminance: number; x: number; y: number; width: number; height: number;
   /** Where it actually landed, and how cluttered that area was. */
   position: LogoPlacement['position']; busy: number; relocated: boolean;
+  /** 1 = full size; smaller when the logo had to shrink to find a clean gap. */
+  scale: number;
 };
 
 /** Pure variant: takes the logo bytes, so it can be tested without a network. */
@@ -94,101 +96,103 @@ export async function compositeLogoBuffer(
 ): Promise<CompositeResult> {
   // Trim transparent padding so widthRatio measures the mark itself.
   const trimmed = await sharp(logoRaw).ensureAlpha().trim({ threshold: 10 }).png().toBuffer();
-  const targetW = Math.round(spec.width * placement.widthRatio);
-  const logoBuf = await sharp(trimmed).resize({ width: targetW }).png().toBuffer();
-  const meta = await sharp(logoBuf).metadata();
-  const lw = meta.width ?? targetW;
-  const lh = meta.height ?? Math.round(targetW * 0.7);
+  const trimMeta = await sharp(trimmed).metadata();
+  const aspect = (trimMeta.height ?? 1) / (trimMeta.width ?? 1);
 
   const margin = Math.round(spec.width * 0.045);
   const safe = safeAreaPx(spec);
   const topLimit = Math.max(margin, safe.top ?? 0);
   const bottomLimit = spec.height - Math.max(margin, safe.bottom ?? 0);
-  const pad = Math.round(lw * 0.1);
 
-  const boxFor = (pos: LogoPlacement['position']) => {
-    const x = clamp(pos.endsWith('left') ? margin : pos.endsWith('right') ? spec.width - lw - margin : Math.round((spec.width - lw) / 2), 0, spec.width - lw);
-    const y = clamp(pos.startsWith('top') ? topLimit : bottomLimit - lh, 0, spec.height - lh);
-    const left = clamp(x - pad, 0, spec.width - 1);
-    const top = clamp(y - pad, 0, spec.height - 1);
-    return { x, y, region: { left, top, width: clamp(lw + 2 * pad, 1, spec.width - left), height: clamp(lh + 2 * pad, 1, spec.height - top) } };
-  };
-
-  // "Busy" = high pixel variance: drawn logos, text and hard edges all raise it.
-  // A calm sky or gradient sits near zero, so the stamp never lands on a
-  // headline or on a logo the model drew despite being told not to.
-  const busyness = async (region: Region) => (await regionMetrics(base, region)).busy;
-
-  // Candidates: three horizontal alignments swept vertically through the band
-  // the plan asked for (and the opposite band as a fallback). Six fixed corners
-  // are not enough — when the model writes a headline across the whole top, the
-  // only clean slot may be a few hundred pixels lower.
   const wantsTop = placement.position.startsWith('top');
-  const xFor = (align: 'left' | 'center' | 'right') =>
-    clamp(align === 'left' ? margin : align === 'right' ? spec.width - lw - margin : Math.round((spec.width - lw) / 2), 0, spec.width - lw);
-
-  const bandFor = (top: boolean) => (top
-    ? { from: topLimit, to: Math.max(topLimit, Math.round(spec.height * 0.34) - lh) }
-    : { from: Math.min(bottomLimit - lh, Math.round(spec.height * 0.66)), to: bottomLimit - lh });
-
   const alignOf = (pos: LogoPlacement['position']): 'left' | 'center' | 'right' =>
     pos.endsWith('left') ? 'left' : pos.endsWith('right') ? 'right' : 'center';
+  const wantedAlign = alignOf(placement.position);
 
-  const regionAt = (x: number, y: number): Region => {
-    const left = clamp(x - pad, 0, spec.width - 1);
-    const top = clamp(y - pad, 0, spec.height - 1);
-    return { left, top, width: clamp(lw + 2 * pad, 1, spec.width - left), height: clamp(lh + 2 * pad, 1, spec.height - top) };
-  };
-
-  type Candidate = { x: number; y: number; region: Region; busy: number; align: 'left' | 'center' | 'right'; top: boolean; preferred: boolean };
-  const candidates: Candidate[] = [];
-  const STEPS = 5;
-  for (const top of [wantsTop, !wantsTop]) {
-    const band = bandFor(top);
-    for (const align of ['center', 'left', 'right'] as const) {
-      for (let i = 0; i < STEPS; i++) {
-        const y = clamp(Math.round(band.from + ((band.to - band.from) * i) / (STEPS - 1)), 0, spec.height - lh);
-        const x = xFor(align);
-        const region = regionAt(x, y);
-        candidates.push({
-          x, y, region, busy: await busyness(region), align, top,
-          preferred: top === wantsTop && align === alignOf(placement.position),
-        });
-      }
-    }
-  }
+  const busyness = async (region: Region) => (await regionMetrics(base, region)).busy;
 
   const BUSY_LIMIT = 0.10;
-  // Prefer the planned spot when it is genuinely clean; otherwise take the
-  // calmest slot found, with a small bias toward the planned band/alignment.
-  const score = (c: Candidate) => c.busy - (c.preferred ? 0.02 : 0) - (c.top === wantsTop ? 0.01 : 0);
-  candidates.sort((a, b) => score(a) - score(b));
-  const best = candidates[0];
-  const plannedCandidate = candidates.find((c) => c.preferred && c.y === clamp(bandFor(wantsTop).from, 0, spec.height - lh));
-  const chosen = { pos: `${best.top ? 'top' : 'bottom'}-${best.align}` as LogoPlacement['position'], x: best.x, y: best.y, region: best.region, busy: best.busy };
-  const relocated = !(plannedCandidate && plannedCandidate.x === best.x && plannedCandidate.y === best.y);
+  type Candidate = { x: number; y: number; region: Region; busy: number; align: 'left' | 'center' | 'right'; top: boolean; scale: number };
 
-  const { luminance } = await regionMetrics(base, chosen.region);
-  // A plate both fixes contrast on light grounds and isolates the logo when no
-  // fully clean slot exists.
-  const plate = luminance > 0.55 || chosen.busy > BUSY_LIMIT;
+  /**
+   * Sweeps the whole canvas — three horizontal alignments by rows from the top
+   * margin to the bottom one — looking for the calmest place the logo fits.
+   * Two corners are never enough: a poster with copy across the top and a hero
+   * product below can have its only quiet gap halfway down the frame.
+   */
+  const sweep = async (scale: number): Promise<Candidate[]> => {
+    const lw = Math.round(spec.width * placement.widthRatio * scale);
+    const lh = Math.round(lw * aspect);
+    const pad = Math.round(lw * 0.1);
+    const out: Candidate[] = [];
+    const rows = 8;
+    const from = topLimit;
+    const to = Math.max(topLimit, bottomLimit - lh);
+    for (let i = 0; i < rows; i++) {
+      const y = clamp(Math.round(from + ((to - from) * i) / (rows - 1)), 0, spec.height - lh);
+      for (const align of ['center', 'left', 'right'] as const) {
+        const x = clamp(align === 'left' ? margin : align === 'right' ? spec.width - lw - margin : Math.round((spec.width - lw) / 2), 0, spec.width - lw);
+        const left = clamp(x - pad, 0, spec.width - 1);
+        const top = clamp(y - pad, 0, spec.height - 1);
+        const region = { left, top, width: clamp(lw + 2 * pad, 1, spec.width - left), height: clamp(lh + 2 * pad, 1, spec.height - top) };
+        out.push({ x, y, region, busy: await busyness(region), align, top: y < spec.height / 2, scale });
+      }
+    }
+    return out;
+  };
+
+  // Full-size first. If nothing is genuinely clean, a smaller logo fits gaps a
+  // big one cannot — better a discreet, legible mark than one over the copy.
+  let candidates = await sweep(1);
+  const scoreOf = (c: Candidate) => c.busy - (c.align === wantedAlign ? 0.015 : 0) - (c.top === wantsTop ? 0.01 : 0);
+  candidates.sort((a, b) => scoreOf(a) - scoreOf(b));
+  if (candidates[0].busy > BUSY_LIMIT) {
+    const smaller = await sweep(0.72);
+    const merged = [...candidates, ...smaller].sort((a, b) => scoreOf(a) - scoreOf(b));
+    candidates = merged;
+  }
+
+  const best = candidates[0];
+  const lw = Math.round(spec.width * placement.widthRatio * best.scale);
+  const logoBuf = await sharp(trimmed).resize({ width: lw }).png().toBuffer();
+  const lhMeta = await sharp(logoBuf).metadata();
+  const lh = lhMeta.height ?? Math.round(lw * aspect);
+
+  const chosenPos = `${best.top ? 'top' : 'bottom'}-${best.align}` as LogoPlacement['position'];
+
+  // The slot the plan asked for, at full size — used only to report whether the
+  // stamp had to move.
+  const plannedW = Math.round(spec.width * placement.widthRatio);
+  const plannedH = Math.round(plannedW * aspect);
+  const plannedX = clamp(
+    wantedAlign === 'left' ? margin : wantedAlign === 'right' ? spec.width - plannedW - margin : Math.round((spec.width - plannedW) / 2),
+    0, spec.width - plannedW,
+  );
+  const plannedY = clamp(wantsTop ? topLimit : bottomLimit - plannedH, 0, spec.height - plannedH);
+  const tolerance = Math.round(spec.height * 0.01);
+  const plannedIsBest = best.scale === 1 && best.x === plannedX && Math.abs(best.y - plannedY) <= tolerance;
+
+  const { luminance } = await regionMetrics(base, best.region);
+  // A plate fixes contrast on light grounds and isolates the mark when no
+  // perfectly clean slot exists.
+  const plate = luminance > 0.55 || best.busy > BUSY_LIMIT;
 
   const layers: sharp.OverlayOptions[] = [];
   if (plate) {
-    const rx = Math.round(pad * 1.2);
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${chosen.region.width}" height="${chosen.region.height}"><rect x="0" y="0" width="${chosen.region.width}" height="${chosen.region.height}" rx="${rx}" ry="${rx}" fill="${plateColor}" fill-opacity="0.94"/></svg>`;
-    layers.push({ input: Buffer.from(svg), left: chosen.region.left, top: chosen.region.top });
+    const rx = Math.round(best.region.width * 0.06);
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${best.region.width}" height="${best.region.height}"><rect x="0" y="0" width="${best.region.width}" height="${best.region.height}" rx="${rx}" ry="${rx}" fill="${plateColor}" fill-opacity="0.94"/></svg>`;
+    layers.push({ input: Buffer.from(svg), left: best.region.left, top: best.region.top });
   }
-  layers.push({ input: logoBuf, left: chosen.x, top: chosen.y });
+  layers.push({ input: logoBuf, left: clamp(best.x, 0, spec.width - lw), top: clamp(best.y, 0, spec.height - lh) });
 
   const buffer = await sharp(base).composite(layers).png().toBuffer();
-  return { buffer, plate, luminance, x: chosen.x, y: chosen.y, width: lw, height: lh, position: chosen.pos, busy: chosen.busy, relocated };
+  return { buffer, plate, luminance, x: best.x, y: best.y, width: lw, height: lh, position: chosenPos, busy: best.busy, relocated: !plannedIsBest, scale: best.scale };
 }
 
 export async function compositeLogo(base: Buffer, spec: FormatSpec, opts: LogoCompositeOptions): Promise<Buffer> {
   const logoRaw = await fetchBuffer(opts.logoUrl);
   const plateColor = pickPlateColor(opts.plateCandidates);
   const out = await compositeLogoBuffer(base, spec, logoRaw, opts.placement, plateColor);
-  console.log(JSON.stringify({ event: 'logo_composited', planned: opts.placement.position, position: out.position, relocated: out.relocated, widthRatio: opts.placement.widthRatio, plate: out.plate, plateColor: out.plate ? plateColor : null, luminance: Number(out.luminance.toFixed(2)), busy: Number(out.busy.toFixed(3)) }));
+  console.log(JSON.stringify({ event: 'logo_composited', planned: opts.placement.position, position: out.position, relocated: out.relocated, widthRatio: opts.placement.widthRatio, plate: out.plate, plateColor: out.plate ? plateColor : null, luminance: Number(out.luminance.toFixed(2)), busy: Number(out.busy.toFixed(3)), scale: out.scale }));
   return out.buffer;
 }
