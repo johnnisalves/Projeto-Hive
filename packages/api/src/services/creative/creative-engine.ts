@@ -58,6 +58,11 @@ export type CreativeInput = {
   variationSeed?: number;
   /** True when the official logo is sent to the model as a reference image. */
   hasLogoReference?: boolean;
+  /**
+   * Set when this piece reuses a plan written for another canvas. The layout is
+   * rebuilt for the new shape instead of being cropped from the first one.
+   */
+  recomposedFrom?: string;
 };
 
 export type PhotoPlacement = {
@@ -567,7 +572,9 @@ CAMERA: ${plan.camera}
 PALETTE: ${plan.palette}
 TYPOGRAPHY: ${plan.typographyMood}
 EMOTION: ${plan.emotion}
-
+${input.recomposedFrom ? `
+RECOMPOSE FOR THIS CANVAS: this concept was first laid out for ${input.recomposedFrom}. Keep the idea, subject, palette, lighting, mood and the exact copy — but REBUILD the layout natively for ${spec.label}. Re-scale and re-place the subject and every text block for this shape. Do not crop or letterbox the other version, and leave no empty margin where the other format used to end.
+` : ''}
 ART DIRECTION — ${mode}:\n${styleDirective(mode)}
 
 ${nicheRules(niche)}

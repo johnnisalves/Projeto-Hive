@@ -161,6 +161,8 @@ export const api = {
       format?: string;
       bakeText?: boolean;
       style?: string;
+      creativePlan?: unknown;
+      recomposedFrom?: string;
     },
   ) =>
     request<{

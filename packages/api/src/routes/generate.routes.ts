@@ -37,6 +37,9 @@ const imageSchema = z.object({
   platform: z.string().optional(),
   qaMode: z.enum(['off', 'report']).optional(),
   chosenConcept: z.any().optional(),
+  // Reuse a plan from a previous generation (Feed + Story pair).
+  creativePlan: z.any().optional(),
+  recomposedFrom: z.string().optional(),
 });
 
 const captionSchema = z.object({

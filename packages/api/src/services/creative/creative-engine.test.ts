@@ -273,3 +273,21 @@ test('"Sem CTA" e instrucao de omitir, nao texto', async () => {
   assert.equal(c.cta, undefined);
   assert.deepEqual(extractMandatoryCopy('post de pizza sem marcacao nenhuma'), {});
 });
+
+test('recomposicao: plano reaproveitado manda refazer o layout, nao cortar', () => {
+  const plan: CreativePlan = {
+    objective: 'o', audience: 'a', concept: 'c', visualHook: 'v', primarySubject: 's',
+    composition: 'comp', palette: 'pal', typographyMood: 'typo', lighting: 'light',
+    camera: 'cam', environment: 'env', emotion: 'emo', headline: 'A espera acabou.',
+    cta: '', negativeInstructions: 'nada',
+  };
+  const story = planToImagePrompt(plan, { ...baseInput, format: '9:16', bakeText: true, recomposedFrom: '4:5' });
+  assert.match(story, /RECOMPOSE FOR THIS CANVAS/);
+  assert.match(story, /1080x1920/);
+  assert.match(story, /Do not crop or letterbox/);
+  assert.match(story, /A espera acabou\./, 'a copy segue identica');
+
+  // Sem recomposedFrom o bloco nao aparece.
+  const feed = planToImagePrompt(plan, { ...baseInput, format: '4:5', bakeText: true });
+  assert.doesNotMatch(feed, /RECOMPOSE FOR THIS CANVAS/);
+});

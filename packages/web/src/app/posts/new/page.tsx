@@ -130,6 +130,8 @@ export default function NewPost() {
   // idea to compete in the feed; "balanced" was producing quiet, catalogue-like pieces.
   const [creativeIntensity, setCreativeIntensity] = useState('bold');
   const [directorMode, setDirectorMode] = useState(false);
+  // Gera a mesma campanha em Feed 4:5 e Story 9:16, recompondo o layout.
+  const [alsoStory, setAlsoStory] = useState(false);
   // "Melhorar prompt": keeps the user's original so the rewrite is undoable.
   const [improving, setImproving] = useState(false);
   const [promptBackup, setPromptBackup] = useState<string | null>(null);
@@ -320,6 +322,8 @@ export default function NewPost() {
 
     let generated = 0;
     let lastError = '';
+    let firstPlan: unknown = null;
+    const baseSeed = Math.floor(Math.random() * 1_000_000);
     const newImages: CarouselImage[] = [];
 
     // Generate images and caption in parallel
@@ -342,11 +346,12 @@ export default function NewPost() {
           creativeMode: chosenConcept?.mode || creativeMode,
           creativeIntensity,
           // Distinct seed per variation so the batch doesn't converge on one look.
-          variationSeed: Math.floor(Math.random() * 1_000_000) + i * 1013,
+          variationSeed: baseSeed + i * 1013,
           platform: platforms[0],
           bakeText: true,
           chosenConcept: chosenConcept || undefined,
         });
+        if (!firstPlan && result.plan) firstPlan = result.plan;
         newImages.push({ url: result.imageUrl, prompt: variation });
         generated++;
         if (count > 1) setGenProgress(`${generated}/${count} imagens geradas...`);
@@ -359,6 +364,30 @@ export default function NewPost() {
     });
 
     await Promise.all(imagePromises);
+
+    // "Feed + Story": repete a campanha no outro formato, reaproveitando o mesmo
+    // plano criativo — mesma ideia e mesmos textos, layout reconstruido.
+    if (alsoStory && firstPlan && newImages.length > 0) {
+      const pairFormat = aspectRatio === '9:16' ? '4:5' : '9:16';
+      setGenProgress(`Gerando a versao ${pairFormat}...`);
+      try {
+        const pair = await api.generateImage(prompt, pairFormat, {
+          brandId: selectedBrandId || undefined,
+          creativeEngine: true,
+          creativeMode: creativeMode,
+          creativeIntensity,
+          platform: platforms[0],
+          bakeText: true,
+          creativePlan: firstPlan,
+          recomposedFrom: aspectRatio,
+          variationSeed: baseSeed + 7717,
+        });
+        newImages.push({ url: pair.imageUrl, prompt: `${prompt} (${pairFormat})` });
+      } catch (e: any) {
+        lastError = e?.message || 'falha ao gerar o segundo formato';
+        console.error('pair generation failed:', e);
+      }
+    }
 
     if (newImages.length > 0) {
       setImages((prev) => [...prev, ...newImages]);
@@ -872,6 +901,26 @@ export default function NewPost() {
               </div>
               <span className={`shrink-0 h-5 w-9 rounded-full transition-colors relative ${directorMode ? 'bg-amber-500' : 'bg-border'}`}>
                 <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${directorMode ? 'left-[18px]' : 'left-0.5'}`} />
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAlsoStory((v) => !v)}
+              className={`w-full flex items-center gap-3 p-3 rounded-btn border text-left transition-all ${
+                alsoStory ? 'border-primary bg-primary/[0.08]' : 'border-border bg-bg-card hover:border-primary/40'
+              }`}
+            >
+              <span className="text-lg">📐</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-text-primary">
+                  Gerar Feed + Story
+                </p>
+                <p className="text-[10px] text-text-muted mt-0.5">
+                  A mesma campanha em {aspectRatio === '9:16' ? '9:16 e 4:5' : '4:5 e 9:16'} — mesmo conceito e mesmos textos, layout refeito para cada formato (nao e recorte)
+                </p>
+              </div>
+              <span className={`shrink-0 h-5 w-9 rounded-full transition-colors relative ${alsoStory ? 'bg-primary' : 'bg-border'}`}>
+                <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all ${alsoStory ? 'left-[18px]' : 'left-0.5'}`} />
               </span>
             </button>
           </div>
