@@ -41,6 +41,7 @@ export async function generateImageController(req: Request, res: Response) {
       // Creative Engine controls (all optional; the endpoint stays backward compatible)
       creativeMode, creativeIntensity, variationSeed, hasUserPhoto,
       creativeEngine, chosenConcept, qaMode, headline, points, platform,
+      creativePlan, recomposedFrom,
     } = req.body as any;
 
     // Resolve the brand once (used by both the new engine and the legacy path).
@@ -79,10 +80,13 @@ export async function generateImageController(req: Request, res: Response) {
         hasUserPhoto,
         bakeText,
         hasLogoReference: !!logoUrl,
+        recomposedFrom,
       };
       const chosen: Concept | undefined = chosenConcept;
       if (chosen?.mode) input.creativeMode = chosen.mode;
-      plan = await buildCreativePlan(input);
+      // A plan supplied by the caller (second format of a Feed+Story pair)
+      // keeps the concept and copy identical; only the layout is rebuilt.
+      plan = creativePlan || (await buildCreativePlan(input));
       // The compositing step draws from this, so it must always be sane numbers.
       if (plan && logoUrl) plan.logoPlacement = normalizeLogoPlacement(plan.logoPlacement);
       finalPrompt = plan ? planToImagePrompt(plan, input) : buildFallbackImagePrompt(input);
