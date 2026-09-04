@@ -56,6 +56,57 @@ router.use(authMiddleware);
 router.post('/image', validate(imageSchema), generateImageController);
 router.post('/caption', validate(captionSchema), generateCaptionController);
 
+// "Melhorar prompt": corrige o portugues e estrutura o texto do usuario como
+// briefing profissional — preservando literalmente o que ele escreveu e sem
+// inventar fatos. E texto puro, rapido e barato; roda antes da geracao.
+const improvePromptSchema = z.object({
+  prompt: z.string().min(3).max(6000),
+  brandId: z.string().optional(),
+  aspectRatio: z.string().optional(),
+  platform: z.string().optional(),
+});
+router.post('/improve-prompt', validate(improvePromptSchema), async (req: AuthRequest, res: Response) => {
+  try {
+    const { prompt, brandId, aspectRatio, platform } = req.body as { prompt: string; brandId?: string; aspectRatio?: string; platform?: string };
+    const ownerId = await resolveOwnerId(req.userId!);
+    let brandBlock = 'nao informada';
+    if (brandId) {
+      const brand = await prisma.brand.findFirst({ where: { id: brandId, userId: ownerId } });
+      if (brand) {
+        brandBlock = [
+          `Nome: ${brand.name}`,
+          brand.nicho ? `Ramo: ${brand.nicho}` : '',
+          brand.cidade ? `Cidade: ${brand.cidade}` : '',
+          brand.slogan ? `Slogan: ${brand.slogan}` : '',
+          brand.voiceTone ? `Tom de voz: ${brand.voiceTone}` : '',
+          brand.products?.length ? `Produtos: ${brand.products.slice(0, 6).join(', ')}` : '',
+          brand.artDirection ? `Regras de arte: ${brand.artDirection.slice(0, 600)}` : '',
+        ].filter(Boolean).join('\n');
+      }
+    }
+    const instruction = `Voce e um diretor de criacao senior de agencia. Reescreva o TEXTO DO USUARIO abaixo como um briefing criativo profissional, em portugues do Brasil impecavel, pronto para um gerador de imagem publicitaria.
+
+REGRAS ABSOLUTAS:
+1. Preserve LITERALMENTE tudo que o usuario disse de forma explicita: headline, texto de apoio, CTA, cena, pessoas, objetos, formato. Corrija apenas ortografia e acentuacao desses textos, sem trocar palavras.
+2. NUNCA invente preco, desconto, promocao, cashback, data, prazo, endereco, telefone, premio ou qualquer promessa que o usuario nao escreveu.
+3. Preencha apenas o que faltou: objetivo, cena/composicao, direcao de fotografia e luz, paleta coerente com a marca, hierarquia visual. Se o usuario nao deu headline, proponha UMA (2 a 7 palavras) marcada como "sugestao".
+4. Respeite as regras de arte da marca (abaixo). Se a marca proibe algo, nao inclua.
+5. Formato do post: ${aspectRatio || '4:5'}${platform ? ` (${platform})` : ''}.
+6. Saida: texto corrido em secoes curtas com estes titulos, em MAIUSCULAS: OBJETIVO, CENA E COMPOSICAO, DIRECAO DE ARTE, TEXTO NA ARTE (headline / apoio / CTA), FORMATO. Maximo 220 palavras. Sem markdown, sem comentarios, sem explicar o que mudou.
+
+MARCA:
+${brandBlock}
+
+TEXTO DO USUARIO:
+"""${prompt.slice(0, 5000)}"""`;
+    const improved = (await callText(instruction, undefined, ownerId)).trim().replace(/^```[a-z]*\n?|```$/g, '').trim();
+    if (!improved) throw new Error('A IA nao devolveu texto.');
+    res.json({ success: true, data: { prompt: improved } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao melhorar o prompt' });
+  }
+});
+
 // Creative Director mode: three distinct concepts for one brief (text only, cheap).
 const conceptsSchema = z.object({
   prompt: z.string().min(1),
