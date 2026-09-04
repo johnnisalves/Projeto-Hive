@@ -90,6 +90,25 @@ export function normalizePhotoPlacement(raw: unknown): PhotoPlacement {
   };
 }
 
+export type LogoPlacement = {
+  position: 'top-center' | 'top-left' | 'top-right' | 'bottom-center' | 'bottom-left' | 'bottom-right';
+  /** Logo width as a fraction of the canvas width (0.16–0.30). */
+  widthRatio: number;
+};
+
+export const DEFAULT_LOGO_PLACEMENT: LogoPlacement = { position: 'top-center', widthRatio: 0.22 };
+
+const LOGO_POSITIONS: LogoPlacement['position'][] = ['top-center', 'top-left', 'top-right', 'bottom-center', 'bottom-left', 'bottom-right'];
+
+export function normalizeLogoPlacement(raw: unknown): LogoPlacement {
+  const value = (raw ?? {}) as Partial<LogoPlacement>;
+  const position = LOGO_POSITIONS.includes(value.position as LogoPlacement['position'])
+    ? (value.position as LogoPlacement['position'])
+    : DEFAULT_LOGO_PLACEMENT.position;
+  const ratio = typeof value.widthRatio === 'number' && Number.isFinite(value.widthRatio) ? value.widthRatio : DEFAULT_LOGO_PLACEMENT.widthRatio;
+  return { position, widthRatio: Math.min(0.3, Math.max(0.16, ratio)) };
+}
+
 export type CreativePlan = {
   objective: string;
   audience: string;
@@ -110,6 +129,8 @@ export type CreativePlan = {
   niche?: string;
   mode?: string;
   photoPlacement?: PhotoPlacement;
+  /** Where the real logo file is stamped after generation. */
+  logoPlacement?: LogoPlacement;
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -381,11 +402,15 @@ function photoRule(hasUserPhoto: boolean | undefined, placement?: PhotoPlacement
  * to reproduce that exact mark. Otherwise fall back to reserving a clean area so
  * the real logo can be composited later — and forbid inventing one.
  */
-function logoRule(brandName?: string | null, hasLogoReference?: boolean): string {
+function logoRule(brandName?: string | null, hasLogoReference?: boolean, placement?: LogoPlacement): string {
   const name = brandName || 'the brand';
   if (hasLogoReference) {
-    return `BRAND & LOGO: The FIRST reference image is the official ${name} logo. Reproduce it EXACTLY — same symbol, proportions, colours and typography. Never redraw it in another style, never recolour it (if the background fights the logo's colours, change the background or place the logo on a clean badge/plate — never change the logo), never invent a variant.
-LOGO PROMINENCE: the logo is a hero brand element, not a footnote. Size it at roughly 18-25% of the canvas width, in a high-contrast, uncluttered position (top centre, top corner or on a dedicated badge). It must be instantly readable at phone size.`;
+    const p = placement ?? DEFAULT_LOGO_PLACEMENT;
+    const pct = Math.round(p.widthRatio * 100);
+    return `BRAND & LOGO: The FIRST reference image is the official ${name} logo. The system will stamp the REAL logo file onto the finished image afterwards, at the ${p.position.replace('-', ' ')} at about ${pct}% of the width. Therefore:
+- Do NOT draw, letter or paint a standalone brand logo or brand name lock-up anywhere in the layout. Leave the ${p.position.replace('-', ' ')} area (~${pct}% width, plus breathing room) clean, calm and free of text or busy detail.
+- The logo MAY appear only where it physically exists in the scene — printed on the real packaging, signage or products shown in the references — reproduced faithfully there.
+- Keep the composition balanced as if the logo were already present in that reserved area.`;
   }
   return `BRAND & LOGO: Do not draw, letter or invent a logo — the real ${name} logo is composited afterwards as an official asset. Reserve a clean, low-contrast, unobstructed logo area (~20% of the width) in one corner, free of texture, text and busy detail.`;
 }
@@ -448,10 +473,12 @@ OUTPUT: a single JSON object. No prose, no markdown fence, no commentary.
   "headline": "final Brazilian Portuguese headline, 2-7 words",
   "subheadline": "optional short support line in Brazilian Portuguese, or empty string",
   "cta": "short Brazilian Portuguese call to action, or empty string",
-  "negativeInstructions": "what must not appear, specific to this concept"${input.hasUserPhoto ? ',\n  "photoPlacement": { "side": "left"|"right"|"center", "heightRatio": 0.45-0.9, "centerX": 0.15-0.85, "anchor": "bottom"|"center" }' : ''}
+  "negativeInstructions": "what must not appear, specific to this concept"${input.hasUserPhoto ? ',\n  "photoPlacement": { "side": "left"|"right"|"center", "heightRatio": 0.45-0.9, "centerX": 0.15-0.85, "anchor": "bottom"|"center" }' : ''}${input.hasLogoReference ? ',\n  "logoPlacement": { "position": "top-center"|"top-left"|"top-right"|"bottom-center"|"bottom-left"|"bottom-right", "widthRatio": 0.16-0.30 }' : ''}
 }
 
 ART DIRECTION MODE — ${mode}:\n${styleDirective(mode)}
+${input.hasLogoReference ? `
+LOGO PLACEMENT: the official logo FILE will be stamped onto the finished image by the system (pixel-perfect). Decide where it belongs for THIS composition and how large (16-30% of the width). Plan the layout so that area stays clean — the image model must NOT draw a standalone logo there.` : ''}
 
 ${intensityGuidance(input.creativeIntensity)}
 
@@ -538,7 +565,7 @@ ${textToRender(input, plan)}
 
 ${photoRule(input.hasUserPhoto, plan.photoPlacement)}
 
-${logoRule(input.brand?.name, input.hasLogoReference)}${referenceAssetsRule(input.brand)}${localContextRule(input.brand)}${safe.top ? `\n\nSAFE AREA: keep all critical text and the logo at least ${safe.top}px from the top and ${safe.bottom}px from the bottom.` : ''}
+${logoRule(input.brand?.name, input.hasLogoReference, plan.logoPlacement)}${referenceAssetsRule(input.brand)}${localContextRule(input.brand)}${safe.top ? `\n\nSAFE AREA: keep all critical text and the logo at least ${safe.top}px from the top and ${safe.bottom}px from the bottom.` : ''}
 
 ${TRUTH_RULES}
 ${brandConstraints(input.brand)}
@@ -658,8 +685,8 @@ CHECKLIST:
 1. Text spelling in Brazilian Portuguese; any gibberish/broken/duplicated letters? (critical)${input.bakeText ? `\n2. Is the headline exactly "${headline}"? Invented extra text? (critical)` : '\n2. Any text at all? There must be none — text is overlaid later. (major)'}
 3. Invented facts: price, %, date, phone, address or claim not in the brief? (critical)
 4. Anatomy: hands, fingers, eyes, limbs malformed? (critical)
-5. Fabricated or lettered logo present? There must not be. (critical)
-6. Clean unobstructed corner reserved for the real logo? (major)
+5. A standalone drawn or lettered brand logo / brand-name lock-up in the layout? The real logo file is stamped afterwards, so a drawn one (other than printed on real packaging or signage) is a duplicate or a fake. (critical)
+6. Is the reserved logo area clean and unobstructed? (major)
 ${input.hasUserPhoto ? '7. ~35-45% width clean and free of any generated person, ready for a real photo composite? (critical)' : '7. People, if present: real skin texture, natural expression, no plastic rendering? (major)'}
 8. Legibility of any text against its background at phone size. (major)
 9. One clear focal point and obvious reading order. (major)
