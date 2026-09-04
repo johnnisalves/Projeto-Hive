@@ -124,6 +124,9 @@ export async function compositeLogoBuffer(
     const lw = Math.round(spec.width * placement.widthRatio * scale);
     const lh = Math.round(lw * aspect);
     const pad = Math.round(lw * 0.1);
+    // Measured area is wider than the plate: a slot whose neighbour is a line of
+    // copy must score as busy, otherwise the stamp lands touching the text.
+    const guard = Math.round(lw * 0.3);
     const out: Candidate[] = [];
     const rows = 8;
     const from = topLimit;
@@ -135,7 +138,10 @@ export async function compositeLogoBuffer(
         const left = clamp(x - pad, 0, spec.width - 1);
         const top = clamp(y - pad, 0, spec.height - 1);
         const region = { left, top, width: clamp(lw + 2 * pad, 1, spec.width - left), height: clamp(lh + 2 * pad, 1, spec.height - top) };
-        out.push({ x, y, region, busy: await busyness(region), align, top: y < spec.height / 2, scale });
+        const gLeft = clamp(x - guard, 0, spec.width - 1);
+        const gTop = clamp(y - guard, 0, spec.height - 1);
+        const guardRegion = { left: gLeft, top: gTop, width: clamp(lw + 2 * guard, 1, spec.width - gLeft), height: clamp(lh + 2 * guard, 1, spec.height - gTop) };
+        out.push({ x, y, region, busy: await busyness(guardRegion), align, top: y < spec.height / 2, scale });
       }
     }
     return out;
