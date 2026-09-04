@@ -406,13 +406,19 @@ function logoRule(brandName?: string | null, hasLogoReference?: boolean, placeme
   const name = brandName || 'the brand';
   if (hasLogoReference) {
     const p = placement ?? DEFAULT_LOGO_PLACEMENT;
+    const where = p.position.replace('-', ' ');
     const pct = Math.round(p.widthRatio * 100);
-    return `BRAND & LOGO: The FIRST reference image is the official ${name} logo. The system will stamp the REAL logo file onto the finished image afterwards, at the ${p.position.replace('-', ' ')} at about ${pct}% of the width. Therefore:
-- Do NOT draw, letter or paint a standalone brand logo or brand name lock-up anywhere in the layout. Leave the ${p.position.replace('-', ' ')} area (~${pct}% width, plus breathing room) clean, calm and free of text or busy detail.
-- The logo MAY appear only where it physically exists in the scene — printed on the real packaging, signage or products shown in the references — reproduced faithfully there.
-- Keep the composition balanced as if the logo were already present in that reserved area.`;
+    const band = p.position.startsWith('top') ? 'top' : 'bottom';
+    const bandPct = Math.round(p.widthRatio * 100) + 8;
+    return `BRAND & LOGO — RESERVED AREA (critical):
+The system stamps the REAL ${name} logo file onto the finished image afterwards, at the ${where}, about ${pct}% of the width. Therefore:
+- DO NOT draw, paint, letter or illustrate any logo, emblem, badge, monogram, icon-plus-name lock-up or brand word-mark anywhere in the layout — not even a placeholder. A drawn logo becomes a DUPLICATE beside the real one and ruins the piece.
+- DO NOT write the brand name as text.
+- Leave the ${band} band of the canvas (roughly the ${band} ${bandPct}% of the height, full width) as CLEAN EMPTY SPACE: flat colour, soft gradient or gently out-of-focus background only. No text, no graphics, no product edges intruding.
+- Compose as if the logo were already sitting in that band, and keep headline, support line and CTA well clear of it.
+- The logo MAY appear only where it physically exists in the scene — printed on real packaging or signage from the reference photos — reproduced faithfully there.`;
   }
-  return `BRAND & LOGO: Do not draw, letter or invent a logo — the real ${name} logo is composited afterwards as an official asset. Reserve a clean, low-contrast, unobstructed logo area (~20% of the width) in one corner, free of texture, text and busy detail.`;
+  return `BRAND & LOGO: Do not draw, letter or invent a logo, and do not write the brand name as text — the real ${name} logo is composited afterwards as an official asset. Reserve a clean, low-contrast, unobstructed logo area (~20% of the width) in one corner, free of texture, text and busy detail.`;
 }
 
 /**
@@ -440,7 +446,17 @@ function textToRender(input: CreativeInput, plan?: CreativePlan): string {
   const headline = plan?.headline || input.headline || '';
   const sub = plan?.subheadline;
   const cta = plan?.cta;
-  return `TEXT TO RENDER (Brazilian Portuguese, exact, perfectly spelled):\n- Headline: "${headline}"${sub ? `\n- Subheadline: "${sub}"` : ''}${cta ? `\n- Call to action: "${cta}"` : ''}\nRender no other text. No invented words, no lorem ipsum, no decorative pseudo-text.`;
+  const lines = [`- Headline: "${headline}"`];
+  if (sub) lines.push(`- Support line: "${sub}"`);
+  if (cta) lines.push(`- Call to action: "${cta}"`);
+  return `TEXT TO RENDER — EXHAUSTIVE LIST (Brazilian Portuguese, exact, perfectly spelled):
+${lines.join('\n')}
+
+THIS LIST IS CLOSED. Render these strings and NOTHING else:
+- No extra tagline, slogan, kicker, badge, sticker, date, city line or closing phrase. Adding even one unrequested phrase is a defect that fails the piece.
+- Do NOT write the brand name as text or as a word-mark anywhere. The brand is represented only by its real logo, which the system stamps in afterwards.
+- No invented words, no lorem ipsum, no decorative pseudo-text, no small print.
+- Text must never overlap other text, and never intrude into the reserved logo area.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -617,7 +633,7 @@ ${NEGATIVE_STANDARD}`;
 
 /** Concept-negative for providers that take a separate negative prompt. */
 export function buildNegativePrompt(plan?: CreativePlan | null): string {
-  const base = 'text, letters, words, numbers, watermark, logo, signature, low quality, blurry, out of focus, pixelated, jpeg artifacts, deformed, ugly, extra fingers, mutated hands, poorly drawn, amateur, generic stock photo, canva template, clipart, oversaturated, harsh flash, cluttered, busy layout, messy composition, plastic food, default dark gradient background';
+  const base = 'duplicate logo, second logo, repeated logo, drawn brand logo, brand name as text, word-mark, overlapping text, text over logo, extra tagline, unrequested slogan, text, letters, words, numbers, watermark, logo, signature, low quality, blurry, out of focus, pixelated, jpeg artifacts, deformed, ugly, extra fingers, mutated hands, poorly drawn, amateur, generic stock photo, canva template, clipart, oversaturated, harsh flash, cluttered, busy layout, messy composition, plastic food, default dark gradient background';
   const extra = plan?.negativeInstructions?.trim();
   return extra ? `${extra}, ${base}` : base;
 }

@@ -204,3 +204,36 @@ test('carimbo da logo: mantem canvas, placa em fundo claro, sem placa em fundo e
   const c = await compositeLogoBuffer(sBase, story, logo, placement, '#D8291C');
   assert.ok(c.y >= Math.round(story.height * 0.14), `logo abaixo da safe area (y=${c.y})`);
 });
+
+test('carimbo foge de area ocupada (texto/logo desenhada) e ativa placa', async () => {
+  const { compositeLogoBuffer } = await import('./logo-composite');
+  const spec = getFormatSpec('ig-feed');
+  const block = await sharp({ create: { width: 200, height: 100, channels: 4, background: { r: 255, g: 196, b: 0, alpha: 1 } } }).png().toBuffer();
+  const logo = await sharp({ create: { width: 400, height: 200, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite([{ input: block, left: 100, top: 50 }])
+    .png().toBuffer();
+
+  // Topo poluido (listras de alto contraste = "texto"), base calma.
+  const stripes = Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${spec.width}" height="420">` +
+    Array.from({ length: 14 }, (_, i) => `<rect x="0" y="${i * 30}" width="${spec.width}" height="15" fill="${i % 2 ? '#000000' : '#FFFFFF'}"/>`).join('') +
+    `</svg>`,
+  );
+  const busyTop = await sharp({ create: { width: spec.width, height: spec.height, channels: 3, background: { r: 40, g: 60, b: 50 } } })
+    .composite([{ input: stripes, left: 0, top: 0 }])
+    .png().toBuffer();
+
+  const out = await compositeLogoBuffer(busyTop, spec, logo, { position: 'top-center', widthRatio: 0.22 }, '#D8291C');
+  assert.equal(out.relocated, true, 'deve sair do topo poluido');
+  assert.ok(out.position !== 'top-center', `realocou para ${out.position}`);
+  const meta = await sharp(out.buffer).metadata();
+  assert.equal(meta.width, spec.width);
+  assert.equal(meta.height, spec.height);
+
+  // Area calma: fica onde foi planejado.
+  const calm = await sharp({ create: { width: spec.width, height: spec.height, channels: 3, background: { r: 40, g: 60, b: 50 } } }).png().toBuffer();
+  const ok = await compositeLogoBuffer(calm, spec, logo, { position: 'top-center', widthRatio: 0.22 }, '#D8291C');
+  assert.equal(ok.relocated, false, 'area calma nao realoca');
+  assert.equal(ok.position, 'top-center');
+  assert.equal(ok.plate, false, 'fundo escuro e calmo dispensa placa');
+});
