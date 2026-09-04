@@ -178,6 +178,12 @@ export const api = {
       body: JSON.stringify({ prompt, aspectRatio, ...opts }),
     }),
 
+  improvePrompt: (prompt: string, opts?: { brandId?: string; aspectRatio?: string; platform?: string }) =>
+    request<{ prompt: string }>('/api/generate/improve-prompt', {
+      method: 'POST',
+      body: JSON.stringify({ prompt, ...opts }),
+    }),
+
   generateConcepts: (
     prompt: string,
     opts?: { brandId?: string; format?: string; aspectRatio?: string; creativeMode?: string; creativeIntensity?: string; platform?: string; headline?: string },

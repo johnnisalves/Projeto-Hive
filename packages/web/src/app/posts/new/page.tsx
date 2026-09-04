@@ -130,6 +130,9 @@ export default function NewPost() {
   // idea to compete in the feed; "balanced" was producing quiet, catalogue-like pieces.
   const [creativeIntensity, setCreativeIntensity] = useState('bold');
   const [directorMode, setDirectorMode] = useState(false);
+  // "Melhorar prompt": keeps the user's original so the rewrite is undoable.
+  const [improving, setImproving] = useState(false);
+  const [promptBackup, setPromptBackup] = useState<string | null>(null);
   const [conceptModalOpen, setConceptModalOpen] = useState(false);
   const [conceptsLoading, setConceptsLoading] = useState(false);
   const [concepts, setConcepts] = useState<ConceptOption[] | null>(null);
@@ -249,6 +252,30 @@ export default function NewPost() {
       setMessageType('error');
     }
     setCaptionLoading(false);
+  }
+
+  /** Rewrites the brief in clean Portuguese, preserving everything explicit and inventing nothing. */
+  async function handleImprovePrompt() {
+    if (!prompt.trim() || improving) return;
+    setImproving(true);
+    setMessage('');
+    try {
+      const res = await api.improvePrompt(prompt, {
+        brandId: selectedBrandId || undefined,
+        aspectRatio,
+        platform: platforms[0],
+      });
+      if (res?.prompt) {
+        setPromptBackup(prompt);
+        setPrompt(res.prompt);
+        const detected = detectFormatFromText(res.prompt);
+        if (detected && detected !== aspectRatio) setAspectRatio(detected);
+      }
+    } catch (err: any) {
+      setMessage(err?.message || 'Nao consegui melhorar o prompt agora.');
+      setMessageType('error');
+    }
+    setImproving(false);
   }
 
   /** Creative Director mode: fetch three routes, let the user pick before generating. */
@@ -636,7 +663,30 @@ export default function NewPost() {
             </div>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">Prompt</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wider">Prompt</label>
+                  <div className="flex items-center gap-2">
+                    {promptBackup !== null && !improving && (
+                      <button
+                        type="button"
+                        onClick={() => { setPrompt(promptBackup); setPromptBackup(null); }}
+                        className="text-[11px] text-text-muted hover:text-text-primary underline-offset-2 hover:underline"
+                      >
+                        Desfazer
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleImprovePrompt}
+                      disabled={improving || !prompt.trim()}
+                      title="Corrige o portugues e transforma seu texto em um briefing profissional. Nao inventa preco, promocao nem dados."
+                      className="inline-flex items-center gap-1.5 rounded-badge border border-primary/40 bg-primary/[0.06] px-2.5 py-1 text-[11px] font-semibold text-primary hover:bg-primary/[0.12] disabled:opacity-50 transition-colors"
+                    >
+                      {improving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" strokeWidth={2} />}
+                      {improving ? 'Melhorando...' : 'Melhorar prompt'}
+                    </button>
+                  </div>
+                </div>
                 <textarea
                   value={prompt}
                   onChange={(e) => {
