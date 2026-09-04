@@ -225,7 +225,9 @@ test('carimbo foge de area ocupada (texto/logo desenhada) e ativa placa', async 
 
   const out = await compositeLogoBuffer(busyTop, spec, logo, { position: 'top-center', widthRatio: 0.22 }, '#D8291C');
   assert.equal(out.relocated, true, 'deve sair do topo poluido');
-  assert.ok(out.position !== 'top-center', `realocou para ${out.position}`);
+  // Pode descer dentro da faixa ou trocar de banda — o que importa e nao ficar na area suja.
+  assert.ok(out.busy < 0.2, `slot escolhido deve ser mais limpo (busy=${out.busy.toFixed(3)})`);
+  assert.ok(out.y > 100 || !out.position.startsWith('top'), `saiu da faixa poluida (y=${out.y}, pos=${out.position})`);
   const meta = await sharp(out.buffer).metadata();
   assert.equal(meta.width, spec.width);
   assert.equal(meta.height, spec.height);

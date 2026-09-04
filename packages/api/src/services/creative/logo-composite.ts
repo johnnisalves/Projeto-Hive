@@ -119,31 +119,58 @@ export async function compositeLogoBuffer(
   // headline or on a logo the model drew despite being told not to.
   const busyness = async (region: Region) => (await regionMetrics(base, region)).busy;
 
-  const planned = boxFor(placement.position);
-  const plannedBusy = await busyness(planned.region);
+  // Candidates: three horizontal alignments swept vertically through the band
+  // the plan asked for (and the opposite band as a fallback). Six fixed corners
+  // are not enough — when the model writes a headline across the whole top, the
+  // only clean slot may be a few hundred pixels lower.
+  const wantsTop = placement.position.startsWith('top');
+  const xFor = (align: 'left' | 'center' | 'right') =>
+    clamp(align === 'left' ? margin : align === 'right' ? spec.width - lw - margin : Math.round((spec.width - lw) / 2), 0, spec.width - lw);
 
-  const BUSY_LIMIT = 0.13;
-  let chosen = { pos: placement.position, ...planned, busy: plannedBusy };
-  let relocated = false;
+  const bandFor = (top: boolean) => (top
+    ? { from: topLimit, to: Math.max(topLimit, Math.round(spec.height * 0.34) - lh) }
+    : { from: Math.min(bottomLimit - lh, Math.round(spec.height * 0.66)), to: bottomLimit - lh });
 
-  if (plannedBusy > BUSY_LIMIT) {
-    // Try every candidate and take the calmest area available.
-    const scored = [{ pos: placement.position, ...planned, busy: plannedBusy }];
-    for (const pos of LOGO_POSITION_ORDER) {
-      if (pos === placement.position) continue;
-      const box = boxFor(pos);
-      scored.push({ pos, ...box, busy: await busyness(box.region) });
-    }
-    scored.sort((a, b) => a.busy - b.busy);
-    if (scored[0].pos !== placement.position) {
-      chosen = scored[0];
-      relocated = true;
+  const alignOf = (pos: LogoPlacement['position']): 'left' | 'center' | 'right' =>
+    pos.endsWith('left') ? 'left' : pos.endsWith('right') ? 'right' : 'center';
+
+  const regionAt = (x: number, y: number): Region => {
+    const left = clamp(x - pad, 0, spec.width - 1);
+    const top = clamp(y - pad, 0, spec.height - 1);
+    return { left, top, width: clamp(lw + 2 * pad, 1, spec.width - left), height: clamp(lh + 2 * pad, 1, spec.height - top) };
+  };
+
+  type Candidate = { x: number; y: number; region: Region; busy: number; align: 'left' | 'center' | 'right'; top: boolean; preferred: boolean };
+  const candidates: Candidate[] = [];
+  const STEPS = 5;
+  for (const top of [wantsTop, !wantsTop]) {
+    const band = bandFor(top);
+    for (const align of ['center', 'left', 'right'] as const) {
+      for (let i = 0; i < STEPS; i++) {
+        const y = clamp(Math.round(band.from + ((band.to - band.from) * i) / (STEPS - 1)), 0, spec.height - lh);
+        const x = xFor(align);
+        const region = regionAt(x, y);
+        candidates.push({
+          x, y, region, busy: await busyness(region), align, top,
+          preferred: top === wantsTop && align === alignOf(placement.position),
+        });
+      }
     }
   }
 
+  const BUSY_LIMIT = 0.10;
+  // Prefer the planned spot when it is genuinely clean; otherwise take the
+  // calmest slot found, with a small bias toward the planned band/alignment.
+  const score = (c: Candidate) => c.busy - (c.preferred ? 0.02 : 0) - (c.top === wantsTop ? 0.01 : 0);
+  candidates.sort((a, b) => score(a) - score(b));
+  const best = candidates[0];
+  const plannedCandidate = candidates.find((c) => c.preferred && c.y === clamp(bandFor(wantsTop).from, 0, spec.height - lh));
+  const chosen = { pos: `${best.top ? 'top' : 'bottom'}-${best.align}` as LogoPlacement['position'], x: best.x, y: best.y, region: best.region, busy: best.busy };
+  const relocated = !(plannedCandidate && plannedCandidate.x === best.x && plannedCandidate.y === best.y);
+
   const { luminance } = await regionMetrics(base, chosen.region);
-  // A plate both fixes contrast on light grounds and isolates the logo when the
-  // area could not be made fully clean.
+  // A plate both fixes contrast on light grounds and isolates the logo when no
+  // fully clean slot exists.
   const plate = luminance > 0.55 || chosen.busy > BUSY_LIMIT;
 
   const layers: sharp.OverlayOptions[] = [];
