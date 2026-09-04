@@ -413,7 +413,8 @@ function logoRule(brandName?: string | null, hasLogoReference?: boolean, placeme
     return `BRAND & LOGO — RESERVED AREA (critical):
 The system stamps the REAL ${name} logo file onto the finished image afterwards, at the ${where}, about ${pct}% of the width. Therefore:
 - DO NOT draw, paint, letter or illustrate any logo, emblem, badge, monogram, icon-plus-name lock-up or brand word-mark anywhere in the layout — not even a placeholder. A drawn logo becomes a DUPLICATE beside the real one and ruins the piece.
-- DO NOT write the brand name as text.
+- DO NOT write the brand name as text — not as a title, not as a small signature, not as a caption, not in a corner, not on a strip. Zero occurrences.
+- THE BRAND APPEARS EXACTLY ONCE in the finished piece: the stamped logo. If you render the name or a mark anywhere, the piece has the brand twice and is rejected.
 - Leave the ${band} band of the canvas (roughly the ${band} ${bandPct}% of the height, full width) as CLEAN EMPTY SPACE: flat colour, soft gradient or gently out-of-focus background only. No text, no graphics, no product edges intruding.
 - Compose as if the logo were already sitting in that band, and keep headline, support line and CTA well clear of it.
 - The logo MAY appear only where it physically exists in the scene — printed on real packaging or signage from the reference photos — reproduced faithfully there.`;
