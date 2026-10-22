@@ -1,5 +1,9 @@
 import { prisma } from '../config/database';
 import crypto from 'crypto';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { run, download } from './audio-mixer.service';
 
 // build: force-recreate 2026-07-10 (regenera roteamento/rede apos outage)
 /**
@@ -10,8 +14,14 @@ import crypto from 'crypto';
  * Endpoints WuzAPI usados:
  *   GET  /session/status        -> checa se a instancia esta logada
  *   POST /chat/send/image       -> body { Phone, Image (base64 data URI), Caption }
- * ATENCAO: WuzAPI exige a imagem em base64 (data:image/...;base64,...), NAO aceita URL.
+ *   POST /chat/send/video       -> body { Phone, Video (base64 data URI), Caption }
+ * ATENCAO: WuzAPI exige a midia em base64 (data:...;base64,...), NAO aceita URL.
  */
+
+// O Status aceita video de ate 60 s. Acima de ~10 MB o WhatsApp Web ja recusa;
+// mirar abaixo disso evita depender do limite exato do servidor do WhatsApp.
+const STATUS_VIDEO_MAX_BYTES = Math.round(9.5 * 1024 * 1024);
+const STATUS_VIDEO_MAX_S = 59;
 
 function normalizeHost(host: string): string {
   let h = (host || '').trim();
@@ -67,36 +77,102 @@ export async function testWhatsappConnection(host: string, token: string): Promi
   }
 }
 
-/** Publica a imagem do post no Status do WhatsApp. */
+/**
+ * Texto do Status de um video: so o 1o paragrafo da legenda, sem hashtags.
+ * A legenda do Reels inteira (com hashtags) fica pesada por cima do video.
+ */
+export function legendaCurtaStatus(caption?: string | null): string {
+  const primeiro = (caption || '').trim().split(/\n\s*\n/)[0] || '';
+  const semTags = primeiro.split(/\s+/).filter((p) => !p.startsWith('#')).join(' ').trim();
+  return semTags.slice(0, 700);
+}
+
+/** Bitrate de video (kbps) para caber o arquivo inteiro abaixo do limite do Status. */
+export function bitrateStatusKbps(duracaoS: number): number {
+  const alvoS = Math.min(Math.max(duracaoS, 1), STATUS_VIDEO_MAX_S);
+  const totalKbps = (9 * 8 * 1024) / alvoS; // ~9 MB no total
+  return Math.max(500, Math.min(2500, Math.floor(totalKbps - 128)));
+}
+
+/**
+ * Baixa o video e, se passar de 59 s ou do limite de tamanho, recomprime
+ * em 720p. O ffmpeg ja esta no container (ver audio-mixer.service).
+ */
+async function prepararVideoStatus(url: string): Promise<Buffer> {
+  const workDir = path.join(os.tmpdir(), 'disparaai-wa-status', crypto.randomUUID());
+  fs.mkdirSync(workDir, { recursive: true });
+  try {
+    const src = path.join(workDir, 'origem.mp4');
+    await download(url, src, 'video do Status');
+    const duracao = Number((await run('ffprobe', [
+      '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', src,
+    ], 30_000)).trim()) || 0;
+    if (fs.statSync(src).size <= STATUS_VIDEO_MAX_BYTES && duracao > 0 && duracao <= STATUS_VIDEO_MAX_S + 0.5) {
+      return fs.readFileSync(src);
+    }
+    const kbps = bitrateStatusKbps(duracao || STATUS_VIDEO_MAX_S);
+    const out = path.join(workDir, 'status.mp4');
+    await run('ffmpeg', [
+      '-y', '-i', src, '-t', String(STATUS_VIDEO_MAX_S),
+      '-vf', 'scale=min(720\\,iw):-2',
+      '-c:v', 'libx264', '-preset', 'veryfast', '-b:v', `${kbps}k`, '-maxrate', `${Math.round(kbps * 1.3)}k`,
+      '-bufsize', `${kbps * 2}k`, '-pix_fmt', 'yuv420p',
+      '-c:a', 'aac', '-b:a', '112k', '-movflags', '+faststart', out,
+    ]);
+    return fs.readFileSync(out);
+  } finally {
+    fs.rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+/** Publica a midia do post (video ou imagem) no Status do WhatsApp. */
 export async function publishToWhatsappStatus(postId: string, connectionId?: string): Promise<{ id: string }> {
   const post = await prisma.post.findUniqueOrThrow({
     where: { id: postId },
     include: { images: { orderBy: { order: 'asc' } } },
   });
 
-  const imageUrl = post.imageUrl || (post.images && post.images[0]?.imageUrl);
-  if (!imageUrl) throw new Error('Post nao tem imagem para o Status');
-
   const conn = await resolveConnection(post.userId, connectionId);
   const base = normalizeHost(conn.host);
-  const caption = [post.caption, post.hashtags.map((h) => `#${h}`).join(' ')].filter(Boolean).join('\n\n');
 
-  // WuzAPI exige a imagem em base64 data URI (nao aceita URL). Baixa e converte.
-  const imgRes = await fetch(imageUrl);
-  if (!imgRes.ok) throw new Error(`Falha ao baixar imagem para o Status (HTTP ${imgRes.status})`);
-  let contentType = (imgRes.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
-  if (!/^image\/(jpe?g|png)$/i.test(contentType)) contentType = 'image/jpeg'; // WuzAPI aceita jpeg/png
-  const buf = Buffer.from(await imgRes.arrayBuffer());
-  const dataUri = `data:${contentType};base64,${buf.toString('base64')}`;
+  let endpoint: string;
+  let body: Record<string, string>;
+  let tamanho: number;
 
-  const body = {
-    Phone: 'status@broadcast',
-    Image: dataUri,
-    Caption: caption || '',
-  };
+  if (post.mediaType === 'VIDEO') {
+    // Com trilha mixada, o arquivo certo e o mixado (o mesmo que foi para as redes).
+    const videoUrl = post.mixedVideoUrl || post.videoUrl;
+    if (!videoUrl) throw new Error('Post de video sem arquivo para o Status');
+    const buf = await prepararVideoStatus(videoUrl);
+    tamanho = buf.length;
+    endpoint = '/chat/send/video';
+    body = {
+      Phone: 'status@broadcast',
+      Video: `data:video/mp4;base64,${buf.toString('base64')}`,
+      Caption: legendaCurtaStatus(post.caption),
+    };
+  } else {
+    const imageUrl = post.imageUrl || (post.images && post.images[0]?.imageUrl);
+    if (!imageUrl) throw new Error('Post nao tem imagem para o Status');
+    const caption = [post.caption, post.hashtags.map((h) => `#${h}`).join(' ')].filter(Boolean).join('\n\n');
 
-  console.log(`[WhatsApp] Publicando no Status via ${base}/chat/send/image (conn=${conn.name}, ${Math.round(buf.length / 1024)}KB)`);
-  const res = await fetch(`${base}/chat/send/image`, {
+    // WuzAPI exige a imagem em base64 data URI (nao aceita URL). Baixa e converte.
+    const imgRes = await fetch(imageUrl);
+    if (!imgRes.ok) throw new Error(`Falha ao baixar imagem para o Status (HTTP ${imgRes.status})`);
+    let contentType = (imgRes.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
+    if (!/^image\/(jpe?g|png)$/i.test(contentType)) contentType = 'image/jpeg'; // WuzAPI aceita jpeg/png
+    const buf = Buffer.from(await imgRes.arrayBuffer());
+    tamanho = buf.length;
+    endpoint = '/chat/send/image';
+    body = {
+      Phone: 'status@broadcast',
+      Image: `data:${contentType};base64,${buf.toString('base64')}`,
+      Caption: caption || '',
+    };
+  }
+
+  console.log(`[WhatsApp] Publicando no Status via ${base}${endpoint} (conn=${conn.name}, ${Math.round(tamanho / 1024)}KB)`);
+  const res = await fetch(`${base}${endpoint}`, {
     method: 'POST',
     headers: { token: conn.token, 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(body),

@@ -23,7 +23,7 @@ import { env } from '../config/env';
 
 const FFMPEG_TIMEOUT_MS = 5 * 60 * 1000;
 
-function run(cmd: string, args: string[], timeoutMs = FFMPEG_TIMEOUT_MS): Promise<string> {
+export function run(cmd: string, args: string[], timeoutMs = FFMPEG_TIMEOUT_MS): Promise<string> {
   return new Promise((resolve, reject) => {
     const proc = spawn(cmd, args);
     let stdout = '';
@@ -48,7 +48,7 @@ function run(cmd: string, args: string[], timeoutMs = FFMPEG_TIMEOUT_MS): Promis
   });
 }
 
-async function download(url: string, destPath: string, label: string): Promise<void> {
+export async function download(url: string, destPath: string, label: string): Promise<void> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Falha ao baixar ${label} (HTTP ${res.status}): ${url}`);
   const buffer = Buffer.from(await res.arrayBuffer());
