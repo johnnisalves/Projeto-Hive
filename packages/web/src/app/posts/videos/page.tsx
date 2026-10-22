@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { api } from '../../../lib/api';
 import {
   Upload, Video as VideoIcon, X, Loader2, CheckCircle2, AlertCircle,
-  Calendar, Send, Save, Trash2, Film, ChevronLeft, Instagram, Facebook, Music2,
+  Calendar, Send, Save, Trash2, Film, ChevronLeft, Instagram, Facebook, Music2, MessageCircle,
 } from 'lucide-react';
 import Link from 'next/link';
 import InstagramOptions, { IgOptions, defaultIgOptions, igOptionsToPayload } from '../new/InstagramOptions';
@@ -69,6 +69,10 @@ export default function VideosBulkPage() {
   // podia sair no perfil de outro.
   const { marcaId, marca } = useBrand();
   const [platforms, setPlatforms] = useState<VideoPlatform[]>(['INSTAGRAM']);
+  // Status do WhatsApp vai junto com o Reels (usa o 1o paragrafo da legenda).
+  // Comeca desligado: a conexao de WhatsApp nao e por empresa.
+  const [sendWhatsapp, setSendWhatsapp] = useState(false);
+  const [hasWhatsapp, setHasWhatsapp] = useState(false);
 
   useEffect(() => {
     if (!marcaId) return;
@@ -76,6 +80,15 @@ export default function VideosBulkPage() {
       .then((b: any) => setPlatforms(soRedesDeVideo(b?.defaultPlatforms)))
       .catch(() => setPlatforms(['INSTAGRAM']));
   }, [marcaId]);
+
+  useEffect(() => {
+    api.listWhatsappConnections()
+      .then((res: any) => {
+        const lista = res?.items || res || [];
+        setHasWhatsapp(Array.isArray(lista) && lista.length > 0);
+      })
+      .catch(() => setHasWhatsapp(false));
+  }, []);
 
   function togglePlatform(p: VideoPlatform) {
     setPlatforms((prev) =>
@@ -213,6 +226,7 @@ export default function VideosBulkPage() {
         hashtags: item.publishMode === 'STORIES' ? [] : item.hashtags.split(',').map((h) => h.trim()).filter(Boolean),
         brandId: marcaId || undefined,
         platforms: item.publishMode === 'STORIES' ? ['INSTAGRAM'] : platforms,
+        sendWhatsappStatus: sendWhatsapp && hasWhatsapp && item.publishMode !== 'STORIES',
         ...igOptionsToPayload(item.ig),
       })) as any;
 
@@ -408,7 +422,7 @@ export default function VideosBulkPage() {
                 <label className="block text-[10px] font-semibold text-text-muted mb-1.5 uppercase">
                   Publicar em{marca?.name ? ` · ${marca.name}` : ''}
                 </label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                   {VIDEO_PLATFORMS.map((p) => {
                     const active = platforms.includes(p.value);
                     const Icon = p.icon;
@@ -430,9 +444,25 @@ export default function VideosBulkPage() {
                       </button>
                     );
                   })}
+                  <button
+                    onClick={() => hasWhatsapp && setSendWhatsapp((v) => !v)}
+                    disabled={!hasWhatsapp}
+                    title={hasWhatsapp ? 'Sai junto com o Reels, com o 1º parágrafo da legenda' : 'Conecte um WhatsApp em Configurações'}
+                    className={`flex items-center gap-2.5 py-2 px-3 rounded-lg border text-xs font-semibold transition-all disabled:opacity-50 ${
+                      sendWhatsapp && hasWhatsapp
+                        ? 'border-primary bg-primary/[0.08] text-text-primary'
+                        : 'border-border bg-bg-card text-text-secondary hover:border-primary/50'
+                    }`}
+                  >
+                    <span className={`w-6 h-6 rounded-md flex items-center justify-center ${sendWhatsapp && hasWhatsapp ? 'bg-green-500' : 'bg-bg-main'}`}>
+                      <MessageCircle className={`w-3.5 h-3.5 ${sendWhatsapp && hasWhatsapp ? 'text-white' : 'text-text-muted'}`} strokeWidth={2} />
+                    </span>
+                    Status WhatsApp
+                  </button>
                 </div>
                 <p className="text-[10px] text-text-muted mt-1.5">
                   Vem do cadastro da empresa. Stories vai só para o Instagram. TikTok sem a auditoria do app sai privado.
+                  O Status do WhatsApp sai junto com o Reels, com o 1º parágrafo da legenda (vídeo reduzido para até 59 s).
                 </p>
               </div>
 
