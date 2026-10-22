@@ -1,16 +1,31 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '../../../lib/api';
 import {
   Upload, Video as VideoIcon, X, Loader2, CheckCircle2, AlertCircle,
-  Calendar, Send, Save, Trash2, Film, ChevronLeft,
+  Calendar, Send, Save, Trash2, Film, ChevronLeft, Instagram, Facebook, Music2,
 } from 'lucide-react';
 import Link from 'next/link';
 import InstagramOptions, { IgOptions, defaultIgOptions, igOptionsToPayload } from '../new/InstagramOptions';
+import { useBrand } from '../../../components/BrandProvider';
 
 type PublishMode = 'REELS' | 'STORIES';
+type VideoPlatform = 'INSTAGRAM' | 'FACEBOOK' | 'TIKTOK';
+
+// So as redes que publicam video. Stories so existe no Instagram: no modo
+// Stories o post vai so para la, seja qual for a selecao.
+const VIDEO_PLATFORMS: { value: VideoPlatform; label: string; icon: typeof Instagram; color: string; hint?: string }[] = [
+  { value: 'INSTAGRAM', label: 'Instagram', icon: Instagram, color: 'bg-gradient-to-br from-purple-500 to-pink-500' },
+  { value: 'FACEBOOK', label: 'Facebook', icon: Facebook, color: 'bg-blue-600' },
+  { value: 'TIKTOK', label: 'TikTok', icon: Music2, color: 'bg-gradient-to-br from-pink-500 to-cyan-400', hint: 'sem a auditoria do TikTok sai privado' },
+];
+
+function soRedesDeVideo(lista?: string[]): VideoPlatform[] {
+  const validas = (lista || []).filter((p): p is VideoPlatform => VIDEO_PLATFORMS.some((o) => o.value === p));
+  return validas.length ? validas : ['INSTAGRAM'];
+}
 
 interface VideoItem {
   id: string;
@@ -49,6 +64,24 @@ export default function VideosBulkPage() {
   const dragRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [savingAll, setSavingAll] = useState(false);
+  // A empresa escolhida no menu decide a conta de cada rede. Sem mandar o
+  // brandId, o post caia na conta padrao do dono — o video de um cliente
+  // podia sair no perfil de outro.
+  const { marcaId, marca } = useBrand();
+  const [platforms, setPlatforms] = useState<VideoPlatform[]>(['INSTAGRAM']);
+
+  useEffect(() => {
+    if (!marcaId) return;
+    api.getBrand(marcaId)
+      .then((b: any) => setPlatforms(soRedesDeVideo(b?.defaultPlatforms)))
+      .catch(() => setPlatforms(['INSTAGRAM']));
+  }, [marcaId]);
+
+  function togglePlatform(p: VideoPlatform) {
+    setPlatforms((prev) =>
+      prev.includes(p) ? (prev.length > 1 ? prev.filter((x) => x !== p) : prev) : [...prev, p],
+    );
+  }
 
   function makeId() {
     return Math.random().toString(36).slice(2);
@@ -178,6 +211,8 @@ export default function VideosBulkPage() {
         keepMedia: item.keepMedia,
         aspectRatio: '9:16',
         hashtags: item.publishMode === 'STORIES' ? [] : item.hashtags.split(',').map((h) => h.trim()).filter(Boolean),
+        brandId: marcaId || undefined,
+        platforms: item.publishMode === 'STORIES' ? ['INSTAGRAM'] : platforms,
         ...igOptionsToPayload(item.ig),
       })) as any;
 
@@ -366,6 +401,39 @@ export default function VideosBulkPage() {
                     Stories (sem legenda)
                   </button>
                 </div>
+              </div>
+
+              {/* Redes de destino */}
+              <div>
+                <label className="block text-[10px] font-semibold text-text-muted mb-1.5 uppercase">
+                  Publicar em{marca?.name ? ` · ${marca.name}` : ''}
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  {VIDEO_PLATFORMS.map((p) => {
+                    const active = platforms.includes(p.value);
+                    const Icon = p.icon;
+                    return (
+                      <button
+                        key={p.value}
+                        onClick={() => togglePlatform(p.value)}
+                        title={p.hint}
+                        className={`flex items-center gap-2.5 py-2 px-3 rounded-lg border text-xs font-semibold transition-all ${
+                          active
+                            ? 'border-primary bg-primary/[0.08] text-text-primary'
+                            : 'border-border bg-bg-card text-text-secondary hover:border-primary/50'
+                        }`}
+                      >
+                        <span className={`w-6 h-6 rounded-md flex items-center justify-center ${active ? p.color : 'bg-bg-main'}`}>
+                          <Icon className={`w-3.5 h-3.5 ${active ? 'text-white' : 'text-text-muted'}`} strokeWidth={2} />
+                        </span>
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-[10px] text-text-muted mt-1.5">
+                  Vem do cadastro da empresa. Stories vai só para o Instagram. TikTok sem a auditoria do app sai privado.
+                </p>
               </div>
 
               {/* Keep media default */}
