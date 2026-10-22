@@ -856,3 +856,18 @@ model VideoClip {
   @@index([userId])
   @@index([status])
 }
+
+// Token de API pessoal (scripts do usuario). So o hash SHA-256 fica aqui;
+// o token aparece uma vez, na criacao. Ver services/api-token.service.ts.
+model ApiToken {
+  id         String    @id @default(uuid())
+  name       String
+  prefix     String
+  tokenHash  String    @unique
+  userId     String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  @@index([userId])
+}
