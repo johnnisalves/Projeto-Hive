@@ -23,6 +23,7 @@ import instagramRoutes from './routes/instagram.routes';
 import socialAccountRoutes from './routes/social-account.routes';
 import brandRoutes from './routes/brand.routes';
 import whatsappRoutes from './routes/whatsapp.routes';
+import apiTokenRoutes from './routes/api-token.routes';
 import calendarRoutes from './routes/calendar.routes';
 import designSystemsRoutes from './routes/designSystems.routes';
 import analyticsRoutes from './routes/analytics.routes';
@@ -87,6 +88,7 @@ app.use('/api/instagram', instagramRoutes);
 app.use('/api/social-accounts', socialAccountRoutes);
 app.use('/api/brands', brandRoutes);
 app.use('/api/whatsapp', whatsappRoutes);
+app.use('/api/api-tokens', apiTokenRoutes);
 app.use('/api/calendar', calendarRoutes);
 app.use('/api/design-systems', designSystemsRoutes);
 app.use('/api/analytics', analyticsRoutes);
@@ -392,6 +394,10 @@ async function ensureBrandColumns() {
     `CREATE TABLE IF NOT EXISTS "IgContact" ("id" TEXT PRIMARY KEY, "username" TEXT NOT NULL, "displayName" TEXT, "verifiedAt" TIMESTAMP(3), "followers" INTEGER, "useCount" INTEGER NOT NULL DEFAULT 1, "lastUsedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS "IgContact_userId_username_key" ON "IgContact"("userId", "username")`,
     `CREATE INDEX IF NOT EXISTS "IgContact_userId_idx" ON "IgContact"("userId")`,
+    // Token de API pessoal (scripts do usuario) — so o hash fica no banco
+    `CREATE TABLE IF NOT EXISTS "ApiToken" ("id" TEXT PRIMARY KEY, "name" TEXT NOT NULL, "prefix" TEXT NOT NULL, "tokenHash" TEXT NOT NULL, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "lastUsedAt" TIMESTAMP(3), "revokedAt" TIMESTAMP(3))`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS "ApiToken_tokenHash_key" ON "ApiToken"("tokenHash")`,
+    `CREATE INDEX IF NOT EXISTS "ApiToken_userId_idx" ON "ApiToken"("userId")`,
   ];
   for (const sql of stmts) {
     try {

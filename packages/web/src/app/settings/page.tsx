@@ -9,6 +9,7 @@ import {
   QrCode, Smartphone,
 } from 'lucide-react';
 import { useConfirm } from '@/components/ConfirmModal';
+import TokensDeApi from './TokensDeApi';
 
 interface SettingFieldOption {
   value: string;
@@ -777,6 +778,8 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+
+      <TokensDeApi />
 
       {/* API Keys */}
       <div className="space-y-4 mb-8">

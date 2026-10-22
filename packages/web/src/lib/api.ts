@@ -887,6 +887,10 @@ export const api = {
 
   // Brands
   listBrands: () => request<{ items: any[]; total: number }>('/api/brands'),
+  listApiTokens: () => request<{ items: any[] }>('/api/api-tokens'),
+  createApiToken: (name: string) =>
+    request<any>('/api/api-tokens', { method: 'POST', body: JSON.stringify({ name }) }),
+  revokeApiToken: (id: string) => request(`/api/api-tokens/${id}`, { method: 'DELETE' }),
   getBrand: (id: string) => request<any>(`/api/brands/${id}`),
   getDefaultBrand: () => request<any>('/api/brands/default'),
   createBrand: (body: Record<string, unknown>) =>
