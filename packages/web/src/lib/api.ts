@@ -89,6 +89,13 @@ export const api = {
       body: JSON.stringify({ email, password, name }),
     }),
 
+  googleConfig: () => request<{ clientId: string | null }>('/api/auth/google/config'),
+  googleLogin: (credential: string) =>
+    request<{ user: any; token: string }>('/api/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential }),
+    }),
+
   listPosts: (params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
     return request<{ items: any[]; total: number; page: number; limit: number }>(`/api/posts${qs}`);

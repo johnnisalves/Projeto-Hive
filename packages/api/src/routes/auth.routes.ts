@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { login, register, refresh } from '../controllers/auth.controller';
+import { login, register, refresh, googleConfig, googleLogin } from '../controllers/auth.controller';
 import { validate } from '../middleware/validate';
 
 const router = Router();
@@ -19,5 +19,7 @@ const registerSchema = z.object({
 router.post('/login', validate(loginSchema), login);
 router.post('/register', validate(registerSchema), register);
 router.post('/refresh', refresh);
+router.get('/google/config', googleConfig);
+router.post('/google', validate(z.object({ credential: z.string().min(20) })), googleLogin);
 
 export default router;
