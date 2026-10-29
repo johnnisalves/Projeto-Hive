@@ -2,6 +2,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   escolherConta, escolherContaSocial, enderecoDaConta, ContaCandidata, ContaSocial,
+  escolherConexaoWhatsapp, ConexaoWhatsapp,
 } from './account-resolver.service';
 
 /**
@@ -170,5 +171,46 @@ describe('enderecoDaConta', () => {
     const e = enderecoDaConta(conta('x', { accessToken: 'IGAAabc', instagramUserId: '178414' }));
     assert.match(e.base, /graph\.instagram\.com/);
     assert.equal(e.uid, 'me');
+  });
+});
+
+const zap = (id: string, over: Partial<ConexaoWhatsapp> = {}): ConexaoWhatsapp => ({
+  id, name: id, host: 'https://wapi.exemplo', token: `t-${id}`, phone: null, isDefault: false, brandId: null, ...over,
+});
+
+describe('escolherConexaoWhatsapp', () => {
+  test('sem conexao, explica', () => {
+    const r = escolherConexaoWhatsapp([], 'marca-1');
+    assert.equal(r.conexao, null);
+    assert.equal(r.motivo, 'nenhuma_conta');
+  });
+
+  test('o numero da empresa ganha da padrao', () => {
+    const r = escolherConexaoWhatsapp(
+      [zap('dono', { isDefault: true, brandId: 'marca-dono' }), zap('cliente', { brandId: 'marca-cliente' })],
+      'marca-cliente',
+    );
+    assert.equal(r.conexao!.id, 'cliente');
+  });
+
+  // O bug que motivou: o Status do cliente saia no WhatsApp padrao do dono.
+  test('varias conexoes e empresa sem numero: RECUSA em vez de usar a padrao', () => {
+    const r = escolherConexaoWhatsapp(
+      [zap('dono', { isDefault: true }), zap('cliente', { brandId: 'marca-cliente' })],
+      'marca-sem-numero',
+    );
+    assert.equal(r.conexao, null);
+    assert.equal(r.motivo, 'ambiguo');
+    assert.match(r.mensagem!, /Vincule/);
+  });
+
+  test('conexao unica e usada mesmo sem vinculo', () => {
+    const r = escolherConexaoWhatsapp([zap('unica', { isDefault: true })], 'qualquer');
+    assert.equal(r.conexao!.id, 'unica');
+  });
+
+  test('sem empresa no post, usa a padrao', () => {
+    const r = escolherConexaoWhatsapp([zap('a'), zap('b', { isDefault: true })], null);
+    assert.equal(r.conexao!.id, 'b');
   });
 });

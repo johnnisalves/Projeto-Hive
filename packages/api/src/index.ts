@@ -284,6 +284,9 @@ async function ensureBrandColumns() {
     // WhatsappConnection (Status do WhatsApp via UAZ)
     'CREATE TABLE IF NOT EXISTS "WhatsappConnection" ("id" TEXT PRIMARY KEY, "name" TEXT NOT NULL, "host" TEXT NOT NULL, "token" TEXT NOT NULL, "phone" TEXT, "isDefault" BOOLEAN NOT NULL DEFAULT false, "userId" TEXT NOT NULL, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)',
     'CREATE INDEX IF NOT EXISTS "WhatsappConnection_userId_idx" ON "WhatsappConnection"("userId")',
+    // WhatsappConnection.brandId: cada empresa com o seu numero de Status
+    'ALTER TABLE "WhatsappConnection" ADD COLUMN IF NOT EXISTS "brandId" TEXT',
+    'CREATE INDEX IF NOT EXISTS "WhatsappConnection_brandId_idx" ON "WhatsappConnection"("brandId")',
     // Status PARTIAL (publicacao parcial multi-plataforma)
     `ALTER TYPE "PostStatus" ADD VALUE IF NOT EXISTS 'PARTIAL'`,
     // Fila de aprovacao (#2): none | pending | approved | rejected
