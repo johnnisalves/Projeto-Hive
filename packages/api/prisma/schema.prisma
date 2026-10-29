@@ -604,10 +604,17 @@ model WhatsappConnection {
   token     String
   phone     String?
   isDefault Boolean  @default(false)
+  /**
+   * A empresa dona deste numero. Sem isso o Status de todas as empresas
+   * saia no WhatsApp padrao do dono. Nulo = ainda nao vinculada; quem decide
+   * e o resolvedor (escolherConexaoWhatsapp em account-resolver.service.ts).
+   */
+  brandId   String?
   userId    String
   createdAt DateTime @default(now())
 
   @@index([userId])
+  @@index([brandId])
 }
 
 model SocialAccount {

@@ -928,8 +928,14 @@ export const api = {
     request<{ loggedIn: boolean; connected: boolean; jid?: string | null }>(`/api/whatsapp/connections/${id}/status`),
   logoutWhatsapp: (id: string) =>
     request(`/api/whatsapp/connections/${id}/logout`, { method: 'POST' }),
-  provisionWhatsapp: (body: { name: string; phone?: string }) =>
-    request<{ id: string; name: string; isDefault: boolean }>('/api/whatsapp/provision', { method: 'POST', body: JSON.stringify(body) }),
+  provisionWhatsapp: (body: { name: string; phone?: string; brandId?: string }) =>
+    request<{ id: string; name: string; isDefault: boolean; brandId?: string | null }>('/api/whatsapp/provision', { method: 'POST', body: JSON.stringify(body) }),
+  // Vincula o numero a uma empresa: o Status dela sai so nele. `brandId: null` desvincula.
+  vincularWhatsappAEmpresa: (id: string, brandId: string | null) =>
+    request<{ id: string; brandId: string | null }>(`/api/whatsapp/connections/${id}/brand`, {
+      method: 'PUT',
+      body: JSON.stringify({ brandId }),
+    }),
   getWhatsappAdminConfig: () =>
     request<{ host: string; hasAdminToken: boolean }>('/api/whatsapp/admin-config'),
   setWhatsappAdminConfig: (body: { host?: string; adminToken?: string }) =>

@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { run, download } from './audio-mixer.service';
+import { escolherConexaoWhatsapp, ConexaoWhatsapp } from './account-resolver.service';
 
 // build: force-recreate 2026-07-10 (regenera roteamento/rede apos outage)
 /**
@@ -38,20 +39,17 @@ export interface WhatsappConn {
   phone?: string | null;
 }
 
-async function resolveConnection(userId: string, connectionId?: string): Promise<WhatsappConn> {
+async function resolveConnection(userId: string, connectionId?: string, brandId?: string | null): Promise<WhatsappConn> {
   const anyPrisma = prisma as any;
-  let conn: WhatsappConn | null = null;
+  // connectionId explicito ainda passa pelo dono (userId na condicao).
   if (connectionId) {
-    conn = await anyPrisma.whatsappConnection.findFirst({ where: { id: connectionId, userId } });
+    const escolhida = await anyPrisma.whatsappConnection.findFirst({ where: { id: connectionId, userId } });
+    if (escolhida) return escolhida;
   }
-  if (!conn) {
-    conn = await anyPrisma.whatsappConnection.findFirst({ where: { userId, isDefault: true } });
-  }
-  if (!conn) {
-    conn = await anyPrisma.whatsappConnection.findFirst({ where: { userId } });
-  }
-  if (!conn) throw new Error('Nenhuma conexao WhatsApp configurada. Adicione em Configuracoes.');
-  return conn;
+  const conexoes = await anyPrisma.whatsappConnection.findMany({ where: { userId } });
+  const { conexao, mensagem } = escolherConexaoWhatsapp(conexoes as ConexaoWhatsapp[], brandId);
+  if (!conexao) throw new Error(mensagem);
+  return conexao;
 }
 
 /** Testa a conexao consultando o status da sessao no WuzAPI. */
@@ -132,7 +130,7 @@ export async function publishToWhatsappStatus(postId: string, connectionId?: str
     include: { images: { orderBy: { order: 'asc' } } },
   });
 
-  const conn = await resolveConnection(post.userId, connectionId);
+  const conn = await resolveConnection(post.userId, connectionId, post.brandId);
   const base = normalizeHost(conn.host);
 
   let endpoint: string;

@@ -175,6 +175,7 @@ export default function SettingsPage() {
 
   // WhatsApp (Status via UAZ)
   const [waConns, setWaConns] = useState<any[]>([]);
+  const [waBrandId, setWaBrandId] = useState('');
   const [showAddWa, setShowAddWa] = useState(false);
   const [waForm, setWaForm] = useState({ name: '', host: 'https://wapi.digitalcrm.com.br', token: '', phone: '' });
   const [waAdding, setWaAdding] = useState(false);
@@ -230,10 +231,11 @@ export default function SettingsPage() {
     setWaProvisioning(true);
     setWaTest('');
     try {
-      const r: any = await api.provisionWhatsapp({ name: waForm.name, phone: waForm.phone || undefined });
+      const r: any = await api.provisionWhatsapp({ name: waForm.name, phone: waForm.phone || undefined, brandId: waBrandId || undefined });
       const newId = r?.data?.id || r?.id;
       const newName = waForm.name;
       setWaForm({ name: '', host: 'https://wapi.digitalcrm.com.br', token: '', phone: '' });
+      setWaBrandId('');
       setShowAddWa(false);
       await loadWaConns();
       if (newId) openWaQr(newId, newName);
@@ -329,6 +331,15 @@ export default function SettingsPage() {
       setWaTest(r?.ok ? '✅ Conexao OK' : '❌ Falhou: ' + (r?.detail || ''));
     } catch (e: any) {
       setWaTest('❌ Erro: ' + (e?.message || ''));
+    }
+  }
+
+  async function handleVincularWa(id: string, brandId: string) {
+    try {
+      await api.vincularWhatsappAEmpresa(id, brandId || null);
+      await loadWaConns();
+    } catch (e: any) {
+      alert(e?.message || 'Não consegui vincular');
     }
   }
 
@@ -442,8 +453,14 @@ export default function SettingsPage() {
     try {
       const res: any = await api.listInstagramAccounts();
       setIgAccounts(Array.isArray(res) ? res : res?.data || []);
-      // As empresas vem junto para montar o seletor de vinculo.
-      if (res?.brands) setIgBrands(res.brands);
+    } catch {}
+    // As empresas montam o seletor de vinculo (Instagram e WhatsApp). O
+    // request() devolve so o `data` da resposta, entao a lista que vinha
+    // junto em /instagram/accounts nunca chegava aqui: busca direto.
+    try {
+      const b: any = await api.listBrands();
+      const items = Array.isArray(b) ? b : b?.items || [];
+      setIgBrands(items.map((x: any) => ({ id: x.id, name: x.name })));
     } catch {}
   }
 
@@ -955,6 +972,15 @@ export default function SettingsPage() {
                     <label className="block text-[11px] font-semibold text-text-muted mb-1">Telefone (opcional)</label>
                     <input value={waForm.phone} onChange={(e) => setWaForm({ ...waForm, phone: e.target.value })} className="input-field text-xs" placeholder="(87) 99999-9999" />
                   </div>
+                  {igBrands.length > 0 && (
+                    <div>
+                      <label className="block text-[11px] font-semibold text-text-muted mb-1">Empresa</label>
+                      <select value={waBrandId} onChange={(e) => setWaBrandId(e.target.value)} className="input-field text-xs">
+                        <option value="">Nenhuma (escolher depois)</option>
+                        {igBrands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
+                    </div>
+                  )}
 
                   {waAdminCfg.hasAdminToken ? (
                     <p className="text-[10px] text-text-muted">✨ Clique em <b>Conectar</b> — a instancia e criada automaticamente e o QR aparece aqui. Escaneie no WhatsApp e pronto.</p>
@@ -1022,30 +1048,53 @@ export default function SettingsPage() {
                 <p className="text-xs text-text-muted">Nenhuma conexao. Clique em "Adicionar Conexao".</p>
               )}
               {waConns.map((c) => (
-                <div key={c.id} className="flex items-center gap-3 p-3 rounded-lg bg-bg-main mb-2">
-                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: '#25D366' }}>
-                    {(c.name || '?')[0].toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-semibold text-text-primary">{c.name}</p>
-                      {c.isDefault && <span className="px-1.5 py-0.5 rounded bg-primary/10 text-[10px] font-bold text-primary">PADRAO</span>}
+                <div key={c.id} className="p-3 rounded-lg bg-bg-main mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: '#25D366' }}>
+                      {(c.name || '?')[0].toUpperCase()}
                     </div>
-                    <p className="text-[10px] text-text-muted">{c.phone || c.host}</p>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-text-primary">{c.name}</p>
+                        {c.isDefault && <span className="px-1.5 py-0.5 rounded bg-primary/10 text-[10px] font-bold text-primary">PADRAO</span>}
+                      </div>
+                      <p className="text-[10px] text-text-muted">{c.phone || c.host}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => openWaQr(c.id, c.name)} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold text-white transition-colors" style={{ background: '#25D366' }}>
+                        <QrCode className="w-3.5 h-3.5" /> Conectar (QR)
+                      </button>
+                      {!c.isDefault && (
+                        <button onClick={() => handleSetDefaultWa(c.id)} className="px-2 py-1 rounded text-[10px] font-semibold text-primary hover:bg-primary/10 transition-colors">Tornar padrao</button>
+                      )}
+                      <button onClick={() => handleDeleteWa(c.id)} className="p-1.5 rounded text-text-muted hover:text-status-failed hover:bg-red-500/10 transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => openWaQr(c.id, c.name)} className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-semibold text-white transition-colors" style={{ background: '#25D366' }}>
-                      <QrCode className="w-3.5 h-3.5" /> Conectar (QR)
-                    </button>
-                    {!c.isDefault && (
-                      <button onClick={() => handleSetDefaultWa(c.id)} className="px-2 py-1 rounded text-[10px] font-semibold text-primary hover:bg-primary/10 transition-colors">Tornar padrao</button>
-                    )}
-                    <button onClick={() => handleDeleteWa(c.id)} className="p-1.5 rounded text-text-muted hover:text-status-failed hover:bg-red-500/10 transition-colors">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
+
+                  {/* O vinculo decide em qual numero sai o Status de cada empresa. */}
+                  {igBrands.length > 0 && (
+                    <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-border">
+                      <span className="text-[10px] text-text-muted flex-shrink-0">Empresa:</span>
+                      <select
+                        value={c.brandId || ''}
+                        onChange={(e) => handleVincularWa(c.id, e.target.value)}
+                        className="flex-1 px-2 py-1 rounded border border-border bg-bg-card text-[11px] text-text-primary"
+                      >
+                        <option value="">Nenhuma</option>
+                        {igBrands.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
+                    </div>
+                  )}
                 </div>
               ))}
+              {waConns.length > 1 && waConns.some((c) => !c.brandId) && (
+                <p className="text-[11px] text-amber-500 mt-2">
+                  Você tem mais de um WhatsApp e algum sem empresa vinculada. O Status de uma empresa sem número
+                  vinculado não é enviado, para não sair no WhatsApp de outra.
+                </p>
+              )}
             </div>
           </div>
         </div>

@@ -27,7 +27,7 @@ router.get('/connections', async (req: AuthRequest, res: Response) => {
     const userId = await resolveOwnerId(req.userId!);
     const items = await db().whatsappConnection.findMany({
       where: { userId },
-      select: { id: true, name: true, host: true, phone: true, isDefault: true, createdAt: true },
+      select: { id: true, name: true, host: true, phone: true, isDefault: true, brandId: true, createdAt: true },
       orderBy: { createdAt: 'desc' },
     });
     res.json({ success: true, data: items });
@@ -36,20 +36,41 @@ router.get('/connections', async (req: AuthRequest, res: Response) => {
   }
 });
 
+/**
+ * Confere se a empresa pode receber este numero: tem que ser do mesmo dono e
+ * ainda nao ter outro WhatsApp. Duas conexoes na mesma empresa voltariam a
+ * ambiguidade que o resolvedor existe para evitar. Devolve o erro ou null.
+ */
+async function erroDoVinculo(userId: string, brandId: string, exceptId?: string): Promise<string | null> {
+  const brand = await prisma.brand.findFirst({ where: { id: brandId, userId } });
+  if (!brand) return 'Empresa nao encontrada';
+  const ja = await db().whatsappConnection.findFirst({
+    where: { userId, brandId, ...(exceptId ? { NOT: { id: exceptId } } : {}) },
+  });
+  if (ja) return `O WhatsApp "${ja.name}" ja esta vinculado a esta empresa. Desvincule ele primeiro.`;
+  return null;
+}
+
 // POST /api/whatsapp/connections
 const addSchema = z.object({
   name: z.string().min(1),
   host: z.string().min(4),
   token: z.string().min(6),
   phone: z.string().optional(),
+  brandId: z.string().optional(),
 });
 router.post('/connections', validate(addSchema), async (req: AuthRequest, res: Response) => {
   try {
     const userId = await resolveOwnerId(req.userId!);
     const { name, host, token, phone } = req.body;
+    const brandId = req.body.brandId || null;
+    if (brandId) {
+      const erro = await erroDoVinculo(userId, brandId);
+      if (erro) { res.status(400).json({ success: false, error: erro }); return; }
+    }
     const count = await db().whatsappConnection.count({ where: { userId } });
     const conn = await db().whatsappConnection.create({
-      data: { name, host, token, phone: phone || null, isDefault: count === 0, userId },
+      data: { name, host, token, phone: phone || null, isDefault: count === 0, brandId, userId },
     });
     res.json({ success: true, data: { id: conn.id, name: conn.name, isDefault: conn.isDefault } });
   } catch (err: any) {
@@ -67,6 +88,25 @@ router.put('/connections/:id/default', async (req: AuthRequest, res: Response) =
     res.json({ success: true, data: { id, isDefault: true } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// PUT /api/whatsapp/connections/:id/brand - vincula o numero a uma empresa (null desvincula)
+router.put('/connections/:id/brand', async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = await resolveOwnerId(req.userId!);
+    const id = String(req.params.id);
+    const brandId = req.body?.brandId ? String(req.body.brandId) : null;
+    const conn = await loadConn(userId, id);
+    if (!conn) { res.status(404).json({ success: false, error: 'Conexao nao encontrada' }); return; }
+    if (brandId) {
+      const erro = await erroDoVinculo(userId, brandId, id);
+      if (erro) { res.status(400).json({ success: false, error: erro }); return; }
+    }
+    await db().whatsappConnection.update({ where: { id }, data: { brandId } });
+    res.json({ success: true, data: { id, brandId } });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Falha ao vincular' });
   }
 });
 
@@ -116,17 +156,23 @@ router.post('/admin-config', validate(adminCfgSchema), async (req: AuthRequest, 
 });
 
 // POST /api/whatsapp/provision - cria instancia no WuzAPI sozinho + salva a conexao aqui
-const provisionSchema = z.object({ name: z.string().min(1), phone: z.string().optional() });
+const provisionSchema = z.object({ name: z.string().min(1), phone: z.string().optional(), brandId: z.string().optional() });
 router.post('/provision', validate(provisionSchema), async (req: AuthRequest, res: Response) => {
   try {
     const userId = await resolveOwnerId(req.userId!);
     const { name, phone } = req.body;
+    const brandId = req.body.brandId || null;
+    // Confere antes de criar a instancia no WuzAPI, para nao deixar instancia orfa.
+    if (brandId) {
+      const erro = await erroDoVinculo(userId, brandId);
+      if (erro) { res.status(400).json({ success: false, error: erro }); return; }
+    }
     const { host, token } = await provisionWhatsappInstance(name);
     const count = await db().whatsappConnection.count({ where: { userId } });
     const conn = await db().whatsappConnection.create({
-      data: { name, host, token, phone: phone || null, isDefault: count === 0, userId },
+      data: { name, host, token, phone: phone || null, isDefault: count === 0, brandId, userId },
     });
-    res.json({ success: true, data: { id: conn.id, name: conn.name, isDefault: conn.isDefault } });
+    res.json({ success: true, data: { id: conn.id, name: conn.name, isDefault: conn.isDefault, brandId: conn.brandId } });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message });
   }

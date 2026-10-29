@@ -173,6 +173,51 @@ export async function contaSocialDaMarca(
 }
 
 /**
+ * A mesma regra, para o numero do Status do WhatsApp.
+ *
+ * A conexao era sempre "a padrao do dono": o Status de um cliente saia no
+ * WhatsApp de outro. Fica igual as redes: vinculada a empresa ganha; com uma
+ * conexao so, usa; varias e nenhuma da empresa, RECUSA.
+ */
+export interface ConexaoWhatsapp {
+  id: string;
+  name: string;
+  host: string;
+  token: string;
+  phone?: string | null;
+  isDefault: boolean;
+  brandId?: string | null;
+}
+
+export const MENSAGENS_WHATSAPP: Record<'nenhuma_conta' | 'ambiguo', string> = {
+  nenhuma_conta: 'Nenhuma conexao WhatsApp configurada. Adicione em Configuracoes.',
+  ambiguo: 'Voce tem mais de um WhatsApp conectado e esta empresa nao esta vinculada a nenhum. Vincule em Configuracoes para o Status nao sair no numero de outra empresa.',
+};
+
+export function escolherConexaoWhatsapp(conexoes: ConexaoWhatsapp[], brandId?: string | null): {
+  conexao: ConexaoWhatsapp | null;
+  motivo?: 'nenhuma_conta' | 'ambiguo';
+  mensagem?: string;
+} {
+  const lista = conexoes || [];
+  if (lista.length === 0) {
+    return { conexao: null, motivo: 'nenhuma_conta', mensagem: MENSAGENS_WHATSAPP.nenhuma_conta };
+  }
+
+  if (!brandId) {
+    return { conexao: lista.find((c) => c.isDefault) || lista[0] };
+  }
+
+  const daMarca = lista.find((c) => c.brandId === brandId);
+  if (daMarca) return { conexao: daMarca };
+
+  // Conexao unica: nao ha como pegar a errada.
+  if (lista.length === 1) return { conexao: lista[0] };
+
+  return { conexao: null, motivo: 'ambiguo', mensagem: MENSAGENS_WHATSAPP.ambiguo };
+}
+
+/**
  * Base da Graph API e caminho da conta, pelo tipo do token.
  *
  * Prefixo EAA = Login do Facebook (graph.facebook.com, usa o id da conta).
