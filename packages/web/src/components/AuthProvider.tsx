@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { api, setToken, getToken } from '../lib/api';
 import { Zap, Loader2 } from 'lucide-react';
@@ -94,6 +94,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('user', JSON.stringify(result.user));
   };
 
+  const loginWithGoogle = async (credential: string) => {
+    const result = await api.googleLogin(credential);
+    setToken(result.token);
+    setUser(result.user);
+    localStorage.setItem('user', JSON.stringify(result.user));
+  };
+
   const logout = () => {
     setToken(null);
     setUser(null);
@@ -114,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   if (!user && !isPublicPath) {
-    return <LoginScreen onLogin={login} onRegister={register} />;
+    return <LoginScreen onLogin={login} onRegister={register} onGoogle={loginWithGoogle} />;
   }
 
   return (
@@ -127,9 +134,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 function LoginScreen({
   onLogin,
   onRegister,
+  onGoogle,
 }: {
   onLogin: (email: string, password: string) => Promise<void>;
   onRegister: (email: string, password: string, name: string) => Promise<void>;
+  onGoogle: (credential: string) => Promise<void>;
 }) {
   const [isRegister, setIsRegister] = useState(false);
   const [email, setEmail] = useState('');
@@ -137,6 +146,59 @@ function LoginScreen({
   const [name, setName] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const googleBtnRef = useRef<HTMLDivElement>(null);
+  const [googleReady, setGoogleReady] = useState(false);
+  // Ref para o callback nao reinicializar o botao a cada render do pai
+  const onGoogleRef = useRef(onGoogle);
+  onGoogleRef.current = onGoogle;
+
+  // Botao "Entrar com Google" (Google Identity Services). So aparece se o
+  // Client ID estiver configurado na plataforma.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let clientId: string | null = null;
+      try {
+        clientId = (await api.googleConfig()).clientId;
+      } catch { /* sem config: sem botao */ }
+      if (!clientId || cancelled) return;
+
+      const renderButton = () => {
+        const g = (window as any).google;
+        if (!g?.accounts?.id || !googleBtnRef.current || cancelled) return;
+        g.accounts.id.initialize({
+          client_id: clientId,
+          callback: async (resp: { credential: string }) => {
+            setError('');
+            setSubmitting(true);
+            try {
+              await onGoogleRef.current(resp.credential);
+            } catch (err: any) {
+              setError(err.message || 'Erro ao entrar com Google');
+            } finally {
+              setSubmitting(false);
+            }
+          },
+        });
+        g.accounts.id.renderButton(googleBtnRef.current, {
+          theme: 'filled_black', size: 'large', shape: 'pill', text: 'continue_with', locale: 'pt-BR',
+          width: googleBtnRef.current.offsetWidth || 320,
+        });
+        setGoogleReady(true);
+      };
+
+      if ((window as any).google?.accounts?.id) {
+        renderButton();
+      } else {
+        const s = document.createElement('script');
+        s.src = 'https://accounts.google.com/gsi/client';
+        s.async = true;
+        s.onload = renderButton;
+        document.head.appendChild(s);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -247,6 +309,8 @@ function LoginScreen({
               <span className="bg-bg-card px-3 text-xs text-text-muted">ou</span>
             </div>
           </div>
+
+          <div ref={googleBtnRef} className={`w-full flex justify-center ${googleReady ? 'mb-5' : ''}`} />
 
           <p className="text-center text-sm text-text-secondary">
             {isRegister ? 'Ja tem uma conta?' : 'Ainda nao tem conta?'}{' '}
