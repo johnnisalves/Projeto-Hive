@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { api, setToken, getToken } from '../lib/api';
 import { Zap, Loader2 } from 'lucide-react';
 
-const PUBLIC_PATHS = ['/invite'];
+const PUBLIC_PATHS = ['/invite', '/termos', '/privacidade'];
 
 interface Branding {
   appName?: string | null;
