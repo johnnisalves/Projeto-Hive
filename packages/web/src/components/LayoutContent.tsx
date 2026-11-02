@@ -3,7 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { Sidebar } from './Sidebar';
 
-const PUBLIC_PATHS = ['/invite'];
+const PUBLIC_PATHS = ['/invite', '/termos', '/privacidade'];
 const FULL_WIDTH_PATHS = ['/posts/visual-editor'];
 
 export function LayoutContent({ children }: { children: React.ReactNode }) {
